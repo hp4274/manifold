@@ -1,0 +1,5 @@
+# Payment receipts are private: served only through admin/file.php?dir=payments
+Require all denied
+
+php_flag engine off
+AddType text/plain .php .phtml .php3 .php4 .php5 .php7 .phps

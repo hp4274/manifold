@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Placeholder illustration of the driver display">
+  <defs>
+    <linearGradient id="tbg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef5fa"/>
+      <stop offset="1" stop-color="#dde9f2"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#tbg3)"/>
+  <rect x="180" y="190" width="440" height="220" rx="26" fill="#0f2c4d" opacity=".93"/>
+  <circle cx="300" cy="300" r="66" fill="none" stroke="#17b0a6" stroke-width="6" stroke-dasharray="300 115" transform="rotate(-125 300 300)"/>
+  <text x="300" y="312" text-anchor="middle" font-family="Figtree, sans-serif" font-size="40" font-weight="700" fill="#eaf7f4">42</text>
+  <rect x="404" y="242" width="170" height="18" rx="9" fill="#4bb453" opacity=".85"/>
+  <rect x="404" y="284" width="122" height="18" rx="9" fill="#17b0a6" opacity=".7"/>
+  <rect x="404" y="326" width="84" height="18" rx="9" fill="#3ba3dc" opacity=".55"/>
+  <rect x="250" y="446" width="300" height="18" rx="9" fill="#0f2c4d" opacity=".1"/>
+  <text x="400" y="524" text-anchor="middle" font-family="Figtree, sans-serif" font-size="24" font-weight="600" fill="#5b7186">Driver display — placeholder image</text>
+</svg>

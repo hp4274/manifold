@@ -1,0 +1,7 @@
+# Uploaded documents are private: no direct URL access, no script execution.
+# Files are served to signed-in admins through admin/file.php instead.
+
+Require all denied
+
+php_flag engine off
+AddType text/plain .php .phtml .php3 .php4 .php5 .php7 .phps

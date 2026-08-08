@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Placeholder illustration of a converted rickshaw on the road">
+  <defs>
+    <linearGradient id="tbg4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e9f4f2"/>
+      <stop offset="1" stop-color="#dfeef4"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#tbg4)"/>
+  <rect x="0" y="410" width="800" height="190" fill="#0f2c4d" opacity=".08"/>
+  <g stroke="#0f2c4d" stroke-opacity=".22" stroke-width="8" stroke-linecap="round" stroke-dasharray="46 44">
+    <path d="M60 500h680"/>
+  </g>
+  <path d="M270 396V286c0-46 38-84 84-84h74c46 0 84 38 84 84v110Z" fill="#3ba3dc" opacity=".28"/>
+  <path d="M270 396V286c0-46 38-84 84-84h74c46 0 84 38 84 84v110Z" fill="none" stroke="#0f2c4d" stroke-opacity=".35" stroke-width="4"/>
+  <rect x="300" y="240" width="80" height="60" rx="10" fill="#fff" opacity=".85"/>
+  <rect x="404" y="240" width="80" height="60" rx="10" fill="#fff" opacity=".85"/>
+  <circle cx="318" cy="404" r="34" fill="#0f2c4d" opacity=".78"/>
+  <circle cx="512" cy="404" r="34" fill="#0f2c4d" opacity=".78"/>
+  <circle cx="318" cy="404" r="12" fill="#eaf3f9"/>
+  <circle cx="512" cy="404" r="12" fill="#eaf3f9"/>
+  <g fill="#17b0a6" opacity=".6">
+    <circle cx="588" cy="360" r="8"/><circle cx="620" cy="344" r="6"/><circle cx="648" cy="332" r="5"/>
+  </g>
+  <text x="400" y="540" text-anchor="middle" font-family="Figtree, sans-serif" font-size="24" font-weight="600" fill="#5b7186">On the road — placeholder image</text>
+</svg>

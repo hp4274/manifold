@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coming Soon — Manifold Clean Energy</title>
+<meta name="description" content="This part of the Manifold Clean Energy site is still being built. Talk to us in the meantime, or read about the hydrogen stove and the TukTuk conversion kit.">
+<meta name="robots" content="noindex">
+
+<!-- Fonts, Bootstrap 5 and Bootstrap Icons — self-hosted, works offline -->
+<link rel="stylesheet" href="assets/vendor/figtree/figtree.css">
+<link rel="stylesheet" href="assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
+
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<!-- ============ TOP BAR ============ -->
+<div class="top-bar" role="banner">
+  <div class="container-x top-bar__inner">
+    <a class="top-bar__email" href="mailto:info@manifoldcleanenergy.com">
+      <i class="bi bi-envelope"></i>
+      <span>info@manifoldcleanenergy.com</span>
+    </a>
+
+    <div class="top-bar__social" aria-label="Social media links">
+      <a href="#" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+      <a href="#" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+      <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+      <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HEADER / NAVBAR ============ -->
+<header class="site-header" id="siteHeader">
+  <div class="nav-wrap">
+    <a class="brand" href="index.html" aria-label="Manifold Clean Energy home">
+      <img class="brand-logo" src="assets/images/manifold.png" alt="Manifold Clean Energy Pvt. Ltd.">
+    </a>
+
+    <nav class="main-nav" id="mainNav" aria-label="Main">
+      <a href="index.html#products">Products</a>
+      <a href="index.html#technology">Technology</a>
+      <a href="index.html#about">About Us</a>
+      <details class="nav-dropdown">
+        <summary>Apply Now <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        <div class="nav-dropdown__menu">
+          <a href="apply-tuktuk.html">TukTuk</a>
+          <a href="apply-stove.html">Stove</a>
+        </div>
+      </details>
+      <a href="contact.html">Contact</a>
+
+      <div class="nav-actions">
+        <a href="contact.html" class="btn-pill btn-pill--white nav-cta-mobile">Get In touch</a>
+        <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login-mobile">Login</a>
+      </div>
+    </nav>
+
+    <div class="nav-actions nav-actions--desktop">
+      <a href="contact.html" class="btn-pill btn-pill--white nav-cta">Get In touch</a>
+      <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login">Login</a>
+    </div>
+
+    <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mainNav">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============ COMING SOON ============ -->
+<section class="soon">
+  <span class="soon-glow" aria-hidden="true"></span>
+  <span class="tech-dots soon-dots" aria-hidden="true"></span>
+
+  <div class="container-x soon__inner">
+    <span class="eyebrow-badge soon__badge">In the workshop</span>
+    <h1 class="soon__title">This page is<br><span>coming soon.</span></h1>
+    <p class="soon__text">
+      We are building this section now. Everything about the hydrogen stove and
+      the TukTuk conversion kit is already live, and a person on the product team
+      will answer anything you ask in the meantime.
+    </p>
+
+    <div class="soon__actions">
+      <a href="contact.html" class="btn-pill btn-pill--white">Talk to us <i class="bi bi-arrow-right"></i></a>
+      <a href="index.html" class="btn-pill btn-pill--ghost">Back to home <i class="bi bi-arrow-left"></i></a>
+    </div>
+
+    <div class="soon__links">
+      <a class="soon-link" href="stove.html">
+        <span class="soon-link__icon"><i class="bi bi-fire"></i></span>
+        <span>
+          <strong>Kinetic Hydrogen Stove</strong>
+          Specifications, features and FAQ
+        </span>
+      </a>
+
+      <a class="soon-link" href="tuktuk.html">
+        <span class="soon-link__icon"><i class="bi bi-truck-front"></i></span>
+        <span>
+          <strong>TukTuk Conversion Kit</strong>
+          Fitment, range and running cost
+        </span>
+      </a>
+
+      <a class="soon-link" href="contact.html">
+        <span class="soon-link__icon"><i class="bi bi-telephone"></i></span>
+        <span>
+          <strong>Contact the team</strong>
+          +91 97251 54186, Ahmedabad
+        </span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site-footer">
+  <div class="container-x">
+
+    <div class="footer-top">
+      <div class="footer-intro">
+        <a class="footer-brand" href="index.html" aria-label="Manifold Clean Energy home">
+          <img src="assets/images/manifold.png" alt="Manifold Clean Energy Pvt. Ltd.">
+        </a>
+        <p class="footer-blurb">Manifold Clean Energy builds hydrogen-powered products for everyday life — clean cooking and zero-emission mobility, made in India.</p>
+
+      </div>
+
+      <div class="footer-connect">
+        <form class="footer-subscribe" action="admin/submit.php" method="post">
+          <input type="hidden" name="form" value="newsletter">
+          <input type="hidden" name="source_page" value="coming-soon.html">
+          <input type="hidden" name="return" value="coming-soon.html">
+          <label class="visually-hidden" for="footerEmail">Email address</label>
+          <input id="footerEmail" type="email" name="email" placeholder="Enter your email address" required>
+          <button type="submit" class="footer-subscribe__btn">Subscribe</button>
+        </form>
+
+        <div class="footer-social" aria-label="Social media links">
+          <a href="#" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+          <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+          <a href="#" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+          <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
+          <a href="#" aria-label="X"><i class="bi bi-twitter-x"></i></a>
+          <a href="#" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-cols">
+
+      <div class="footer-col">
+        <h4>Company</h4>
+        <ul class="footer-links">
+          <li><a href="index.html#about">About Manifold</a></li>
+          <li><a href="coming-soon.html">Our Team</a></li>
+          <li><a href="coming-soon.html">Milestones</a></li>
+          <li><a href="coming-soon.html">Partners</a></li>
+          <li><a href="contact.html">Contact Us</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Products</h4>
+        <ul class="footer-links">
+          <li><a href="stove.html">Kinetic Hydrogen Stove</a></li>
+          <li><a href="tuktuk.html">TukTuk Conversion Kit</a></li>
+          <li><a href="apply-stove.html">Apply: Stove</a></li>
+          <li><a href="apply-tuktuk.html">Apply: TukTuk Kit</a></li>
+          <li><a href="index.html#products">All Products</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Technology</h4>
+        <ul class="footer-links">
+          <li><a href="index.html#technology">How It Works</a></li>
+          <li><a href="index.html#technology">On-demand Generation</a></li>
+          <li><a href="index.html#technology">Safety by Design</a></li>
+          <li><a href="stove.html#specifications">Specifications</a></li>
+          <li><a href="index.html#technology">Research &amp; Development</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Applications</h4>
+        <ul class="footer-links">
+          <li><a href="index.html#applications">Clean Cooking</a></li>
+          <li><a href="index.html#applications">Zero Emission Mobility</a></li>
+          <li><a href="index.html#applications">Commercial Kitchens</a></li>
+          <li><a href="index.html#applications">Industrial Heat</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul class="footer-links">
+          <li><a href="coming-soon.html">Blog</a></li>
+          <li><a href="coming-soon.html">Newsroom</a></li>
+          <li><a href="coming-soon.html">Case Studies</a></li>
+          <li><a href="coming-soon.html">Downloads</a></li>
+          <li><a href="coming-soon.html">FAQs</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Support</h4>
+        <ul class="footer-links">
+          <li><a href="contact.html">Contact Support</a></li>
+          <li><a href="coming-soon.html">Service Centres</a></li>
+          <li><a href="coming-soon.html">Warranty</a></li>
+          <li><a href="coming-soon.html">Report an Issue</a></li>
+          <li><a href="coming-soon.html">Sitemap</a></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="footer-bottom">
+      <p class="footer-legal">&copy; 2026 Manifold Clean Energy Pvt. Ltd. All rights reserved.</p>
+
+      <nav class="footer-policy" aria-label="Legal">
+        <a href="privacy-policy.html#privacy-policy">Privacy Policy</a>
+        <a href="privacy-policy.html#terms-of-service">Terms of Service</a>
+        <a href="privacy-policy.html#website-terms">Website Terms</a>
+        <a href="privacy-policy.html#refund-policy">Refund Policy</a>
+        <a href="privacy-policy.html#data-deletion">Data Deletion</a>
+        <a href="privacy-policy.html#disclosure-policy">Disclosure Policy</a>
+        <a href="privacy-policy.html#cookies">Cookies</a>
+      </nav>
+
+
+      <p class="footer-credit">Designed and developed by
+        <a href="https://keryar.com" target="_blank" rel="noopener">Keryar</a>
+      </p>
+    </div>
+
+  </div>
+
+  <button class="to-top" id="toTop" type="button" aria-label="Back to top">
+    <i class="bi bi-arrow-up"></i>
+  </button>
+</footer>
+
+<script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Placeholder illustration of the generation cell">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4f9fc"/>
+      <stop offset="1" stop-color="#e4eff6"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg2)"/>
+  <rect x="230" y="150" width="340" height="300" rx="26" fill="#fff" stroke="#cfe0ec" stroke-width="2"/>
+  <rect x="272" y="196" width="76" height="208" rx="14" fill="#17b0a6" opacity=".18"/>
+  <rect x="362" y="196" width="76" height="208" rx="14" fill="#4bb453" opacity=".2"/>
+  <rect x="452" y="196" width="76" height="208" rx="14" fill="#3ba3dc" opacity=".18"/>
+  <g stroke="#0e8f96" stroke-width="3" stroke-linecap="round" opacity=".55">
+    <path d="M310 236v128M400 236v128M490 236v128"/>
+  </g>
+  <g fill="#17b0a6">
+    <circle cx="310" cy="176" r="9"/><circle cx="400" cy="176" r="9"/><circle cx="490" cy="176" r="9"/>
+  </g>
+  <rect x="250" y="486" width="300" height="18" rx="9" fill="#0f2c4d" opacity=".1"/>
+  <text x="400" y="546" text-anchor="middle" font-family="Figtree, sans-serif" font-size="24" font-weight="600" fill="#5b7186">Generation cell — placeholder image</text>
+</svg>

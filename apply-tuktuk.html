@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TukTuk Application — Hydrogen Conversion Kit | Manifold Clean Energy</title>
+<meta name="description" content="Apply for the Manifold hydrogen conversion kit for auto rickshaws. Complete the application to reserve a technical assessment and installation slot.">
+
+<!-- Fonts, Bootstrap 5 and Bootstrap Icons — self-hosted, works offline -->
+<link rel="stylesheet" href="assets/vendor/figtree/figtree.css">
+<link rel="stylesheet" href="assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
+
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<!-- ============ TOP BAR ============ -->
+<div class="top-bar" role="banner">
+  <div class="container-x top-bar__inner">
+    <a class="top-bar__email" href="mailto:info@manifoldcleanenergy.com">
+      <i class="bi bi-envelope"></i>
+      <span>info@manifoldcleanenergy.com</span>
+    </a>
+
+    <div class="top-bar__social" aria-label="Social media links">
+      <a href="#" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+      <a href="#" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+      <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+      <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HEADER / NAVBAR ============ -->
+<header class="site-header" id="siteHeader">
+  <div class="nav-wrap">
+    <a class="brand" href="index.html" aria-label="Manifold Clean Energy home">
+      <img class="brand-logo" src="assets/images/manifold.png" alt="Manifold Clean Energy Pvt. Ltd.">
+    </a>
+
+    <nav class="main-nav" id="mainNav" aria-label="Main">
+      <a href="index.html#products">Products</a>
+      <a href="index.html#technology">Technology</a>
+      <a href="index.html#about">About Us</a>
+      <details class="nav-dropdown">
+        <summary>Apply Now <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        <div class="nav-dropdown__menu">
+          <a href="apply-tuktuk.html" aria-current="page">TukTuk</a>
+          <a href="stove.html">Stove</a>
+        </div>
+      </details>
+      <a href="contact.html">Contact</a>
+
+      <div class="nav-actions">
+        <a href="contact.html" class="btn-pill btn-pill--white nav-cta-mobile">Get In touch</a>
+        <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login-mobile">Login</a>
+      </div>
+    </nav>
+
+    <div class="nav-actions nav-actions--desktop">
+      <a href="contact.html" class="btn-pill btn-pill--white nav-cta">Get In touch</a>
+      <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login">Login</a>
+    </div>
+
+    <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mainNav">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============ PAGE HERO ============ -->
+<section class="page-hero page-hero--apply">
+  <div class="page-hero__media" aria-hidden="true"></div>
+
+  <div class="container-x page-hero__inner">
+    <nav class="breadcrumb-x" aria-label="Breadcrumb">
+      <a href="index.html">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="tuktuk.html">TukTuk Conversion Kit</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">Application</span>
+    </nav>
+
+    <span class="eyebrow-badge">TukTuk application — Model MH-3W</span>
+    <h1 class="page-hero__title">Hydrogen Conversion Kit<br>Auto Application</h1>
+    <p class="page-hero__text">
+      Apply for the Manifold hydrogen conversion kit for your auto rickshaw. Our
+      team reviews every application and coordinates the technical assessment and
+      installation slot with you directly.
+    </p>
+
+    <div class="page-hero__actions">
+      <a href="#application" class="btn-pill btn-pill--white">Start the application <i class="bi bi-arrow-right"></i></a>
+      <a href="tuktuk.html" class="btn-pill btn-pill--ghost">Read the product page <i class="bi bi-arrow-right"></i></a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ APPLICATION FORM ============ -->
+<section class="section section--tint" id="application">
+  <div class="container-x">
+    <p class="eyebrow eyebrow--rule reveal">Application</p>
+    <div class="section-head reveal">
+      <h2 class="section-title">Twelve short steps, one submission.</h2>
+      <p class="section-sub">Fields marked with an asterisk are required. Everything else helps us prepare a faster, more accurate assessment.</p>
+    </div>
+
+    <form class="apply-form reveal" id="applyForm" action="admin/submit.php" method="post" enctype="multipart/form-data" novalidate>
+      <input type="hidden" name="form" value="tuktuk">
+      <input type="hidden" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="display:none">
+
+      <!-- 1. Applicant information -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">01</span>
+          <h2>Applicant information</h2>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="full_name">Full name <span class="req" aria-hidden="true">*</span></label>
+            <input id="full_name" name="full_name" type="text" autocomplete="name" required>
+          </div>
+
+          <div class="field">
+            <label for="date_of_birth">Date of birth</label>
+            <input id="date_of_birth" name="date_of_birth" type="date">
+          </div>
+
+          <div class="field">
+            <label for="nationality">Nationality</label>
+            <input id="nationality" name="nationality" type="text">
+          </div>
+
+          <div class="field">
+            <label for="gender">Gender</label>
+            <select id="gender" name="gender">
+              <option value="" selected>Select…</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+              <option value="Prefer not to say">Prefer not to say</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="occupation">Occupation</label>
+            <input id="occupation" name="occupation" type="text">
+          </div>
+
+          <div class="field">
+            <label for="mobile_number">Mobile number <span class="req" aria-hidden="true">*</span></label>
+            <input id="mobile_number" name="mobile_number" type="tel" autocomplete="tel" required>
+          </div>
+
+          <div class="field">
+            <label for="alt_mobile_number">Alternative mobile number</label>
+            <input id="alt_mobile_number" name="alt_mobile_number" type="tel">
+          </div>
+
+          <div class="field">
+            <label for="email">Email <span class="req" aria-hidden="true">*</span></label>
+            <input id="email" name="email" type="email" autocomplete="email" required>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. Identification details -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">02</span>
+          <h2>Identification details</h2>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="id_number">National ID / Passport number</label>
+            <input id="id_number" name="id_number" type="text">
+          </div>
+
+          <div class="field">
+            <label for="id_document_file">Upload copy of ID</label>
+            <label class="upload" for="id_document_file">
+              <i class="bi bi-upload" aria-hidden="true"></i>
+              <span class="upload__name" data-file-label>Choose file…</span>
+              <input id="id_document_file" name="id_document_file" type="file" accept="image/*,application/pdf">
+            </label>
+            <span class="field-hint">JPG, PNG or PDF, max 10 MB</span>
+          </div>
+
+          <div class="field">
+            <label for="residence_proof_file">Residence proof / Auto RC</label>
+            <label class="upload" for="residence_proof_file">
+              <i class="bi bi-upload" aria-hidden="true"></i>
+              <span class="upload__name" data-file-label>Choose file…</span>
+              <input id="residence_proof_file" name="residence_proof_file" type="file" accept="image/*,application/pdf">
+            </label>
+            <span class="field-hint">Utility bill, tenancy contract or vehicle registration</span>
+          </div>
+        </div>
+
+        <p class="form-info">Uploads are optional but speed up verification. Files are stored securely and are only visible to our review team.</p>
+      </section>
+
+      <!-- 3. Residential address -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">03</span>
+          <h2>Residential address</h2>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="house_number">House / Villa / Apartment number</label>
+            <input id="house_number" name="house_number" type="text">
+          </div>
+
+          <div class="field">
+            <label for="street">Street name</label>
+            <input id="street" name="street" type="text">
+          </div>
+
+          <div class="field">
+            <label for="city">City</label>
+            <input id="city" name="city" type="text" autocomplete="address-level2">
+          </div>
+
+          <div class="field">
+            <label for="state">State</label>
+            <input id="state" name="state" type="text" autocomplete="address-level1">
+          </div>
+
+          <div class="field">
+            <label for="country">Country</label>
+            <input id="country" name="country" type="text" autocomplete="country-name">
+          </div>
+
+          <div class="field">
+            <label for="pin_code">Pin code</label>
+            <input id="pin_code" name="pin_code" type="text" autocomplete="postal-code">
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Property / operator information -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">04</span>
+          <h2>Property / operator information</h2>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="property_type">Operator / property type</label>
+            <select id="property_type" name="property_type">
+              <option value="" selected>Select…</option>
+              <option value="Individual Owner-Driver">Individual Owner-Driver</option>
+              <option value="Fleet Operator">Fleet Operator</option>
+              <option value="Apartment">Apartment</option>
+              <option value="Villa">Villa</option>
+              <option value="Town House">Town House</option>
+              <option value="Farm House">Farm House</option>
+              <option value="Commercial">Commercial</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="property_type_other">If other, specify</label>
+            <input id="property_type_other" name="property_type_other" type="text">
+          </div>
+
+          <div class="field">
+            <label for="ownership_status">Ownership status</label>
+            <select id="ownership_status" name="ownership_status">
+              <option value="" selected>Select…</option>
+              <option value="Owner">Owner</option>
+              <option value="Tenant">Tenant</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="household_members">Number of household members</label>
+            <input id="household_members" name="household_members" type="number" min="0">
+          </div>
+
+          <div class="field">
+            <label for="existing_fuel">Existing fuel used in auto</label>
+            <select id="existing_fuel" name="existing_fuel">
+              <option value="" selected>Select…</option>
+              <option value="LPG">LPG</option>
+              <option value="CNG">CNG</option>
+              <option value="Petrol">Petrol</option>
+              <option value="Diesel">Diesel</option>
+              <option value="Auto Engine">Auto Engine</option>
+              <option value="Electric">Electric</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="existing_fuel_other">If other, specify</label>
+            <input id="existing_fuel_other" name="existing_fuel_other" type="text">
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. Product requirement -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">05</span>
+          <h2>Product requirement</h2>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="units_required">Number of conversion kits required</label>
+            <input id="units_required" name="units_required" type="number" min="1">
+          </div>
+
+          <div class="field">
+            <label for="intended_usage">Intended usage</label>
+            <select id="intended_usage" name="intended_usage">
+              <option value="" selected>Select…</option>
+              <option value="Personal">Personal</option>
+              <option value="Commercial">Commercial</option>
+              <option value="Fleet">Fleet</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="expected_daily_usage">Expected daily usage (km / hours)</label>
+            <input id="expected_daily_usage" name="expected_daily_usage" type="text">
+          </div>
+
+          <div class="field">
+            <label for="preferred_install_date">Preferred installation date</label>
+            <input id="preferred_install_date" name="preferred_install_date" type="date">
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. Water supply -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">06</span>
+          <h2>Water supply (for on-board hydrogen generation)</h2>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="water_source">Primary water source</label>
+            <select id="water_source" name="water_source">
+              <option value="" selected>Select…</option>
+              <option value="Municipal Water">Municipal Water</option>
+              <option value="Well Water">Well Water</option>
+              <option value="Borewell">Borewell</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="water_source_other">If other, specify</label>
+            <input id="water_source_other" name="water_source_other" type="text">
+          </div>
+
+          <fieldset class="field">
+            <legend>Continuous water supply available?</legend>
+            <div class="choice-row">
+              <label class="choice"><input type="radio" name="continuous_water" value="yes"> Yes</label>
+              <label class="choice"><input type="radio" name="continuous_water" value="no"> No</label>
+            </div>
+          </fieldset>
+
+          <fieldset class="field">
+            <legend>Water storage tank available?</legend>
+            <div class="choice-row">
+              <label class="choice"><input type="radio" name="water_storage" value="yes"> Yes</label>
+              <label class="choice"><input type="radio" name="water_storage" value="no"> No</label>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+
+      <!-- 7. Technical assessment -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">07</span>
+          <h2>Technical assessment</h2>
+        </div>
+
+        <div class="field-grid">
+          <fieldset class="field">
+            <legend>Dedicated parking / workshop space?</legend>
+            <div class="choice-row">
+              <label class="choice"><input type="radio" name="dedicated_kitchen" value="yes"> Yes</label>
+              <label class="choice"><input type="radio" name="dedicated_kitchen" value="no"> No</label>
+            </div>
+          </fieldset>
+
+          <fieldset class="field">
+            <legend>Access to level surface for installation?</legend>
+            <div class="choice-row">
+              <label class="choice"><input type="radio" name="countertop_space" value="yes"> Yes</label>
+              <label class="choice"><input type="radio" name="countertop_space" value="no"> No</label>
+            </div>
+          </fieldset>
+
+          <fieldset class="field">
+            <legend>Existing fuel connection in auto?</legend>
+            <div class="choice-row">
+              <label class="choice"><input type="radio" name="existing_gas" value="yes"> Yes</label>
+              <label class="choice"><input type="radio" name="existing_gas" value="no"> No</label>
+            </div>
+          </fieldset>
+
+          <fieldset class="field">
+            <legend>Existing electrical / battery system?</legend>
+            <div class="choice-row">
+              <label class="choice"><input type="radio" name="existing_electric" value="yes"> Yes</label>
+              <label class="choice"><input type="radio" name="existing_electric" value="no"> No</label>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+
+      <!-- 8. Payment information -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">08</span>
+          <h2>Payment information</h2>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="payment_method">Preferred payment method</label>
+            <select id="payment_method" name="payment_method">
+              <option value="" selected>Select…</option>
+              <option value="Full Payment">Full Payment</option>
+              <option value="Installments">Installments</option>
+              <option value="Lease-to-Own">Lease-to-Own</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="financing_option">Preferred financing option</label>
+            <input id="financing_option" name="financing_option" type="text">
+          </div>
+
+          <div class="field">
+            <label for="bank_name">Bank name</label>
+            <input id="bank_name" name="bank_name" type="text">
+          </div>
+        </div>
+      </section>
+
+      <!-- 9. Referral -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">09</span>
+          <h2>Referral</h2>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="referral_source">How did you hear about us?</label>
+            <select id="referral_source" name="referral_source">
+              <option value="" selected>Select…</option>
+              <option value="Social Media">Social Media</option>
+              <option value="Advertisement">Advertisement</option>
+              <option value="Friend / Family">Friend / Family</option>
+              <option value="Distributor">Distributor</option>
+              <option value="Exhibition">Exhibition</option>
+              <option value="Website">Website</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="referral_other">If other, specify</label>
+            <input id="referral_other" name="referral_other" type="text">
+          </div>
+        </div>
+      </section>
+
+      <!-- 10. Environmental impact -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">10</span>
+          <h2>Environmental impact</h2>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="monthly_gas_consumption">Approx. monthly fuel consumption</label>
+            <input id="monthly_gas_consumption" name="monthly_gas_consumption" type="text" placeholder="e.g. 120 L petrol / month">
+          </div>
+
+          <div class="field">
+            <label for="monthly_electric_consumption">Approx. monthly electricity consumption</label>
+            <input id="monthly_electric_consumption" name="monthly_electric_consumption" type="text" placeholder="e.g. 40 kWh">
+          </div>
+
+          <div class="field">
+            <label for="carbon_interest">Interest in reducing carbon footprint</label>
+            <select id="carbon_interest" name="carbon_interest">
+              <option value="" selected>Select…</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11. Declaration -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">11</span>
+          <h2>Declaration</h2>
+        </div>
+
+        <p class="u-sub">I hereby certify that all information provided in this application is true and correct to the best of my knowledge. I understand that submission of this application does not guarantee approval, product allocation or installation until confirmed by the Company.</p>
+
+        <label class="field-consent" for="declaration_accepted">
+          <input id="declaration_accepted" name="declaration_accepted" type="checkbox" required>
+          <span>I agree to the declaration above. <span class="req" aria-hidden="true">*</span></span>
+        </label>
+
+        <label class="field-consent" for="testimonial_consent">
+          <input id="testimonial_consent" name="testimonial_consent" type="checkbox">
+          <span>I consent to being contacted for a customer testimonial.</span>
+        </label>
+      </section>
+
+      <!-- 12. Terms and conditions -->
+      <section class="form-step">
+        <div class="form-step__head">
+          <span class="form-step__num">12</span>
+          <h2>Terms &amp; conditions</h2>
+        </div>
+
+        <div class="terms-box" tabindex="0" role="region" aria-label="Terms and conditions">
+          <ul>
+            <li>Submission of this application does not constitute approval, sale, financing or installation of the kit.</li>
+            <li>The Company reserves the right to accept, reject or defer any application without assigning a reason.</li>
+            <li>All information provided by the applicant must be accurate and complete.</li>
+            <li>The applicant authorises the Company to conduct verification, technical assessment and site inspection where required.</li>
+            <li>Any false or misleading information may result in immediate rejection of the application.</li>
+            <li>Installation timelines are estimates and may vary depending on location, product availability and regulatory approvals.</li>
+            <li>Any application processing fee paid is non-refundable unless otherwise stated in writing by the Company.</li>
+            <li>Product specifications, performance figures and operating requirements are subject to change without prior notice.</li>
+            <li>The Company shall not be liable for delays caused by force majeure, government restrictions, utility interruptions or circumstances beyond its control.</li>
+            <li>The applicant consents to the collection and processing of personal information for application review, installation, customer support and warranty administration.</li>
+            <li>Financing approvals, where applicable, remain subject to the independent review of the financing institution.</li>
+            <li>Warranty terms shall be governed by the official Warranty Certificate supplied with the kit upon installation.</li>
+          </ul>
+          <p><strong>Processing fee:</strong> A non-refundable application processing fee may apply. It covers administrative review, technical assessment, verification and site inspection. Payment of the processing fee does not guarantee approval, allocation, financing or installation.</p>
+        </div>
+
+        <label class="field-consent" for="terms_accepted">
+          <input id="terms_accepted" name="terms_accepted" type="checkbox" required>
+          <span>I have read and accept the Terms &amp; Conditions above. <span class="req" aria-hidden="true">*</span></span>
+        </label>
+      </section>
+
+      <div class="form-actions">
+        <p class="form-note">We use your information only to process this application. This form is not yet wired to a mailbox — until it is, call <a href="tel:+919725154186">+91 97251 54186</a>.</p>
+        <button type="submit" class="btn-pill btn-pill--accent form-x__submit">Submit application <i class="bi bi-send"></i></button>
+      </div>
+
+    </form>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="section section--tint" id="faq">
+  <div class="container-x">
+    <p class="eyebrow eyebrow--rule reveal">Questions</p>
+    <div class="section-head reveal">
+      <h2 class="section-title">What drivers and fleet owners ask first.</h2>
+      <p class="section-sub">Anything not covered here, write to us and an engineer will answer.</p>
+    </div>
+
+    <div class="faq-grid reveal">
+      <div class="faq">
+        <details class="faq-item" open>
+          <summary>Does the engine have to be replaced or rebuilt?</summary>
+          <p>No. The kit feeds hydrogen into the existing intake and trims the mixture electronically. A healthy engine needs nothing beyond a service; a tired one should be tuned before conversion, the same as for any fuel change.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Is there a high-pressure cylinder on board?</summary>
+          <p>None. Hydrogen is produced only while the engine is running and consumed within seconds. There is no reservoir to rupture in a collision, which is the main safety difference from a CNG conversion.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>What if the water runs out mid-shift?</summary>
+          <p>The display warns at two litres remaining, and the controller falls back to the original petrol line so the vehicle keeps running. Refilling takes about a minute at any water point.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>How does the cost compare with a new electric auto?</summary>
+          <p>A conversion costs roughly a fifth of a new e-rickshaw and needs no charging infrastructure or overnight parking with a socket. The kit also transfers to another vehicle when the current one retires.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Is it legal to drive a converted rickshaw?</summary>
+          <p>Pilot vehicles run under an RTO trial registration issued for the programme. Retail retrofit begins once type approval is granted; until then, conversions are limited to registered pilot fleets.</p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Who fits and services the kit?</summary>
+          <p>Authorised workshops trained by Manifold. Fitment takes six to eight hours, and the first two services are included with every pilot conversion.</p>
+        </details>
+      </div>
+
+      <div class="faq-media">
+        <img src="assets/images/faq-tuktuk-portrait.png" alt="Manifold Hydrogen TukTuk Kit">
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site-footer">
+  <div class="container-x">
+
+    <div class="footer-top">
+      <div class="footer-intro">
+        <a class="footer-brand" href="index.html" aria-label="Manifold Clean Energy home">
+          <img src="assets/images/manifold.png" alt="Manifold Clean Energy Pvt. Ltd.">
+        </a>
+        <p class="footer-blurb">Manifold Clean Energy builds hydrogen-powered products for everyday life — clean cooking and zero-emission mobility, made in India.</p>
+
+      </div>
+
+      <div class="footer-connect">
+        <form class="footer-subscribe" action="admin/submit.php" method="post">
+          <input type="hidden" name="form" value="newsletter">
+          <input type="hidden" name="source_page" value="apply-tuktuk.html">
+          <input type="hidden" name="return" value="apply-tuktuk.html">
+          <label class="visually-hidden" for="footerEmail">Email address</label>
+          <input id="footerEmail" type="email" name="email" placeholder="Enter your email address" required>
+          <button type="submit" class="footer-subscribe__btn">Subscribe</button>
+        </form>
+
+        <div class="footer-social" aria-label="Social media links">
+          <a href="#" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+          <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+          <a href="#" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+          <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
+          <a href="#" aria-label="X"><i class="bi bi-twitter-x"></i></a>
+          <a href="#" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-cols">
+
+      <div class="footer-col">
+        <h4>Company</h4>
+        <ul class="footer-links">
+          <li><a href="index.html#about">About Manifold</a></li>
+          <li><a href="coming-soon.html">Our Team</a></li>
+          <li><a href="coming-soon.html">Milestones</a></li>
+          <li><a href="coming-soon.html">Partners</a></li>
+          <li><a href="contact.html">Contact Us</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Products</h4>
+        <ul class="footer-links">
+          <li><a href="stove.html">Kinetic Hydrogen Stove</a></li>
+          <li><a href="tuktuk.html">TukTuk Conversion Kit</a></li>
+          <li><a href="apply-tuktuk.html">Apply: TukTuk Kit</a></li>
+          <li><a href="index.html#products">Spares &amp; Accessories</a></li>
+          <li><a href="index.html#products">All Products</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Technology</h4>
+        <ul class="footer-links">
+          <li><a href="index.html#technology">How It Works</a></li>
+          <li><a href="index.html#technology">On-demand Generation</a></li>
+          <li><a href="index.html#technology">Safety by Design</a></li>
+          <li><a href="tuktuk.html#specifications">Specifications</a></li>
+          <li><a href="index.html#technology">Research &amp; Development</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Applications</h4>
+        <ul class="footer-links">
+          <li><a href="index.html#applications">Clean Cooking</a></li>
+          <li><a href="index.html#applications">Zero Emission Mobility</a></li>
+          <li><a href="index.html#applications">Commercial Kitchens</a></li>
+          <li><a href="index.html#applications">Industrial Heat</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul class="footer-links">
+          <li><a href="coming-soon.html">Blog</a></li>
+          <li><a href="coming-soon.html">Newsroom</a></li>
+          <li><a href="coming-soon.html">Case Studies</a></li>
+          <li><a href="coming-soon.html">Downloads</a></li>
+          <li><a href="coming-soon.html">FAQs</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Support</h4>
+        <ul class="footer-links">
+          <li><a href="contact.html">Contact Support</a></li>
+          <li><a href="coming-soon.html">Service Centres</a></li>
+          <li><a href="coming-soon.html">Warranty</a></li>
+          <li><a href="coming-soon.html">Report an Issue</a></li>
+          <li><a href="coming-soon.html">Sitemap</a></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="footer-bottom">
+      <p class="footer-legal">&copy; 2026 Manifold Clean Energy Pvt. Ltd. All rights reserved.</p>
+
+      <nav class="footer-policy" aria-label="Legal">
+        <a href="privacy-policy.html#privacy-policy">Privacy Policy</a>
+        <a href="privacy-policy.html#terms-of-service">Terms of Service</a>
+        <a href="privacy-policy.html#website-terms">Website Terms</a>
+        <a href="privacy-policy.html#refund-policy">Refund Policy</a>
+        <a href="privacy-policy.html#data-deletion">Data Deletion</a>
+        <a href="privacy-policy.html#disclosure-policy">Disclosure Policy</a>
+        <a href="privacy-policy.html#cookies">Cookies</a>
+      </nav>
+
+
+      <p class="footer-credit">Designed and developed by
+        <a href="https://keryar.com" target="_blank" rel="noopener">Keryar</a>
+      </p>
+    </div>
+
+  </div>
+
+  <button class="to-top" id="toTop" type="button" aria-label="Back to top">
+    <i class="bi bi-arrow-up"></i>
+  </button>
+</footer>
+
+<script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/apply.js"></script>
+</body>
+</html>
