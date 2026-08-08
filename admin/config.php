@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 const DB_HOST = '127.0.0.1';
 const DB_NAME = 'manifold';
-const DB_USER = 'root';
-const DB_PASS = '';
+const DB_USER = 'manifold';
+const DB_PASS = 'manifold2210';
 const DB_PORT = 3306;
 
 /** Absolute path where uploaded application documents are stored. */
