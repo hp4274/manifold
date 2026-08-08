@@ -1,259 +1,247 @@
 -- ==========================================================================
--- Manifold Clean Energy — admin database schema
--- MySQL 5.7+ / MariaDB 10.2+
+-- Manifold Clean Energy — fresh install
 --
--- Import once:  mysql -u root -p < schema.sql
--- or paste into phpMyAdmin > SQL.
+-- Creates the `manifold` database with empty tables and one admin account.
+--
+--   WARNING: this DROPS the existing `manifold` database. Everything in it —
+--   applications, payments, receipts, enquiries — is destroyed. Take a backup
+--   first if this is not a clean machine.
+--
+-- Import:  mysql -u root -p < schema-fresh.sql
+--
+-- Then sign in at /manifold/admin/login.php with
+--   username  admin        (or admin@manifold.com)
+--   password  admin12345
+--
+-- CHANGE THAT PASSWORD before this touches a real server.
 -- ==========================================================================
 
-CREATE DATABASE IF NOT EXISTS `manifold`
+DROP DATABASE IF EXISTS `manifold`;
+
+CREATE DATABASE `manifold`
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
 USE `manifold`;
 
 -- --------------------------------------------------------------------------
--- Admin users
+-- Admin accounts for the submissions dashboard.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `admin_users` (
-  `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `name`          VARCHAR(120)  NOT NULL,
-  `email`         VARCHAR(190)  NOT NULL,
-  `password_hash` VARCHAR(255)  NOT NULL,
-  `is_active`     TINYINT(1)    NOT NULL DEFAULT 1,
-  `last_login_at` DATETIME      NULL,
-  `created_at`    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(120) NOT NULL,
+  `email` varchar(190) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `last_login_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_admin_email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Product applications — both apply forms live here, split by `product`
--- Column names match the `name` attributes on apply-stove.html /
--- apply-tuktuk.html so the two stay in sync.
+-- Both apply forms. Column names match the `name` attributes on
+-- apply-stove.html / apply-tuktuk.html.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `applications` (
-  `id`                           INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `product`                      ENUM('stove','tuktuk') NOT NULL,
-  -- payment_pending → payment_review → complete (or rejected)
-  `status`                       ENUM('payment_pending','payment_review','complete','rejected') NOT NULL DEFAULT 'payment_pending',
-  -- quoted to the applicant; how they find their application in the portal
-  `reference_code`               VARCHAR(20) NOT NULL,
-
-  -- 1. applicant
-  `full_name`                    VARCHAR(160) NOT NULL,
-  `date_of_birth`                DATE         NULL,
-  `nationality`                  VARCHAR(80)  NULL,
-  `gender`                       VARCHAR(30)  NULL,
-  `occupation`                   VARCHAR(120) NULL,
-  `mobile_number`                VARCHAR(32)  NOT NULL,
-  `alt_mobile_number`            VARCHAR(32)  NULL,
-  `email`                        VARCHAR(190) NOT NULL,
-
-  -- 2. identification
-  `id_number`                    VARCHAR(80)  NULL,
-  `id_document_path`             VARCHAR(255) NULL,
-  `residence_proof_path`         VARCHAR(255) NULL,
-
-  -- 3. address
-  `house_number`                 VARCHAR(120) NULL,
-  `street`                       VARCHAR(160) NULL,
-  `city`                         VARCHAR(120) NULL,
-  `state`                        VARCHAR(120) NULL,
-  `country`                      VARCHAR(120) NULL,
-  `pin_code`                     VARCHAR(20)  NULL,
-
-  -- 4. property / operator
-  `property_type`                VARCHAR(80)  NULL,
-  `property_type_other`          VARCHAR(160) NULL,
-  `ownership_status`             VARCHAR(40)  NULL,
-  `household_members`            INT          NULL,
-  `existing_fuel`                VARCHAR(80)  NULL,
-  `existing_fuel_other`          VARCHAR(160) NULL,
-
-  -- 5. product requirement
-  `units_required`               INT          NULL,
-  `intended_usage`               VARCHAR(60)  NULL,
-  `expected_daily_usage`         VARCHAR(120) NULL,
-  `preferred_install_date`       DATE         NULL,
-
-  -- 6. water supply
-  `water_source`                 VARCHAR(80)  NULL,
-  `water_source_other`           VARCHAR(160) NULL,
-  `continuous_water`             ENUM('yes','no') NULL,
-  `water_storage`                ENUM('yes','no') NULL,
-
-  -- 7. technical assessment
-  `dedicated_kitchen`            ENUM('yes','no') NULL,
-  `countertop_space`             ENUM('yes','no') NULL,
-  `existing_gas`                 ENUM('yes','no') NULL,
-  `existing_electric`            ENUM('yes','no') NULL,
-
-  -- 8. payment
-  `payment_method`               VARCHAR(60)  NULL,
-  `financing_option`             VARCHAR(160) NULL,
-  `bank_name`                    VARCHAR(160) NULL,
-
-  -- 9. referral
-  `referral_source`              VARCHAR(80)  NULL,
-  `referral_other`               VARCHAR(160) NULL,
-
-  -- 10. environmental
-  `monthly_gas_consumption`      VARCHAR(120) NULL,
-  `monthly_electric_consumption` VARCHAR(120) NULL,
-  `carbon_interest`              VARCHAR(20)  NULL,
-
-  -- 11 & 12. consent
-  `declaration_accepted`         TINYINT(1) NOT NULL DEFAULT 0,
-  `testimonial_consent`          TINYINT(1) NOT NULL DEFAULT 0,
-  `terms_accepted`               TINYINT(1) NOT NULL DEFAULT 0,
-
-  -- payment: the applicant pays as soon as the form is submitted
-  `payment_amount`               DECIMAL(10,2) NOT NULL DEFAULT 3500.00,
-  `payment_reference`            VARCHAR(120) NULL,
-  `payment_proof_path`           VARCHAR(255) NULL,
-  `payment_uploaded_at`          DATETIME     NULL,
-  `payment_verified_at`          DATETIME     NULL,
-  `payment_rejected_at`          DATETIME     NULL,
-  `payment_reject_reason`        VARCHAR(255) NULL,
-  `reminded_at`                  DATETIME     NULL,
-  `reminder_count`               SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  `confirmed_at`                 DATETIME     NULL,
-  `completed_at`                 DATETIME     NULL,
-
-  -- admin
-  `admin_note`                   TEXT      NULL,
-  `ip_address`                   VARCHAR(45) NULL,
-  `created_at`                   DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`                   DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `product` enum('stove','tuktuk') NOT NULL,
+  `status` enum('payment_pending','payment_review','complete','rejected') NOT NULL DEFAULT 'payment_pending',
+  `reference_code` varchar(20) NOT NULL DEFAULT '',
+  `full_name` varchar(160) NOT NULL,
+  `date_of_birth` date DEFAULT NULL,
+  `nationality` varchar(80) DEFAULT NULL,
+  `gender` varchar(30) DEFAULT NULL,
+  `occupation` varchar(120) DEFAULT NULL,
+  `mobile_number` varchar(32) NOT NULL,
+  `alt_mobile_number` varchar(32) DEFAULT NULL,
+  `email` varchar(190) NOT NULL,
+  `id_number` varchar(80) DEFAULT NULL,
+  `id_document_path` varchar(255) DEFAULT NULL,
+  `residence_proof_path` varchar(255) DEFAULT NULL,
+  `house_number` varchar(120) DEFAULT NULL,
+  `street` varchar(160) DEFAULT NULL,
+  `city` varchar(120) DEFAULT NULL,
+  `state` varchar(120) DEFAULT NULL,
+  `country` varchar(120) DEFAULT NULL,
+  `pin_code` varchar(20) DEFAULT NULL,
+  `property_type` varchar(80) DEFAULT NULL,
+  `property_type_other` varchar(160) DEFAULT NULL,
+  `ownership_status` varchar(40) DEFAULT NULL,
+  `household_members` int(11) DEFAULT NULL,
+  `existing_fuel` varchar(80) DEFAULT NULL,
+  `existing_fuel_other` varchar(160) DEFAULT NULL,
+  `units_required` int(11) DEFAULT NULL,
+  `intended_usage` varchar(60) DEFAULT NULL,
+  `expected_daily_usage` varchar(120) DEFAULT NULL,
+  `preferred_install_date` date DEFAULT NULL,
+  `water_source` varchar(80) DEFAULT NULL,
+  `water_source_other` varchar(160) DEFAULT NULL,
+  `continuous_water` enum('yes','no') DEFAULT NULL,
+  `water_storage` enum('yes','no') DEFAULT NULL,
+  `dedicated_kitchen` enum('yes','no') DEFAULT NULL,
+  `countertop_space` enum('yes','no') DEFAULT NULL,
+  `existing_gas` enum('yes','no') DEFAULT NULL,
+  `existing_electric` enum('yes','no') DEFAULT NULL,
+  `payment_method` varchar(60) DEFAULT NULL,
+  `financing_option` varchar(160) DEFAULT NULL,
+  `bank_name` varchar(160) DEFAULT NULL,
+  `referral_source` varchar(80) DEFAULT NULL,
+  `referral_other` varchar(160) DEFAULT NULL,
+  `monthly_gas_consumption` varchar(120) DEFAULT NULL,
+  `monthly_electric_consumption` varchar(120) DEFAULT NULL,
+  `carbon_interest` varchar(20) DEFAULT NULL,
+  `declaration_accepted` tinyint(1) NOT NULL DEFAULT 0,
+  `testimonial_consent` tinyint(1) NOT NULL DEFAULT 0,
+  `terms_accepted` tinyint(1) NOT NULL DEFAULT 0,
+  `payment_amount` decimal(10,2) NOT NULL DEFAULT 3500.00,
+  `payment_reference` varchar(120) DEFAULT NULL,
+  `payment_proof_path` varchar(255) DEFAULT NULL,
+  `payment_uploaded_at` datetime DEFAULT NULL,
+  `payment_verified_at` datetime DEFAULT NULL,
+  `payment_rejected_at` datetime DEFAULT NULL,
+  `payment_reject_reason` varchar(255) DEFAULT NULL,
+  `reminded_at` datetime DEFAULT NULL,
+  `reminder_count` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `confirmed_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `admin_note` text DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_app_reference` (`reference_code`),
-  KEY `ix_app_product_status` (`product`, `status`),
+  KEY `ix_app_product_status` (`product`,`status`),
   KEY `ix_app_created` (`created_at`),
   KEY `ix_app_email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Payments — one row per transfer, so an applicant can pay the fee in
--- instalments and get a receipt for each one.
+-- One row per transfer, so the fee can be paid in instalments and
+-- each verified payment gets its own receipt.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `payments` (
-  `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `application_id` INT UNSIGNED NOT NULL,
-  `amount`         DECIMAL(10,2) NOT NULL,
-  `reference`      VARCHAR(120) NULL,
-  `proof_path`     VARCHAR(255) NULL,
-  `status`         ENUM('pending','verified','rejected') NOT NULL DEFAULT 'pending',
-  `receipt_no`     VARCHAR(30)  NULL,
-  `reject_reason`  VARCHAR(255) NULL,
-  `uploaded_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `decided_at`     DATETIME     NULL,
-  `decided_by`     INT UNSIGNED NULL,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `application_id` int(10) unsigned NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `reference` varchar(120) DEFAULT NULL,
+  `proof_path` varchar(255) DEFAULT NULL,
+  `status` enum('pending','verified','rejected') NOT NULL DEFAULT 'pending',
+  `receipt_no` varchar(30) DEFAULT NULL,
+  `reject_reason` varchar(255) DEFAULT NULL,
+  `uploaded_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `decided_at` datetime DEFAULT NULL,
+  `decided_by` int(10) unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `ix_pay_app` (`application_id`, `status`),
-  CONSTRAINT `fk_pay_app` FOREIGN KEY (`application_id`)
-    REFERENCES `applications` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_pay_admin` FOREIGN KEY (`decided_by`)
-    REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+  KEY `ix_pay_app` (`application_id`,`status`),
+  KEY `fk_pay_admin` (`decided_by`),
+  CONSTRAINT `fk_pay_admin` FOREIGN KEY (`decided_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_pay_app` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Contact enquiries — contact.html
+-- Contact enquiries from contact.html.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `contact_messages` (
-  `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `status`     ENUM('new','accepted','contacted','rejected') NOT NULL DEFAULT 'new',
-  `name`       VARCHAR(160) NOT NULL,
-  `company`    VARCHAR(160) NULL,
-  `email`      VARCHAR(190) NOT NULL,
-  `phone`      VARCHAR(32)  NOT NULL,
-  `interest`   VARCHAR(60)  NULL,
-  `city`       VARCHAR(120) NULL,
-  `message`    TEXT         NOT NULL,
-  `consent`    TINYINT(1)   NOT NULL DEFAULT 0,
-  `admin_note` TEXT         NULL,
-  `ip_address` VARCHAR(45)  NULL,
-  `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `status` enum('new','accepted','contacted','rejected') NOT NULL DEFAULT 'new',
+  `name` varchar(160) NOT NULL,
+  `company` varchar(160) DEFAULT NULL,
+  `email` varchar(190) NOT NULL,
+  `phone` varchar(32) NOT NULL,
+  `interest` varchar(60) DEFAULT NULL,
+  `city` varchar(120) DEFAULT NULL,
+  `message` text NOT NULL,
+  `consent` tinyint(1) NOT NULL DEFAULT 0,
+  `admin_note` text DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `ix_contact_status` (`status`),
   KEY `ix_contact_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Newsletter subscribers — footer form on every page
+-- Footer newsletter signups.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `newsletter_subscribers` (
-  `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `status`      ENUM('new','accepted','contacted','rejected') NOT NULL DEFAULT 'new',
-  `email`       VARCHAR(190) NOT NULL,
-  `source_page` VARCHAR(120) NULL,
-  `admin_note`  TEXT         NULL,
-  `ip_address`  VARCHAR(45)  NULL,
-  `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `status` enum('new','accepted','contacted','rejected') NOT NULL DEFAULT 'new',
+  `email` varchar(190) NOT NULL,
+  `source_page` varchar(120) DEFAULT NULL,
+  `admin_note` text DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_subscriber_email` (`email`),
   KEY `ix_subscriber_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Audit trail for every status change
+-- Audit trail of every status change.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `status_log` (
-  `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `entity`     ENUM('application','contact','newsletter') NOT NULL,
-  `entity_id`  INT UNSIGNED NOT NULL,
-  `old_status` VARCHAR(20)  NULL,
-  `new_status` VARCHAR(20)  NOT NULL,
-  `changed_by` INT UNSIGNED NULL,
-  `changed_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `entity` enum('application','contact','newsletter') NOT NULL,
+  `entity_id` int(10) unsigned NOT NULL,
+  `old_status` varchar(20) DEFAULT NULL,
+  `new_status` varchar(20) NOT NULL,
+  `changed_by` int(10) unsigned DEFAULT NULL,
+  `changed_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  KEY `ix_log_entity` (`entity`, `entity_id`),
-  CONSTRAINT `fk_log_admin` FOREIGN KEY (`changed_by`)
-    REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+  KEY `ix_log_entity` (`entity`,`entity_id`),
+  KEY `fk_log_admin` (`changed_by`),
+  CONSTRAINT `fk_log_admin` FOREIGN KEY (`changed_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Applicant portal: one-time codes emailed for sign-in
+-- One-time codes for the applicant portal sign-in.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `applicant_otps` (
-  `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `email`      VARCHAR(190) NOT NULL,
-  `code_hash`  VARCHAR(255) NOT NULL,
-  `attempts`   TINYINT UNSIGNED NOT NULL DEFAULT 0,
-  `used_at`    DATETIME     NULL,
-  `expires_at` DATETIME     NOT NULL,
-  `ip_address` VARCHAR(45)  NULL,
-  `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `email` varchar(190) NOT NULL,
+  `code_hash` varchar(255) NOT NULL,
+  `attempts` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `used_at` datetime DEFAULT NULL,
+  `expires_at` datetime NOT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  KEY `ix_otp_email` (`email`, `expires_at`)
+  KEY `ix_otp_email` (`email`,`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Every email the site tries to send, so failures are visible
+-- Every email the site tried to send, successful or not.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `email_log` (
-  `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `to_email`   VARCHAR(190) NOT NULL,
-  `subject`    VARCHAR(255) NOT NULL,
-  `kind`       VARCHAR(40)  NOT NULL,
-  `ok`         TINYINT(1)   NOT NULL DEFAULT 0,
-  `error`      TEXT         NULL,
-  `sent_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `to_email` varchar(190) NOT NULL,
+  `subject` varchar(255) NOT NULL,
+  `kind` varchar(40) NOT NULL,
+  `ok` tinyint(1) NOT NULL DEFAULT 0,
+  `error` text DEFAULT NULL,
+  `sent_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  KEY `ix_email_kind` (`kind`, `sent_at`)
+  KEY `ix_email_kind` (`kind`,`sent_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Failed login throttling
+-- Failed admin logins, used for throttling.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `login_attempts` (
-  `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `email`      VARCHAR(190) NOT NULL,
-  `ip_address` VARCHAR(45)  NULL,
-  `attempted_at` DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `email` varchar(190) NOT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `attempted_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  KEY `ix_attempt_email_time` (`email`, `attempted_at`)
+  KEY `ix_attempt_email_time` (`email`,`attempted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- The one account you start with.
+-- Sign in with "admin" or "admin@manifold.com", password "admin12345".
+-- --------------------------------------------------------------------------
+INSERT INTO `admin_users` (`name`, `email`, `password_hash`) VALUES
+  ('admin', 'admin@manifold.com', '$2y$10$UoO.3dsFFzlN0PsyNNbAjOAJ0yITCnUYzPcyiBX6nQNPLk6WPPJC6');

@@ -33,8 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($email === '' || $password === '') {
         $error = 'Enter both an email address and a password.';
     } else {
-        $stmt = db()->prepare('SELECT * FROM admin_users WHERE email = ? AND is_active = 1');
-        $stmt->execute([$email]);
+        /* the seeded account signs in as "admin" as well as by its address */
+        $stmt = db()->prepare('SELECT * FROM admin_users WHERE (email = ? OR name = ?) AND is_active = 1');
+        $stmt->execute([$email, $email]);
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password_hash'])) {
@@ -91,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?= csrf_field() ?>
 
       <div class="field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" value="<?= e($email) ?>" autocomplete="username" required autofocus>
+        <label for="email">Username or email</label>
+        <input id="email" name="email" type="text" value="<?= e($email) ?>" autocomplete="username" required autofocus>
       </div>
 
       <div class="field">

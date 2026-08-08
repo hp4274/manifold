@@ -6,22 +6,34 @@ framework, no build step.
 
 ## Setup
 
-0. **Upgrading an existing database?** Run `upgrade-portal.sql`,
+1. **Create the database.** Import `schema-fresh.sql` —
+   `mysql -u root -p < schema-fresh.sql`, or paste it into phpMyAdmin. It builds
+   the `manifold` database with every table empty and one admin account:
+
+   | username | password |
+   |---|---|
+   | `admin` (or `admin@manifold.com`) | `admin12345` |
+
+   **It drops any existing `manifold` database first**, so back up before
+   running it on a machine that already has data. **Change that password**
+   before the site goes anywhere real.
+
+   *Upgrading instead of starting over?* Run `upgrade-portal.sql`,
    `upgrade-payment-flow.sql` then `upgrade-instalments.sql`, in that order.
-1. **Create the database.** Import `schema.sql` once — `mysql -u root -p < schema.sql`
-   or paste it into phpMyAdmin. It creates the `manifold` database with five
-   tables plus the status audit log.
+   `schema.sql` is the same structure without the `DROP DATABASE` or the seeded
+   account.
 2. **Check the credentials** in `config.php`. Stock XAMPP defaults (`root`, no
    password, `127.0.0.1`) are already set.
-3. **Create the first account** at `http://localhost/manifold/admin/create-admin.php`.
-   The page refuses to run once an account exists — **delete it afterwards**.
-4. Sign in at `http://localhost/manifold/admin/login.php`.
+3. Sign in at `http://localhost/manifold/admin/login.php`.
+   `create-admin.php` is still there for making the first account by hand on a
+   database seeded without one — **delete it after use**.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `schema.sql` | Database schema |
+| `schema-fresh.sql` | Fresh install: empty tables plus the seeded `admin` account |
+| `schema.sql` | The same structure, without dropping anything or seeding |
 | `config.php` | Credentials, upload rules, PDO connection |
 | `lib.php` | Session, CSRF, login guard, status vocabulary |
 | `login.php` / `logout.php` | Authentication |
