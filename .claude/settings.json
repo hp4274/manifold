@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --window-size=1600,780 --virtual-time-budget=2500 --screenshot=/private/tmp/claude-501/-Applications-XAMPP-xamppfiles-htdocs-website-php-manifold/afcf5109-1ba4-4171-a99d-ca0f3683a0a1/scratchpad/tech-after.png file:///private/tmp/claude-501/-Applications-XAMPP-xamppfiles-htdocs-website-php-manifold/afcf5109-1ba4-4171-a99d-ca0f3683a0a1/scratchpad/tech.html)",
-      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --window-size=1600,760 --virtual-time-budget=2500 --screenshot=/private/tmp/claude-501/-Applications-XAMPP-xamppfiles-htdocs-website-php-manifold/afcf5109-1ba4-4171-a99d-ca0f3683a0a1/scratchpad/tech-after.png file:///private/tmp/claude-501/-Applications-XAMPP-xamppfiles-htdocs-website-php-manifold/afcf5109-1ba4-4171-a99d-ca0f3683a0a1/scratchpad/tech.html)"
-    ]
-  }
-}

@@ -5,8 +5,11 @@
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db
-
+# Agent memory files
+memory.md
+.claude/memory.md
+*.memory.md
+.claude
 # IDE & Editor files
 .vscode/
 .idea/
