@@ -19,12 +19,13 @@ $deletedId = (int) ($_GET['deleted'] ?? 0);
 
 /* newest across all four forms — filtered in the browser by the column headers */
 $recent = db()->query(
-    "SELECT product AS type, id, full_name AS title, email, status, created_at
+    "SELECT product AS type, id, full_name AS title, email, status, created_at,
+            reminder_count, reminded_at
        FROM applications
      UNION ALL
-     SELECT 'contact', id, name, email, status, created_at FROM contact_messages
+     SELECT 'contact', id, name, email, status, created_at, 0, NULL FROM contact_messages
      UNION ALL
-     SELECT 'newsletter', id, email, email, status, created_at FROM newsletter_subscribers
+     SELECT 'newsletter', id, email, email, status, created_at, 0, NULL FROM newsletter_subscribers
      ORDER BY created_at DESC
      LIMIT 60"
 )->fetchAll();
@@ -136,7 +137,10 @@ require __DIR__ . '/partials/layout-top.php';
               <td class="td-seq" data-seq><?= $seq ?></td>
               <td><?= e($types[$row['type']]['label']) ?></td>
               <td>
-                <strong><?= e($row['title']) ?></strong><br>
+                <?php /* a newsletter signup has nothing but an address, so show it once */ ?>
+                <?php if ($row['title'] !== $row['email']): ?>
+                  <strong><?= e($row['title']) ?></strong><br>
+                <?php endif; ?>
                 <a href="mailto:<?= e($row['email']) ?>"><?= e($row['email']) ?></a>
               </td>
               <td><?= e(format_datetime($row['created_at'])) ?></td>
@@ -177,8 +181,9 @@ require __DIR__ . '/partials/layout-top.php';
         continue;
     }
 
-    $srcType = $row['type'];
-    $srcRow  = $record;
+    $srcType   = $row['type'];
+    $srcRow    = $record;
+    $srcReturn = 'index.php';
     require __DIR__ . '/partials/drawer-source.php';
   ?>
 <?php endforeach; ?>

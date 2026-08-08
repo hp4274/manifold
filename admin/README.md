@@ -6,6 +6,8 @@ framework, no build step.
 
 ## Setup
 
+0. **Upgrading an existing database?** Run `upgrade-portal.sql`,
+   `upgrade-payment-flow.sql` then `upgrade-instalments.sql`, in that order.
 1. **Create the database.** Import `schema.sql` once — `mysql -u root -p < schema.sql`
    or paste it into phpMyAdmin. It creates the `manifold` database with five
    tables plus the status audit log.
@@ -23,16 +25,19 @@ framework, no build step.
 | `config.php` | Credentials, upload rules, PDO connection |
 | `lib.php` | Session, CSRF, login guard, status vocabulary |
 | `login.php` / `logout.php` | Authentication |
-| `index.php` | Dashboard: totals per form, latest ten submissions |
+| `index.php` | Dashboard: totals per form, latest submissions with column filters |
 | `list.php` | One form's submissions — filter, switch status inline, expand a row for the full record |
-| `status.php` | POST handler behind the row action buttons and the note box |
+| `status.php` | POST handler for contact / newsletter row buttons |
+| `payment.php` | Accept or reject one transfer, or chase the balance |
 | `delete.php` | Deletes one submission and its uploaded files, POST only |
-| `file.php` | Serves an uploaded document to a signed-in admin |
+| `file.php` | Serves an uploaded proof (identity, address or payment) to a signed-in admin |
+| `receipt.php` | Generates the PDF receipt for one verified payment |
+| `receipt-pdf.php` | The PDF writer and the receipt layout, no dependencies |
 | `submit.php` | Public endpoint the website forms post to |
 | `create-admin.php` | One-time bootstrap, delete after use |
-| `partials/` | Shared sidebar, page chrome and the row status switcher |
+| `partials/` | Sidebar, page chrome, row actions, detail drawer, payment panel |
 | `assets/admin.css` | All admin styling |
-| `assets/admin.js` | Auto-submitting status selects, expandable rows |
+| `assets/admin.js` | Column filters, detail drawer, delete confirmation |
 | `uploads/` | Uploaded ID and address documents (not web-readable) |
 
 ## Email (SMTP)
@@ -59,35 +64,58 @@ order; the four are just labels). Counts per status are on the dashboard tiles
 and the filter row of each list. Each change is written to `status_log` with the
 admin who made it.
 
-**Applications** follow the payment flow:
+**Applications** are payment-first, and the fee may be paid in instalments.
 
-`new → pending → confirmed → payment_pending → complete`, or `rejected`.
+`payment_pending → payment_review → complete`, or `rejected`.
 
-| Icon | Action | Effect |
-|---|---|---|
-| ⏳ | Mark under review | `pending` |
-| ✓ | Confirm | `confirmed` **and emails the payment QR code and portal link** |
-| ✅ | Verify payment | `complete` **and emails the applicant** |
-| ✕ | Reject | `rejected` |
-| 🗑 | Delete | removes the record, its documents and its receipt |
+1. The form is submitted. `submit.php` emails the applicant the reference, the
+   QR code and the ₹3,500 fee. The record lands on **payment pending**.
+2. The applicant pays — all at once, or in as many transfers as they like — and
+   uploads a receipt for each. Every upload becomes a row in `payments` and the
+   application moves to **payment received**.
+3. An admin opens **Details** and accepts or rejects each transfer separately.
+   Each accepted transfer emails its own numbered receipt (`MF-2026-00042-R1`,
+   `-R2`, …) showing the amount, the running total and the balance left.
+4. When verified payments cover the fee, the application flips to **complete**
+   on its own — nobody has to mark it.
 
-`payment_pending` is set by the applicant, not the admin — it happens the moment
-they upload a receipt in the portal. That is the queue to review.
+The application's status is always derived from its payments
+(`status_from_payments()` / `sync_application_status()` in `lib.php`), so it can
+never drift out of step with what has actually been banked.
 
-Once an application is `complete` the status buttons disappear and a "Done"
-marker takes their place; the server rejects any further status change on it.
-Delete stays available so finished records can still be cleared out.
+Everything about a payment happens in the Details drawer, where the receipts can
+actually be seen — application rows carry no status buttons, only delete.
 
-**Contact enquiries and newsletter signups** keep the simple set: accept ☎
-contact, ✕ reject, 🗑 delete.
+| In the drawer | Effect |
+|---|---|
+| Accept & send receipt (per transfer) | that payment is verified, its receipt is emailed, the balance drops |
+| Reject (per transfer) | that payment is void, applicant emailed the reason, its file deleted |
+| Send payment reminder | emails the QR code and the outstanding balance |
 
-The button matching the current status is filled in and disabled. Delete asks
-for confirmation first and cannot be undone; there is no soft-delete, so use
-Reject if the record should be kept. Nothing sets a record back to `new` — use
-the status filter to find them instead.
+The fee is `PAYMENT_AMOUNT` in `config.php` (₹3,500), copied to each
+application's `payment_amount` at creation so changing the constant does not
+rewrite historic records.
 
-"Details" expands the row in place to show every field and the internal note
-box, so there is no separate record page.
+**Contact enquiries and newsletter signups** keep the simple set on the row
+itself: ✓ accept, ☎ contact, ✕ reject, 🗑 delete.
+
+"Details" opens a slide-over on the right with every field — and, for an
+application, the payment panel at the top. There is no separate record page.
+
+## Proofs and receipts are different things
+
+| Artefact | Who makes it | Where it lives | How it is opened |
+|---|---|---|---|
+| Identity / address proof | applicant, on the apply form | `admin/uploads/` | `file.php?path=…` |
+| Proof of payment | applicant, per transfer | `admin/uploads/payments/` | `file.php?path=…&dir=payments` |
+| **Receipt** | **we do, per verified payment** | **generated on demand, never stored** | `receipt.php?payment=…` |
+
+A receipt is a PDF we issue — it is not the applicant's screenshot. Rejecting a
+payment deletes that transfer's proof but never affects receipts already issued,
+because those are regenerated from the payment record each time.
+
+Receipts are also attached to the receipt email and copied to
+`ADMIN_NOTIFY_EMAIL`, so both sides always have one.
 
 ## How the website reaches it
 

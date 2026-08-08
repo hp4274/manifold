@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 $mail = (string) ($_GET['mail'] ?? '');
+$pay  = (string) ($_GET['pay'] ?? '');
 ?>
 <?php if ($mail === 'sent'): ?>
   <p class="alert alert--ok">Email sent to the applicant.</p>
@@ -17,4 +18,14 @@ $mail = (string) ($_GET['mail'] ?? '');
       Check the <code>email_log</code> table for the reason.
     <?php endif; ?>
   </p>
+<?php endif; ?>
+
+<?php if ($pay === 'receipt'): ?>
+  <p class="alert alert--ok">Payment accepted. The receipt has been emailed to the applicant.</p>
+<?php elseif ($pay === 'rejected'): ?>
+  <p class="alert alert--error">Payment rejected. The applicant has been emailed and is back to payment pending.</p>
+<?php elseif ($pay === 'reminded'): ?>
+  <p class="alert alert--ok">Reminder sent.</p>
+<?php elseif ($pay === 'mailfail'): ?>
+  <p class="alert alert--error">Saved, but the email did not go out. Check the <code>email_log</code> table.</p>
 <?php endif; ?>

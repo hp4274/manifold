@@ -21,10 +21,10 @@ if (session_status() === PHP_SESSION_NONE) {
 const STATUSES = ['new', 'accepted', 'contacted', 'rejected'];
 
 /** Workflow states for product applications, in the order they happen. */
-const APPLICATION_STATUSES = ['new', 'pending', 'confirmed', 'payment_pending', 'complete', 'rejected'];
+const APPLICATION_STATUSES = ['payment_pending', 'payment_review', 'complete', 'rejected'];
 
 /** The stages an applicant sees in the portal timeline (rejected sits outside). */
-const APPLICATION_STAGES = ['new', 'pending', 'confirmed', 'payment_pending', 'complete'];
+const APPLICATION_STAGES = ['payment_pending', 'payment_review', 'complete'];
 
 /** Which status list applies to a submission type. */
 function statuses_for(string $type): array
@@ -40,13 +40,12 @@ function statuses_for(string $type): array
 function status_label(string $status, string $audience = 'admin'): string
 {
     $labels = [
-        'new'             => 'New',
-        'pending'         => 'Under review',
-        'confirmed'       => 'Confirmed — awaiting payment',
-        'payment_pending' => $audience === 'applicant'
+        'payment_pending' => $audience === 'applicant' ? 'Payment due' : 'Payment pending',
+        'payment_review'  => $audience === 'applicant'
             ? 'Payment submitted — verifying'
             : 'Payment received — verify',
-        'complete'        => 'Complete',
+        'complete'        => $audience === 'applicant' ? 'Complete' : 'Paid and complete',
+        'new'             => 'New',
         'accepted'        => 'Accepted',
         'contacted'       => 'Contacted',
         'rejected'        => 'Rejected',
@@ -59,8 +58,8 @@ function status_label(string $status, string $audience = 'admin'): string
 function status_short(string $status): string
 {
     $short = [
-        'payment_pending' => 'payment received',
-        'confirmed'       => 'confirmed',
+        'payment_pending' => 'payment pending',
+        'payment_review'  => 'payment received',
         'complete'        => 'complete',
     ];
 
@@ -71,21 +70,127 @@ function status_short(string $status): string
 function stage_copy(string $status): array
 {
     $copy = [
-        'new' => ['Application received',
-                  'We have your application and it is queued for review.'],
-        'pending' => ['Under review',
-                      'Our team is checking your details and working out the technical assessment.'],
-        'confirmed' => ['Confirmed — payment due',
-                        'Your application is approved. Pay using the QR code we emailed you, then upload the receipt below.'],
-        'payment_pending' => ['Payment submitted',
-                              'We have your receipt and are verifying it. Nothing more is needed from you.'],
-        'complete' => ['Complete',
-                       'Payment verified. We will contact you to schedule installation.'],
-        'rejected' => ['Not proceeding',
-                       'This application is not moving forward. Contact us if you think that is a mistake.'],
+        'payment_pending' => ['Payment due',
+                              'Pay the balance below using the QR code — in one go or in instalments — '
+                              . 'and upload a receipt for each transfer.'],
+        'payment_review'  => ['Payment submitted',
+                              'We are checking your latest receipt. Nothing more is needed for that transfer.'],
+        'complete'        => ['Complete',
+                              'Payment verified. Your receipt is on its way and we will call you to schedule installation.'],
+        'rejected'        => ['Not proceeding',
+                              'This application is not moving forward. Contact us if you think that is a mistake.'],
     ];
 
     return $copy[$status] ?? [status_label($status, 'applicant'), ''];
+}
+
+/* ---------- payments ---------- */
+
+/** Every transfer on one application, oldest first. */
+function payments_for(int $applicationId): array
+{
+    $stmt = db()->prepare('SELECT * FROM payments WHERE application_id = ? ORDER BY uploaded_at, id');
+    $stmt->execute([$applicationId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * What has been paid, what is waiting to be checked and what is still owed.
+ * Rejected transfers count for nothing.
+ */
+function payment_totals(array $app, ?array $payments = null): array
+{
+    $payments = $payments ?? payments_for((int) $app['id']);
+    $due      = (float) ($app['payment_amount'] ?? PAYMENT_AMOUNT);
+
+    $paid    = 0.0;
+    $waiting = 0.0;
+
+    foreach ($payments as $payment) {
+        if ($payment['status'] === 'verified') {
+            $paid += (float) $payment['amount'];
+        } elseif ($payment['status'] === 'pending') {
+            $waiting += (float) $payment['amount'];
+        }
+    }
+
+    return [
+        'due'      => $due,
+        'paid'     => $paid,
+        'waiting'  => $waiting,
+        'balance'  => max($due - $paid, 0),
+        'settled'  => $paid + 0.001 >= $due,
+        'percent'  => $due > 0 ? min(100, (int) round($paid / $due * 100)) : 100,
+    ];
+}
+
+/**
+ * The status an application should be on, worked out from its payments.
+ * A rejected application stays rejected — that is an admin decision.
+ */
+function status_from_payments(array $app, ?array $payments = null): string
+{
+    if ($app['status'] === 'rejected') {
+        return 'rejected';
+    }
+
+    $payments = $payments ?? payments_for((int) $app['id']);
+    $totals   = payment_totals($app, $payments);
+
+    if ($totals['settled']) {
+        return 'complete';
+    }
+
+    foreach ($payments as $payment) {
+        if ($payment['status'] === 'pending') {
+            return 'payment_review';
+        }
+    }
+
+    return 'payment_pending';
+}
+
+/** Writes the derived status back, and stamps completion the first time. */
+function sync_application_status(int $applicationId): string
+{
+    $stmt = db()->prepare('SELECT * FROM applications WHERE id = ?');
+    $stmt->execute([$applicationId]);
+    $app = $stmt->fetch();
+
+    if (!$app) {
+        return '';
+    }
+
+    $payments = payments_for($applicationId);
+    $next     = status_from_payments($app, $payments);
+    $totals   = payment_totals($app, $payments);
+
+    if ($next !== $app['status']) {
+        db()->prepare('UPDATE applications SET status = ? WHERE id = ?')->execute([$next, $applicationId]);
+        log_status_change('application', $applicationId, (string) $app['status'], $next, null);
+    }
+
+    db()->prepare(
+        'UPDATE applications
+            SET payment_verified_at = ?, completed_at = ?
+          WHERE id = ?'
+    )->execute([
+        $totals['paid'] > 0 ? ($app['payment_verified_at'] ?? date('Y-m-d H:i:s')) : null,
+        $next === 'complete' ? ($app['completed_at'] ?? date('Y-m-d H:i:s')) : null,
+        $applicationId,
+    ]);
+
+    return $next;
+}
+
+/** MF-2026-00042-R2 — the receipt number for one verified transfer. */
+function next_receipt_no(array $app): string
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM payments WHERE application_id = ? AND status = ?');
+    $stmt->execute([(int) $app['id'], 'verified']);
+
+    return $app['reference_code'] . '-R' . ((int) $stmt->fetchColumn() + 1);
 }
 
 /** MF-2026-00042 style reference, unique per application. */
@@ -209,6 +314,19 @@ function log_status_change(string $entity, int $id, ?string $old, string $new, ?
     $stmt->execute([$entity, $id, $old, $new, $userId]);
 }
 
+/**
+ * The status that means "waiting on us" for a given form, and how to say it.
+ * Applications have no `new` — a receipt sitting unverified is the queue.
+ */
+function attention_status(string $type): array
+{
+    if (type_config($type)['table'] === 'applications') {
+        return ['payment_review', 'waiting on payment verification'];
+    }
+
+    return ['new', 'waiting to be reviewed'];
+}
+
 /** Counts per status for one submission type, plus the total. */
 function status_counts(string $type): array
 {
@@ -245,8 +363,11 @@ function record_title(string $type, array $row): string
 }
 
 /**
- * Field groups shown in the expanded row, per submission type.
- * Keys are column names, values are the labels.
+ * Fields shown in the Details drawer, as tab => section => [column => label].
+ *
+ * Related things live under one tab — the site address, what the property is,
+ * its water supply and the technical assessment are all "where it goes", so
+ * they sit together rather than being five separate tabs.
  */
 function field_groups(string $type): array
 {
@@ -254,44 +375,67 @@ function field_groups(string $type): array
 
     if ($config['table'] === 'applications') {
         return [
-            'Applicant' => ['full_name' => 'Full name', 'date_of_birth' => 'Date of birth', 'nationality' => 'Nationality',
-                            'gender' => 'Gender', 'occupation' => 'Occupation', 'mobile_number' => 'Mobile',
-                            'alt_mobile_number' => 'Alternative mobile', 'email' => 'Email'],
-            'Identification' => ['id_number' => 'ID / passport number', 'id_document_path' => 'ID document',
-                                 'residence_proof_path' => 'Residence proof'],
-            'Address' => ['house_number' => 'House / unit', 'street' => 'Street', 'city' => 'City',
-                          'state' => 'State', 'country' => 'Country', 'pin_code' => 'Pin code'],
-            'Property' => ['property_type' => 'Property type', 'property_type_other' => 'Property type (other)',
-                           'ownership_status' => 'Ownership', 'household_members' => 'Household members',
-                           'existing_fuel' => 'Existing fuel', 'existing_fuel_other' => 'Existing fuel (other)'],
-            'Requirement' => ['units_required' => 'Units required', 'intended_usage' => 'Intended usage',
-                              'expected_daily_usage' => 'Expected daily usage', 'preferred_install_date' => 'Preferred install date'],
-            'Water supply' => ['water_source' => 'Water source', 'water_source_other' => 'Water source (other)',
-                               'continuous_water' => 'Continuous supply', 'water_storage' => 'Storage tank'],
-            'Technical assessment' => ['dedicated_kitchen' => 'Dedicated space', 'countertop_space' => 'Level / counter space',
-                                       'existing_gas' => 'Existing fuel connection', 'existing_electric' => 'Electrical supply'],
-            'Payment' => ['payment_method' => 'Payment method', 'financing_option' => 'Financing option', 'bank_name' => 'Bank'],
-            'Referral' => ['referral_source' => 'Heard about us via', 'referral_other' => 'Referral (other)'],
-            'Environmental' => ['monthly_gas_consumption' => 'Monthly fuel', 'monthly_electric_consumption' => 'Monthly electricity',
-                                'carbon_interest' => 'Carbon interest'],
-            'Consent' => ['declaration_accepted' => 'Declaration accepted', 'testimonial_consent' => 'Testimonial consent',
-                          'terms_accepted' => 'Terms accepted'],
-            'Payment &amp; tracking' => ['reference_code' => 'Reference', 'payment_reference' => 'Payment reference',
-                                         'payment_proof_path' => 'Payment proof', 'payment_uploaded_at' => 'Proof uploaded',
-                                         'payment_verified_at' => 'Payment verified', 'confirmed_at' => 'Confirmed on',
-                                         'completed_at' => 'Completed on'],
+            'Applicant' => [
+                'Contact details' => ['full_name' => 'Full name', 'date_of_birth' => 'Date of birth',
+                                      'nationality' => 'Nationality', 'gender' => 'Gender',
+                                      'occupation' => 'Occupation', 'mobile_number' => 'Mobile',
+                                      'alt_mobile_number' => 'Alternative mobile', 'email' => 'Email'],
+                'Identity &amp; address proofs' => ['id_number' => 'ID / passport number',
+                                                   'id_document_path' => 'ID document (proof of identity)',
+                                                   'residence_proof_path' => 'Residence proof (proof of address)'],
+            ],
+
+            'Site &amp; address' => [
+                'Address' => ['house_number' => 'House / unit', 'street' => 'Street', 'city' => 'City',
+                              'state' => 'State', 'country' => 'Country', 'pin_code' => 'Pin code'],
+                'Property' => ['property_type' => 'Property type', 'property_type_other' => 'Property type (other)',
+                               'ownership_status' => 'Ownership', 'household_members' => 'Household members',
+                               'existing_fuel' => 'Existing fuel', 'existing_fuel_other' => 'Existing fuel (other)'],
+                'Water supply' => ['water_source' => 'Water source', 'water_source_other' => 'Water source (other)',
+                                   'continuous_water' => 'Continuous supply', 'water_storage' => 'Storage tank'],
+                'Technical assessment' => ['dedicated_kitchen' => 'Dedicated space',
+                                           'countertop_space' => 'Level / counter space',
+                                           'existing_gas' => 'Existing fuel connection',
+                                           'existing_electric' => 'Electrical supply'],
+            ],
+
+            'Requirement' => [
+                'What they need' => ['units_required' => 'Units required', 'intended_usage' => 'Intended usage',
+                                     'expected_daily_usage' => 'Expected daily usage',
+                                     'preferred_install_date' => 'Preferred install date'],
+                'Current consumption' => ['monthly_gas_consumption' => 'Monthly fuel',
+                                          'monthly_electric_consumption' => 'Monthly electricity',
+                                          'carbon_interest' => 'Carbon interest'],
+            ],
+
+            'Preferences' => [
+                /* what they told us on the form — the real payments are their own tab */
+                'Payment preference' => ['payment_method' => 'Preferred method',
+                                         'financing_option' => 'Financing option', 'bank_name' => 'Bank'],
+                'Referral' => ['referral_source' => 'Heard about us via', 'referral_other' => 'Referral (other)'],
+                'Consent' => ['declaration_accepted' => 'Declaration accepted',
+                              'testimonial_consent' => 'Testimonial consent', 'terms_accepted' => 'Terms accepted'],
+                'Tracking' => ['reference_code' => 'Reference', 'payment_amount' => 'Application fee',
+                               'completed_at' => 'Completed on'],
+            ],
         ];
     }
 
     if ($type === 'contact') {
         return [
-            'Enquiry' => ['name' => 'Name', 'company' => 'Company', 'email' => 'Email', 'phone' => 'Phone',
-                          'interest' => 'Interest', 'city' => 'City', 'message' => 'Message', 'consent' => 'Contact consent'],
+            'Enquiry' => [
+                'Who wrote in' => ['name' => 'Name', 'company' => 'Company', 'email' => 'Email',
+                                   'phone' => 'Phone', 'city' => 'City'],
+                'What they asked' => ['interest' => 'Interest', 'message' => 'Message',
+                                      'consent' => 'Contact consent'],
+            ],
         ];
     }
 
     return [
-        'Subscriber' => ['email' => 'Email'],
+        'Subscriber' => [
+            'Signup' => ['email' => 'Email'],
+        ],
     ];
 }
 

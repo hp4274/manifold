@@ -92,6 +92,13 @@ ul{list-style:none;margin:0;padding:0}
 .sidebar{
   flex:none;
   width:var(--sidebar);
+  /* stays put while the table scrolls, with its own scrollbar if it ever
+     outgrows the window */
+  position:sticky;
+  top:0;
+  align-self:flex-start;
+  height:100vh;
+  overflow-y:auto;
   padding:26px 22px;
   background:var(--navy-800);
   color:#fff;
@@ -260,7 +267,8 @@ ul{list-style:none;margin:0;padding:0}
 .tile__stat--accepted b,
 .tile__stat--confirmed b{color:#26743a}
 .tile__stat--contacted b,
-.tile__stat--payment_pending b{color:#0b7a74}
+.tile__stat--payment_review b{color:#0b7a74}
+.tile__stat--payment_pending b{color:var(--warn)}
 .tile__stat--complete b{color:var(--ink)}
 .tile__stat--rejected b{color:var(--danger)}
 
@@ -285,8 +293,9 @@ ul{list-style:none;margin:0;padding:0}
 .pill--pending{background:rgba(201,138,43,.16);color:var(--warn)}
 .pill--accepted,
 .pill--confirmed{background:rgba(75,180,83,.16);color:#26743a}
-.pill--contacted,
-.pill--payment_pending{background:rgba(23,176,166,.16);color:#0b7a74}
+.pill--contacted{background:rgba(23,176,166,.16);color:#0b7a74}
+.pill--payment_pending{background:rgba(201,138,43,.16);color:#8a5f1c}
+.pill--payment_review{background:rgba(23,176,166,.16);color:#0b7a74}
 .pill--complete{background:rgba(15,44,77,.1);color:var(--ink)}
 .pill--rejected{background:rgba(201,69,92,.12);color:var(--danger)}
 
@@ -469,24 +478,6 @@ tr.is-flagged td{background:rgba(75,180,83,.09)}
 .icon-btn.is-delete:hover{background:rgba(201,69,92,.12);border-color:rgba(201,69,92,.45);color:var(--danger)}
 
 /* the button matching the row's current status is filled in and inert */
-/* completed applications carry no actions, just this marker */
-.row-done{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:8px 16px;
-  border:1px solid var(--line);
-  border-radius:999px;
-  background:var(--tint);
-  font-size:var(--t-micro);
-  font-weight:700;
-  letter-spacing:.1em;
-  text-transform:uppercase;
-  color:var(--ink-soft);
-  white-space:nowrap;
-}
-.row-done i{font-size:14px;line-height:1}
-
 .icon-btn.is-current{cursor:default;transform:none}
 .icon-btn.is-accept.is-current{background:rgba(75,180,83,.18);border-color:rgba(75,180,83,.5);color:#26743a}
 .icon-btn.is-review.is-current{background:rgba(201,138,43,.18);border-color:rgba(201,138,43,.5);color:var(--warn)}
@@ -508,7 +499,7 @@ tr.is-flagged td{background:rgba(75,180,83,.09)}
 .drawer__panel{
   position:absolute;
   top:0;right:0;bottom:0;
-  width:min(1040px,94vw);
+  width:min(1280px,96vw);
   display:flex;
   flex-direction:column;
   background:#fff;
@@ -550,14 +541,33 @@ tr.is-flagged td{background:rgba(75,180,83,.09)}
   overflow-y:auto;
   padding:6px 32px 36px;
 }
-/* wide enough for two columns of fields, one on a narrow window */
-.drawer__body .detail-grid{
-  grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
-  padding:0;
+/* one section at a time; each label/value pair is one grid cell so they can
+   never be split across columns */
+.drawer__body .detail-block{padding-top:22px}
+.detail-fields{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
   gap:0 40px;
+  margin:0;
 }
-.drawer__body .detail-block{padding-top:24px}
-.drawer__body .detail-block dl{grid-template-columns:170px minmax(0,1fr)}
+.detail-field{
+  padding:12px 0;
+  border-top:1px solid var(--line);
+  min-width:0;
+}
+.detail-field dt{
+  font-size:var(--t-ui);
+  font-weight:600;
+  color:var(--muted);
+  margin-bottom:3px;
+}
+.detail-field dd{
+  margin:0;
+  font-size:var(--t-sub);
+  color:var(--ink);
+  line-height:1.45;
+  overflow-wrap:anywhere;
+}
 
 body.has-drawer{overflow:hidden}
 
@@ -602,9 +612,7 @@ body.has-drawer{overflow:hidden}
   margin-bottom:10px;
   border-bottom:1px solid var(--line);
 }
-.detail-block dl{display:grid;grid-template-columns:150px minmax(0,1fr);gap:6px 14px;margin:0}
-.detail-block dt{font-size:var(--t-ui);font-weight:600;color:var(--ink)}
-.detail-block dd{margin:0;font-size:var(--t-ui);color:var(--body);overflow-wrap:anywhere}
+.detail-block dl{margin:0}
 
 
 /* ---------- record view ---------- */
@@ -649,7 +657,13 @@ body.has-drawer{overflow:hidden}
 
 @media (max-width:900px){
   .shell{flex-direction:column}
-  .sidebar{width:100%;flex-direction:column}
+  .sidebar{
+    position:static;
+    width:100%;
+    height:auto;
+    overflow:visible;
+    flex-direction:column;
+  }
   .main{padding:24px 20px 50px}
 }
 
@@ -659,8 +673,6 @@ body.has-drawer{overflow:hidden}
   .drawer__panel{width:100vw}
   .drawer__head{padding:20px 18px}
   .drawer__body{padding:4px 18px 28px}
-  .drawer__body .detail-block dl{grid-template-columns:1fr;gap:2px}
-  .drawer__body .detail-block dt{padding-bottom:0}
   .panel__head{flex-wrap:wrap;gap:10px;padding:18px 18px}
   .filters{gap:8px}
   .filters a{padding:8px 14px;font-size:var(--t-micro)}
@@ -668,3 +680,262 @@ body.has-drawer{overflow:hidden}
   .tile strong{font-size:30px}
   .login-card{padding:32px 24px}
 }
+
+/* ---------- payment panel (top of an application's drawer) ---------- */
+.pay-panel{
+  margin:20px 0 4px;
+  padding:22px 24px 24px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg);
+  background:var(--tint);
+}
+.pay-panel--payment_review{background:rgba(23,176,166,.08);border-color:rgba(23,176,166,.3)}
+.pay-panel--complete{background:rgba(75,180,83,.08);border-color:rgba(75,180,83,.3)}
+
+.pay-panel__head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  margin-bottom:16px;
+}
+.pay-panel__head .detail-block__title{border-bottom:0;padding-bottom:4px;margin-bottom:2px}
+.pay-panel__amount{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  font-size:26px;
+  font-weight:700;
+  line-height:1.2;
+  color:var(--ink);
+}
+
+.pay-panel__facts{
+  display:grid;
+  grid-template-columns:170px minmax(0,1fr);
+  gap:6px 14px;
+  margin:0 0 18px;
+}
+.pay-panel__facts dt{font-size:var(--t-ui);font-weight:600;color:var(--ink)}
+.pay-panel__facts dd{margin:0;font-size:var(--t-ui);color:var(--body);overflow-wrap:anywhere}
+
+.pay-panel__actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:12px;
+  padding-top:18px;
+  border-top:1px solid var(--line);
+}
+.pay-panel__reject{display:flex;gap:10px;flex:1 1 320px;min-width:0}
+.pay-panel__reject input{
+  flex:1 1 auto;
+  min-width:0;
+  padding:11px 14px;
+  font-family:inherit;
+  font-size:var(--t-ui);
+  color:var(--ink);
+  background:#fff;
+  border:1px solid #dfe7ee;
+  border-radius:var(--radius-sm);
+  outline:none;
+}
+.pay-panel__reject input:focus{border-color:var(--danger);box-shadow:0 0 0 3px rgba(201,69,92,.12)}
+
+.btn--danger{background:#fff;color:var(--danger);border:1px solid rgba(201,69,92,.4)}
+.btn--danger:hover{background:rgba(201,69,92,.08)}
+
+.pay-panel__note{
+  flex:1 1 260px;
+  font-size:var(--t-ui);
+  line-height:1.5;
+  color:var(--body);
+}
+.pay-panel__note--ok{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:#26743a;
+  font-weight:600;
+}
+
+@media (max-width:640px){
+  .pay-panel{padding:18px}
+  .pay-panel__facts{grid-template-columns:1fr;gap:2px}
+  .pay-panel__facts dd{margin-bottom:8px}
+  .pay-panel__reject{flex-direction:column;align-items:stretch}
+}
+
+/* ---------- instalment list inside the payment panel ---------- */
+.pay-panel__of{font-size:var(--t-ui);font-weight:400;color:var(--body);margin-left:2px}
+.pay-panel__balance{
+  font-size:var(--t-sub);
+  font-weight:700;
+  color:var(--accent-deep);
+  white-space:nowrap;
+}
+
+.pay-bar{
+  height:8px;
+  margin-bottom:18px;
+  border-radius:99px;
+  background:#e3ebf2;
+  overflow:hidden;
+}
+.pay-bar span{
+  display:block;
+  height:100%;
+  border-radius:99px;
+  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+}
+
+.pay-list{display:grid;gap:10px;margin-bottom:18px}
+.pay-item{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px 16px;
+  padding:14px 16px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+  background:#fff;
+}
+.pay-item--verified{border-color:rgba(75,180,83,.35)}
+.pay-item--rejected{border-color:rgba(201,69,92,.3);opacity:.75}
+.pay-item__main strong{display:block;font-size:var(--t-sub);color:var(--ink)}
+.pay-item__meta{font-size:var(--t-ui);color:var(--muted);overflow-wrap:anywhere}
+.pay-item__side{display:flex;align-items:center;gap:14px;white-space:nowrap}
+.pay-item__state{
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.pay-item--verified .pay-item__state{color:#26743a}
+.pay-item--pending .pay-item__state{color:#8a5f1c}
+.pay-item--rejected .pay-item__state{color:var(--danger)}
+.pay-item__actions{
+  grid-column:1 / -1;
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+
+@media (max-width:640px){
+  .pay-item{grid-template-columns:1fr}
+  .pay-item__side{justify-content:space-between}
+}
+
+
+/* a verified payment has two artefacts: our receipt, and their proof */
+.pay-item__proof{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:var(--t-ui);
+  color:var(--muted);
+  white-space:nowrap;
+}
+a.pay-item__proof:hover{color:var(--ink-soft);text-decoration:underline}
+.pay-item__proof--gone{opacity:.6;font-style:italic}
+
+/* ---------- section tabs inside the drawer ---------- */
+.detail-tabs{
+  position:sticky;
+  top:0;
+  z-index:2;
+  display:flex;
+  gap:6px;
+  overflow-x:auto;
+  padding:14px 0 12px;
+  margin-bottom:4px;
+  background:#fff;
+  border-bottom:1px solid var(--line);
+  scrollbar-width:thin;
+}
+.detail-tabs::-webkit-scrollbar{height:4px}
+.detail-tabs::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+
+.detail-tab{
+  flex:none;
+  padding:9px 16px;
+  border:1px solid transparent;
+  border-radius:999px;
+  background:none;
+  font-family:inherit;
+  font-size:var(--t-ui);
+  font-weight:600;
+  line-height:1.2;
+  color:var(--muted);
+  white-space:nowrap;
+  cursor:pointer;
+  transition:background .2s ease,color .2s ease,border-color .2s ease;
+}
+.detail-tab:hover{background:var(--tint);color:var(--ink-soft)}
+.detail-tab.is-active{
+  background:var(--ink);
+  border-color:var(--ink);
+  color:#fff;
+}
+
+.detail-panel{display:none}
+.detail-panel.is-active{display:block;animation:panelIn .22s ease}
+@keyframes panelIn{
+  0%{opacity:0;transform:translateY(4px)}
+  100%{opacity:1;transform:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .detail-panel.is-active{animation:none}
+}
+
+@media (max-width:640px){
+  .detail-tabs{padding:10px 0 10px}
+  .detail-tab{padding:8px 13px;font-size:var(--t-micro)}
+  .detail-fields{grid-template-columns:1fr;gap:0}
+}
+
+/* the reminder button grows from a circle into a capsule on hover to show how
+   many reminders this lead has had — the colours stay exactly as they are */
+.icon-btn.is-remind{
+  width:auto;
+  min-width:36px;
+  padding:0 9px;
+  /* 50% would stretch into an oval as the button grows — a big fixed radius
+     keeps a true capsule at every width */
+  border-radius:999px;
+  overflow:hidden;
+}
+.icon-btn.is-remind:hover,
+.icon-btn.is-remind:focus-visible{
+  background:#fff;
+  border-color:var(--line);
+  color:var(--ink-soft);
+}
+.icon-btn__text{
+  max-width:0;
+  opacity:0;
+  overflow:hidden;
+  white-space:nowrap;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  transition:max-width .25s ease,opacity .2s ease,margin-left .25s ease;
+}
+.icon-btn.is-remind:hover .icon-btn__text,
+.icon-btn.is-remind:focus-visible .icon-btn__text{
+  max-width:170px;
+  opacity:1;
+  margin-left:8px;
+}
+@media (prefers-reduced-motion:reduce){
+  .icon-btn__text{transition:none}
+}
+
+/* the sidebar's own scrollbar, on the rare screen too short for it */
+.sidebar{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent}
+.sidebar::-webkit-scrollbar{width:6px}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:99px}

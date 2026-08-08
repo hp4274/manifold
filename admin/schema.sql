@@ -35,8 +35,8 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
 CREATE TABLE IF NOT EXISTS `applications` (
   `id`                           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `product`                      ENUM('stove','tuktuk') NOT NULL,
-  -- new → pending → confirmed → payment_pending → complete (or rejected)
-  `status`                       ENUM('new','pending','confirmed','payment_pending','complete','rejected') NOT NULL DEFAULT 'new',
+  -- payment_pending → payment_review → complete (or rejected)
+  `status`                       ENUM('payment_pending','payment_review','complete','rejected') NOT NULL DEFAULT 'payment_pending',
   -- quoted to the applicant; how they find their application in the portal
   `reference_code`               VARCHAR(20) NOT NULL,
 
@@ -108,11 +108,16 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `testimonial_consent`          TINYINT(1) NOT NULL DEFAULT 0,
   `terms_accepted`               TINYINT(1) NOT NULL DEFAULT 0,
 
-  -- payment (filled once the application is confirmed)
+  -- payment: the applicant pays as soon as the form is submitted
+  `payment_amount`               DECIMAL(10,2) NOT NULL DEFAULT 3500.00,
   `payment_reference`            VARCHAR(120) NULL,
   `payment_proof_path`           VARCHAR(255) NULL,
   `payment_uploaded_at`          DATETIME     NULL,
   `payment_verified_at`          DATETIME     NULL,
+  `payment_rejected_at`          DATETIME     NULL,
+  `payment_reject_reason`        VARCHAR(255) NULL,
+  `reminded_at`                  DATETIME     NULL,
+  `reminder_count`               SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   `confirmed_at`                 DATETIME     NULL,
   `completed_at`                 DATETIME     NULL,
 
@@ -127,6 +132,30 @@ CREATE TABLE IF NOT EXISTS `applications` (
   KEY `ix_app_product_status` (`product`, `status`),
   KEY `ix_app_created` (`created_at`),
   KEY `ix_app_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- Payments — one row per transfer, so an applicant can pay the fee in
+-- instalments and get a receipt for each one.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `payments` (
+  `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `application_id` INT UNSIGNED NOT NULL,
+  `amount`         DECIMAL(10,2) NOT NULL,
+  `reference`      VARCHAR(120) NULL,
+  `proof_path`     VARCHAR(255) NULL,
+  `status`         ENUM('pending','verified','rejected') NOT NULL DEFAULT 'pending',
+  `receipt_no`     VARCHAR(30)  NULL,
+  `reject_reason`  VARCHAR(255) NULL,
+  `uploaded_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `decided_at`     DATETIME     NULL,
+  `decided_by`     INT UNSIGNED NULL,
+  PRIMARY KEY (`id`),
+  KEY `ix_pay_app` (`application_id`, `status`),
+  CONSTRAINT `fk_pay_app` FOREIGN KEY (`application_id`)
+    REFERENCES `applications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_pay_admin` FOREIGN KEY (`decided_by`)
+    REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------

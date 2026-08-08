@@ -44,10 +44,16 @@ if (!$row) {
 $oldStatus = (string) $row['status'];
 $mailFlag  = '';
 
-/* the UI hides the buttons on a completed application; enforce it here too */
-if ($config['table'] === 'applications' && $oldStatus === 'complete' && $status !== 'complete') {
+/* payment decisions belong to payment.php, which checks the receipt first */
+if ($config['table'] === 'applications') {
     http_response_code(409);
-    exit('This application is complete and can no longer be changed.');
+    exit('Use the payment actions in the Details drawer for applications.');
+}
+
+/* the UI hides the buttons once accepted; enforce it here too */
+if ($oldStatus === 'accepted' && $status !== 'accepted') {
+    http_response_code(409);
+    exit('This one has been accepted and can no longer be changed.');
 }
 
 if ($oldStatus !== $status) {
@@ -56,20 +62,8 @@ if ($oldStatus !== $status) {
 
     log_status_change($config['entity'], $id, $oldStatus, $status, (int) $user['id']);
 
-    if ($config['table'] === 'applications') {
-        if ($status === 'confirmed') {
-            db()->prepare('UPDATE applications SET confirmed_at = NOW() WHERE id = ?')->execute([$id]);
-            $row['status'] = $status;
-            $mailFlag = send_payment_email($row) ? '&mail=sent' : '&mail=failed';
-        }
-
-        if ($status === 'complete') {
-            db()->prepare('UPDATE applications SET completed_at = NOW(), payment_verified_at = NOW() WHERE id = ?')
-                ->execute([$id]);
-            $row['status'] = $status;
-            $mailFlag = send_complete_email($row) ? '&mail=sent' : '&mail=failed';
-        }
-    }
+    /* Applications are driven by payment.php, which sends the emails that go
+       with a payment decision. Nothing to send from here. */
 }
 
 if (array_key_exists('admin_note', $_POST)) {

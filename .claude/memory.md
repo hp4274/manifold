@@ -22,6 +22,126 @@ already obvious from the code or the README.
 
 ## Log
 
+### 2026-08-08 — Details tabs consolidated to five
+
+- Thirteen tabs was still too many, so `field_groups()` now returns
+  **tab => section => fields** and related things share a tab, each keeping its
+  own subheading inside the panel.
+- Applications: **Payment · Applicant · Site & address · Requirement · Admin**.
+  Address, property, water supply and the technical assessment all describe
+  where the unit goes, so they live under Site & address; consumption joined
+  Requirement; payment preference, referral, consent and tracking became Admin.
+- Contact and newsletter now have one tab with two subsections, so the tab bar
+  is skipped entirely for them.
+- `partials/drawer-source.php` renders the extra nesting level; nothing else
+  consumed `field_groups()`.
+
+
+### 2026-08-08 — Details drawer: wider, with section tabs
+
+- A full application showed thirteen field groups stacked, so the drawer was an
+  endless scroll.
+- `partials/drawer-source.php` now renders a tab bar (`.detail-tabs`) and one
+  `.detail-panel` per group, with only the first visible. The payment panel is
+  the first tab on an application; contact and newsletter have a single group so
+  the bar is skipped entirely.
+- Switching is handled in `assets/admin.js`, delegated on `#drawerBody` because
+  the markup is cloned into the drawer at open time. The tab bar is sticky and
+  scrolls sideways; the body scrolls back to the top on each switch.
+- Drawer widened 1040px → **1280px** (96vw cap). Fields inside a panel now flow
+  into as many `minmax(340px,1fr)` columns as fit, each row separated by a
+  hairline, one column on a phone.
+- Renamed the form's `Payment` field group to **Payment preference** — it was
+  colliding with the real Payment tab in the tab bar.
+
+
+### 2026-08-08 — Receipts are generated PDFs, kept apart from proofs
+
+- The "Receipt" link in the payment panel opened the applicant's uploaded
+  screenshot, which is a *proof*, not a receipt — and broke when a proof had
+  been deleted. Receipts are now PDFs we issue.
+- `admin/receipt-pdf.php` is a hand-written PDF 1.4 writer (SimplePdf: text,
+  rules, filled rects, Helvetica base-14) plus `build_receipt_pdf()`. No
+  Composer, no vendor directory, in keeping with the rest of the project.
+  Rupee signs and dashes are folded to ASCII because base-14 fonts are
+  single byte.
+- Served by `admin/receipt.php?payment=N` (admin session) and
+  `portal/receipt.php?payment=N` (applicant session, scoped to their own email).
+  Nothing is stored on disk — each request regenerates from the payment row, so
+  deleting a proof can never destroy a receipt.
+- The receipt email now **attaches the PDF** and BCCs `ADMIN_NOTIFY_EMAIL`.
+  `mailer.php` grew attachment support: multipart/mixed wrapping the
+  related/alternative body.
+- Vocabulary is now explicit everywhere: *identity proof* and *address proof*
+  (apply form, `uploads/`), *proof of payment* (per transfer,
+  `uploads/payments/`), *receipt* (ours, generated). The drawer shows
+  "Receipt PDF" and "Proof of payment" as separate links, and says
+  "proof removed" where a rejected transfer's file is gone.
+- Verified: PDF opens as `application/pdf` (4.5 KB, valid header/EOF, all text
+  reads back correctly), endpoint 302s to login without a session, and a live
+  receipt email with the attachment was delivered.
+
+
+### 2026-08-08 — Instalments: pay the fee in parts, a receipt for each
+
+- Scenario raised: an applicant whose bank caps transfers at ₹1,000 pays four
+  times and should get four receipts.
+- Payments moved out of the `applications` row into a new `payments` table
+  (`admin/upgrade-instalments.sql`, already run locally; also in `schema.sql`).
+  One row per transfer: amount, reference, proof, status
+  (pending/verified/rejected), `receipt_no`, who decided it and when. Existing
+  single receipts were migrated in as `-R1`.
+- The application's status is now **derived, never set by hand**:
+  `status_from_payments()` returns complete when verified payments cover the
+  fee, payment_review while any transfer is waiting, otherwise payment_pending.
+  `sync_application_status()` writes it back and stamps `completed_at`. Called
+  after every upload and every admin decision.
+- `payment_totals()` gives due / paid / waiting / balance / percent, used by the
+  admin panel, the portal ledger and all three emails.
+- Receipts are numbered `MF-2026-00042-R1`, `-R2`… by counting verified
+  payments. Each receipt email shows that transfer's amount, the running total
+  and the balance; the final one says "paid in full".
+- Portal: the upload form asks how much this transfer was (capped at the
+  balance), and the card shows a progress bar plus a ledger of every transfer
+  with its state and receipt number.
+- Admin drawer: one row per transfer with its own Accept / Reject, a progress
+  bar, and a reminder button that quotes the outstanding balance.
+- Tested live end to end with 1000+1000+1000+500 → four receipt emails
+  (R1–R4, balances 2500/1500/500/0) and the application auto-completed. Test
+  rows, orphaned receipt files and OTPs were removed afterwards.
+
+
+### 2026-08-08 — Payment-first application flow
+
+- Flow rewritten on request: the applicant pays as soon as the form is
+  submitted. There is no admin approval before payment, so the old
+  new/pending/confirmed steps are gone.
+- Application statuses are now `payment_pending → payment_review → complete`
+  (plus `rejected`). `admin/upgrade-payment-flow.sql` migrates an existing
+  database and has been run locally; `schema.sql` matches for fresh installs.
+- `submit.php` sends the payment email itself (reference, QR, fee) the moment an
+  application is stored. The fee is `PAYMENT_AMOUNT` (₹3,500) in `config.php`,
+  copied into each row's `payment_amount` so changing it later cannot rewrite
+  history. `money()` formats it.
+- New `admin/payment.php` handles the three payment decisions; new
+  `partials/payment-panel.php` renders them at the top of an application's
+  Details drawer. Accept → `complete` + receipt email. Reject → back to
+  `payment_pending`, reason emailed, and the receipt file is deleted from disk.
+  Remind → re-sends the QR, bumps `reminder_count`.
+- **Application rows no longer carry status buttons** — only delete. Payments
+  are decided in the drawer, where the receipt can actually be seen.
+  `status.php` now refuses any application and answers 409; it serves contact
+  and newsletter only.
+- Four new email templates in `emails.php`: application received / pay,
+  reminder, receipt (itemised table), payment rejected. All five paths were
+  delivered live to the client's inbox during testing.
+- Portal: the upload appears while `payment_pending`, moves the record to
+  `payment_review`, and a rejected receipt shows the admin's reason above the
+  upload form.
+- Test row #7 was created and deleted afterwards; the three real applications
+  (#3, #4, #6) and their receipts were left alone.
+
+
 ### 2026-08-06 — Mobile pass over the public site, portal and admin
 
 - Asked to fix sections that did not fit a phone screen.

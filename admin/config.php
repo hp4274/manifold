@@ -89,6 +89,15 @@ function qr_file(): ?string
     return $path === '' ? null : __DIR__ . '/../' . $path;
 }
 
+/** What every application costs, and how it is written. */
+const PAYMENT_AMOUNT   = 3500;
+const PAYMENT_CURRENCY = '₹';
+
+function money(float $amount): string
+{
+    return PAYMENT_CURRENCY . number_format($amount, 2);
+}
+
 /** Where payment proofs are stored. */
 const PAYMENT_PROOF_DIR = __DIR__ . '/uploads/payments';
 

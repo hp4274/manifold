@@ -12,7 +12,7 @@ $email = require_applicant();
 $error = '';
 $done  = false;
 
-/* ---------- receipt upload ---------- */
+/* ---------- receipt upload: one row per transfer ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
@@ -22,10 +22,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute([$id, $email]);
     $app = $stmt->fetch();
 
+    $totals = $app ? payment_totals($app) : null;
+    $amount = round((float) str_replace(',', '', (string) ($_POST['amount'] ?? '')), 2);
+
     if (!$app) {
         $error = 'That application could not be found.';
-    } elseif ($app['status'] !== 'confirmed') {
-        $error = 'A receipt can only be uploaded once the application is confirmed.';
+    } elseif ($totals['settled']) {
+        $error = 'This application is already paid in full.';
+    } elseif ($amount <= 0) {
+        $error = 'Enter how much this transfer was for.';
+    } elseif ($amount > $totals['balance'] + 0.001) {
+        $error = 'That is more than the ' . money((float) $totals['balance']) . ' still outstanding.';
     } elseif (empty($_FILES['payment_proof']) || $_FILES['payment_proof']['error'] !== UPLOAD_ERR_OK) {
         $error = 'Choose the receipt file to upload.';
     } else {
@@ -48,22 +55,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'The upload did not complete. Try again.';
             } else {
                 db()->prepare(
-                    'UPDATE applications
-                        SET payment_proof_path = ?, payment_reference = ?, payment_uploaded_at = NOW(),
-                            status = ?
-                      WHERE id = ?'
+                    'INSERT INTO payments (application_id, amount, reference, proof_path) VALUES (?, ?, ?, ?)'
                 )->execute([
-                    $name,
-                    mb_substr(trim((string) ($_POST['payment_reference'] ?? '')), 0, 120) ?: null,
-                    'payment_pending',
                     $id,
+                    $amount,
+                    mb_substr(trim((string) ($_POST['payment_reference'] ?? '')), 0, 120) ?: null,
+                    $name,
                 ]);
 
-                log_status_change('application', $id, (string) $app['status'], 'payment_pending', null);
+                /* keep the application row in step and tell the team */
+                sync_application_status($id);
 
-                /* tell the team there is a receipt waiting */
-                $app['status']            = 'payment_pending';
-                $app['payment_reference'] = $_POST['payment_reference'] ?? null;
+                $app['status'] = 'payment_review';
                 send_payment_received_admin($app);
 
                 header('Location: status.php?uploaded=' . $id . '#app-' . $id);
@@ -157,22 +160,76 @@ require __DIR__ . '/partials/head.php';
           <p class="portal-app__copy"><strong><?= e($title) ?>.</strong> <?= e($copy) ?></p>
         <?php endif; ?>
 
-        <?php if ($status === 'confirmed'): ?>
+        <?php $totals = payment_totals($app); ?>
+
+        <?php if ($status !== 'rejected'): ?>
+          <div class="portal-ledger">
+            <div class="portal-ledger__head">
+              <p class="portal-ledger__paid">
+                <?= e(money((float) $totals['paid'])) ?>
+                <span>paid of <?= e(money((float) $totals['due'])) ?></span>
+              </p>
+              <?php if ($totals['balance'] > 0): ?>
+                <p class="portal-ledger__due"><?= e(money((float) $totals['balance'])) ?> to go</p>
+              <?php endif; ?>
+            </div>
+
+            <div class="portal-bar" role="img"
+                 aria-label="<?= (int) $totals['percent'] ?>% of the fee has been paid">
+              <span style="width:<?= (int) $totals['percent'] ?>%"></span>
+            </div>
+
+            <?php $entries = payments_for((int) $app['id']); ?>
+            <?php if ($entries): ?>
+              <ul class="portal-ledger__list">
+                <?php foreach ($entries as $entry): ?>
+                  <li class="portal-entry portal-entry--<?= e($entry['status']) ?>">
+                    <span class="portal-entry__amount"><?= e(money((float) $entry['amount'])) ?></span>
+                    <span class="portal-entry__meta">
+                      <?= e(format_datetime($entry['uploaded_at'])) ?>
+                      <?php if (!empty($entry['receipt_no'])): ?>
+                        · receipt <?= e($entry['receipt_no']) ?>
+                      <?php endif; ?>
+                      <?php if ($entry['status'] === 'rejected' && !empty($entry['reject_reason'])): ?>
+                        · <?= e($entry['reject_reason']) ?>
+                      <?php endif; ?>
+                    </span>
+                    <?php if ($entry['status'] === 'verified'): ?>
+                      <a class="portal-entry__receipt" target="_blank" rel="noopener"
+                         href="receipt.php?payment=<?= (int) $entry['id'] ?>">
+                        <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Receipt PDF
+                      </a>
+                    <?php endif; ?>
+
+                    <span class="portal-entry__state">
+                      <?php if ($entry['status'] === 'verified'): ?>
+                        <i class="bi bi-check-lg" aria-hidden="true"></i> Verified
+                      <?php elseif ($entry['status'] === 'pending'): ?>
+                        <i class="bi bi-hourglass-split" aria-hidden="true"></i> Checking
+                      <?php else: ?>
+                        <i class="bi bi-x-lg" aria-hidden="true"></i> Not accepted
+                      <?php endif; ?>
+                    </span>
+                  </li>
+                <?php endforeach; ?>
+              </ul>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+
+        <?php if (!$totals['settled'] && $status !== 'rejected'): ?>
           <div class="portal-pay">
             <div class="portal-pay__qr">
               <?php $qr = qr_path(); ?>
               <?php if ($qr !== ''): ?>
                 <img src="../<?= e($qr) ?>" alt="Payment QR code for <?= e($app['reference_code']) ?>">
-                <p class="portal-pay__note">
-                  Scan with any UPI app to pay, then upload the receipt below.
-                  Quote <strong><?= e($app['reference_code']) ?></strong> on the payment.
-                </p>
-              <?php else: ?>
-                <p class="portal-pay__note">
-                  The payment QR code will be emailed to you. Quote
-                  <strong><?= e($app['reference_code']) ?></strong> on the payment.
-                </p>
               <?php endif; ?>
+              <p class="portal-pay__note">
+                Pay all or part of the <strong><?= e(money((float) $totals['balance'])) ?></strong> outstanding,
+                then upload that receipt. You can pay in as many instalments as you like —
+                each verified transfer gets its own receipt.
+                Quote <strong><?= e($app['reference_code']) ?></strong> on every payment.
+              </p>
             </div>
 
             <form class="portal-pay__form form-x" method="post" enctype="multipart/form-data">
@@ -180,31 +237,30 @@ require __DIR__ . '/partials/head.php';
               <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
 
               <div class="field">
+                <label for="amount-<?= (int) $app['id'] ?>">How much was this transfer? <span class="req" aria-hidden="true">*</span></label>
+                <input id="amount-<?= (int) $app['id'] ?>" name="amount" type="number" step="0.01" min="1"
+                       max="<?= e(number_format((float) $totals['balance'], 2, '.', '')) ?>"
+                       value="<?= e(number_format((float) $totals['balance'], 2, '.', '')) ?>" required>
+                <span class="field-hint">Up to <?= e(money((float) $totals['balance'])) ?> outstanding</span>
+              </div>
+
+              <div class="field">
                 <label for="ref-<?= (int) $app['id'] ?>">Payment reference or UTR (optional)</label>
                 <input id="ref-<?= (int) $app['id'] ?>" name="payment_reference" type="text" placeholder="From your bank or UPI app">
               </div>
 
               <div class="field">
-                <label for="proof-<?= (int) $app['id'] ?>">Payment receipt <span class="req" aria-hidden="true">*</span></label>
+                <label for="proof-<?= (int) $app['id'] ?>">Receipt for this transfer <span class="req" aria-hidden="true">*</span></label>
                 <input id="proof-<?= (int) $app['id'] ?>" name="payment_proof" type="file"
                        accept="image/*,application/pdf" required>
                 <span class="field-hint">JPG, PNG, WebP or PDF, up to 10 MB</span>
               </div>
 
               <button type="submit" class="btn-pill btn-pill--accent form-x__submit">
-                Upload receipt <i class="bi bi-upload"></i>
+                Upload this receipt <i class="bi bi-upload"></i>
               </button>
             </form>
           </div>
-        <?php endif; ?>
-
-        <?php if (!empty($app['payment_uploaded_at'])): ?>
-          <p class="portal-app__meta">
-            Receipt uploaded <?= e(format_datetime($app['payment_uploaded_at'])) ?>
-            <?php if (!empty($app['payment_reference'])): ?>
-              · reference <?= e($app['payment_reference']) ?>
-            <?php endif; ?>
-          </p>
         <?php endif; ?>
 
       </article>

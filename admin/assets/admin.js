@@ -79,6 +79,26 @@
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && !drawer.hidden) closeDrawer();
     });
+
+    /* ---------- the drawer's own tab bar ---------- */
+    drawerBody.addEventListener('click', function (e) {
+      var tab = e.target.closest('.detail-tab');
+      if (!tab) return;
+
+      var wanted = tab.dataset.tab;
+
+      Array.prototype.forEach.call(drawerBody.querySelectorAll('.detail-tab'), function (button) {
+        var on = button === tab;
+        button.classList.toggle('is-active', on);
+        button.setAttribute('aria-selected', String(on));
+      });
+
+      Array.prototype.forEach.call(drawerBody.querySelectorAll('.detail-panel'), function (panel) {
+        panel.classList.toggle('is-active', panel.dataset.panel === wanted);
+      });
+
+      drawerBody.scrollTop = 0;
+    });
   }
 
   /* ---------- click-to-cycle column filters ----------

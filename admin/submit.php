@@ -13,6 +13,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/emails.php';
 
 /* ---------- helpers ---------- */
 
@@ -216,12 +217,19 @@ try {
 
         db()->prepare($sql)->execute(array_values($columns));
 
-        $id = (int) db()->lastInsertId();
-        db()->prepare('UPDATE applications SET reference_code = ? WHERE id = ?')
-            ->execute(['MF-' . date('Y') . '-' . str_pad((string) $id, 5, '0', STR_PAD_LEFT), $id]);
+        $id  = (int) db()->lastInsertId();
+        $ref = 'MF-' . date('Y') . '-' . str_pad((string) $id, 5, '0', STR_PAD_LEFT);
 
-        respond(true, 'Application received. Our team will be in touch within two working days. '
-            . 'Track it any time by signing in with this email address.');
+        db()->prepare('UPDATE applications SET reference_code = ? WHERE id = ?')->execute([$ref, $id]);
+
+        /* the applicant pays first, so the payment email goes out immediately */
+        $columns['id']             = $id;
+        $columns['reference_code'] = $ref;
+        $columns['payment_amount'] = PAYMENT_AMOUNT;
+        send_payment_email($columns);
+
+        respond(true, 'Application received. We have emailed you the payment details — pay '
+            . money((float) PAYMENT_AMOUNT) . ' and upload the receipt to reserve your place.');
     }
 
     if ($form === 'contact') {

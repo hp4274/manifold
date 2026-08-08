@@ -48,8 +48,10 @@ $savedId   = (int) ($_GET['saved'] ?? 0);
 $deletedId = (int) ($_GET['deleted'] ?? 0);
 $returnUrl = 'list.php?type=' . urlencode($type) . ($status !== '' ? '&status=' . urlencode($status) : '');
 
+[$attentionKey, $attentionLabel] = attention_status($type);
+
 $pageTitle  = $config['label'];
-$pageLead   = $counts['total'] . ' total · ' . $counts['new'] . ' waiting to be reviewed';
+$pageLead   = $counts['total'] . ' total · ' . ($counts[$attentionKey] ?? 0) . ' ' . $attentionLabel;
 $activeType = $type;
 
 require __DIR__ . '/partials/layout-top.php';
@@ -144,6 +146,7 @@ require __DIR__ . '/partials/layout-top.php';
     <?php
       $srcType   = $type;
       $srcRow    = $row;
+      $srcReturn = $returnUrl;
       require __DIR__ . '/partials/drawer-source.php';
     ?>
   <?php endforeach; ?>
