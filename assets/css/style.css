@@ -22,6 +22,7 @@
   --accent:#4bb453;
   --accent-2:#17b0a6;
   --accent-deep:#0e8f96;
+  --accent-on-dark:#7fe0c8;   /* accents on the navy bands */
   --nav-ink:#04223a;      /* navbar link colour */
   --nav-active:#4bb453;   /* active / hover navbar link */
   --tint:#f6f9fc;
@@ -616,7 +617,7 @@ p{margin:0}
   top:14px;left:14px;
   z-index:3;
   background:var(--accent);
-  color:#06332f;
+  color:var(--white);
   font-size:var(--t-micro);
   font-weight:700;
   letter-spacing:.08em;
@@ -1070,16 +1071,11 @@ p{margin:0}
   color:var(--leaf-deep);
 }
 
-/* --- why hydrogen: full-width panel under the intro --- */
+/* --- why hydrogen: full-width block under the intro, no panel chrome --- */
 .why-panel{
   position:relative;
   z-index:2;
   margin-top:80px;
-  padding:52px 44px 48px;
-  border-radius:26px;
-  background:linear-gradient(180deg,rgba(255,255,255,.7) 0%,rgba(238,246,251,.92) 100%);
-  border:1px solid rgba(255,255,255,.9);
-  box-shadow:0 20px 50px rgba(15,60,95,.06);
 }
 /* centred eyebrow, rule underneath */
 .eyebrow--center{text-align:center;margin-bottom:40px}
@@ -1286,12 +1282,12 @@ p{margin:0}
 }
 
 /* ---------- 9b. Proof / trusted ----------
-   Light band in the site palette: --ink headings, --accent-deep accents,
-   white cards on --line borders, same radius and shadow as every other card. */
+   Dark band, same gradient as the feature bar: white headings, glass cards
+   over the navy, accent teal for labels, links and icons. */
 .proof{
   position:relative;
   overflow:hidden;
-  background:linear-gradient(180deg,var(--white) 0%,var(--tint) 100%);
+  background:linear-gradient(10deg,#043d6b 70%,#4bb453 100%);
 }
 .proof-dots{
   position:absolute;
@@ -1299,13 +1295,16 @@ p{margin:0}
   right:0;top:6%;
   width:140px;height:180px;
   pointer-events:none;
-  background-image:radial-gradient(#dbe7f0 1.5px,transparent 1.5px);
+  background-image:radial-gradient(rgba(255,255,255,.32) 1.5px,transparent 1.5px);
   background-size:16px 16px;
   opacity:.8;
 }
 .proof .container-x{position:relative;z-index:2}
-.proof .section-title{max-width:26ch}
-.proof .section-title span{color:var(--accent-deep)}
+.proof .section-title{max-width:26ch;color:#fff}
+.proof .section-title span{color:var(--accent-on-dark)}
+.proof .section-sub{color:rgba(255,255,255,.66)}
+.proof .eyebrow--rule{color:var(--accent-on-dark)}
+.proof .eyebrow--rule::after{background:var(--accent-on-dark)}
 /* Desktop only: once .section-head stacks, a flex-basis is read as a height
    and leaves a 420px hole under the subtitle. */
 @media (min-width:992px){
@@ -1317,24 +1316,25 @@ p{margin:0}
   display:flex;
   flex-direction:column;
   padding:34px 32px 30px;
-  border:1px solid var(--line);
+  border:1px solid rgba(255,255,255,.16);
   border-radius:var(--radius-lg);
-  background:#fff;
-  box-shadow:var(--shadow-card);
-  transition:transform .3s ease,border-color .3s ease,box-shadow .3s ease;
+  background:rgba(255,255,255,.07);
+  box-shadow:0 14px 40px rgba(2,20,36,.18);
+  transition:transform .3s ease,border-color .3s ease,box-shadow .3s ease,background .3s ease;
 }
 .proof-card:hover{
   transform:translateY(-5px);
-  border-color:rgba(23,176,166,.35);
-  box-shadow:0 18px 40px rgba(10,45,80,.12);
+  border-color:rgba(127,224,200,.45);
+  background:rgba(255,255,255,.11);
+  box-shadow:0 22px 50px rgba(2,20,36,.26);
 }
 .proof-card__icon{
   display:flex;align-items:center;justify-content:center;line-height:1;
   width:60px;height:60px;
   margin-bottom:24px;
   border-radius:50%;
-  background:rgba(23,176,166,.12);
-  color:var(--accent-deep);
+  background:rgba(255,255,255,.12);
+  color:var(--accent-on-dark);
   font-size:24px;
 }
 .proof-card__icon > i{display:block;line-height:1}
@@ -1343,14 +1343,14 @@ p{margin:0}
   font-weight:700;
   letter-spacing:.16em;
   text-transform:uppercase;
-  color:var(--accent-deep);
+  color:var(--accent-on-dark);
   margin-bottom:8px;
 }
 .proof-card h3{
   font-size:var(--t-sub);
   font-weight:700;
   line-height:1.4;
-  color:var(--ink);
+  color:#fff;
   margin-bottom:14px;
 }
 .proof-card__rule{
@@ -1364,7 +1364,7 @@ p{margin:0}
   font-size:var(--t-sub);
   font-weight:400;
   line-height:1.6;
-  color:var(--body);
+  color:rgba(255,255,255,.66);
   margin-bottom:26px;
 }
 .proof-card__link{
@@ -1374,7 +1374,7 @@ p{margin:0}
   margin-top:auto;
   font-size:var(--t-sub);
   font-weight:700;
-  color:var(--accent-deep);
+  color:var(--accent-on-dark);
 }
 .proof-card__link i{font-size:15px;line-height:1;transition:transform .25s ease}
 .proof-card__link:hover i{transform:translateX(4px)}
@@ -1391,25 +1391,26 @@ p{margin:0}
   align-items:center;
   gap:11px;
   padding:13px 22px;
-  border:1px solid var(--line);
+  border:1px solid rgba(255,255,255,.22);
   border-radius:999px;
-  background:#fff;
+  background:rgba(255,255,255,.07);
   font-size:var(--t-ui);
   font-weight:600;
   letter-spacing:.06em;
   text-transform:uppercase;
-  color:var(--ink-soft);
-  transition:border-color .25s ease,transform .25s ease,color .25s ease;
+  color:rgba(255,255,255,.8);
+  transition:border-color .25s ease,transform .25s ease,color .25s ease,background .25s ease;
 }
 .proof-tag i{
   font-size:18px;
   line-height:1;
-  color:var(--accent-deep);
+  color:var(--accent-on-dark);
 }
 .proof-tag:hover{
   transform:translateY(-2px);
-  border-color:rgba(23,176,166,.45);
-  color:var(--ink);
+  border-color:rgba(127,224,200,.5);
+  background:rgba(255,255,255,.12);
+  color:#fff;
 }
 
 /* ---------- 10. Partners ---------- */
@@ -1433,7 +1434,7 @@ p{margin:0}
 .partner-row img:hover{opacity:1;transform:translateY(-2px)}
 
 /* ---------- 11. CTA ---------- */
-.cta-section{padding:0 0 var(--sec-pad);background:var(--white)}
+.cta-section{padding:var(--sec-pad) 0;background:var(--white)}
 
 .cta-band{
   position:relative;
@@ -1865,7 +1866,7 @@ p{margin:0}
   margin-bottom:18px;
   border-radius:50%;
   background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
-  color:#04302f;
+  color:var(--white);
   font-size:var(--t-micro);
   font-weight:700;
   letter-spacing:.06em;
@@ -2942,7 +2943,7 @@ p{margin:0}
   .about-stat{flex:1 1 220px}
   .about-dots--bl,.about-dots--br,.about-dots--tl{display:none}
 
-  .why-panel{margin-top:56px;padding:36px 24px 32px;border-radius:20px}
+  .why-panel{margin-top:56px}
 
   .page-hero{min-height:0}
   .page-hero__inner{padding-top:calc(var(--header-offset) + 44px);padding-bottom:56px}
@@ -3074,7 +3075,6 @@ body{overflow-x:hidden}
     box-shadow:0 14px 34px rgba(15,60,95,.12);
   }
 
-  .why-panel{padding:28px 18px 26px;border-radius:18px}
   .eyebrow--center{margin-bottom:26px}
 
   /* --- panels that were padded for desktop --- */
