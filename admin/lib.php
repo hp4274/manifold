@@ -184,6 +184,174 @@ function sync_application_status(int $applicationId): string
     return $next;
 }
 
+/* ---------- settings ---------- */
+
+/**
+ * Every row of `settings`, read once per request. Pass true after a write so
+ * the next read sees it.
+ */
+function settings_all(bool $reload = false): array
+{
+    static $values = null;
+
+    if ($values === null || $reload) {
+        $values = [];
+
+        foreach (db()->query('SELECT name, value FROM settings')->fetchAll() as $row) {
+            $values[(string) $row['name']] = (string) $row['value'];
+        }
+    }
+
+    return $values;
+}
+
+/** One admin-editable value, or $default when the row is missing. */
+function setting(string $name, string $default = ''): string
+{
+    $values = settings_all();
+
+    return $values[$name] ?? $default;
+}
+
+function save_setting(string $name, string $value): void
+{
+    db()->prepare(
+        'INSERT INTO settings (name, value) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE value = VALUES(value)'
+    )->execute([$name, $value]);
+
+    settings_all(true);
+}
+
+/* ---------- referrals ----------
+   Every application carries a code of its own for life. Quoting somebody
+   else's code changes nothing about what this applicant pays — it books a
+   reward for the person who referred them, which the office pays by hand. */
+
+/** States a reward goes through. `none` means the application was not referred. */
+const REWARD_STATUSES = ['none', 'pending', 'sent', 'cancelled'];
+
+/** What the referrer earns when their code is used. */
+function referral_reward(): float
+{
+    return max(0.0, (float) setting('referral_reward', (string) REFERRAL_REWARD_DEFAULT));
+}
+
+function reward_label(string $status): string
+{
+    $labels = [
+        'none'      => 'Not referred',
+        'pending'   => 'Payout pending',
+        'sent'      => 'Payout sent',
+        'cancelled' => 'Payout cancelled',
+    ];
+
+    return $labels[$status] ?? ucfirst($status);
+}
+
+/** Nothing that can be misread down a phone line: no O/0, no I/1. */
+function make_referral_code(): string
+{
+    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $check    = db()->prepare('SELECT 1 FROM applications WHERE referral_code = ?');
+
+    for ($attempt = 0; $attempt < 20; $attempt++) {
+        $code = 'MF';
+
+        for ($i = 0; $i < 6; $i++) {
+            $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+        }
+
+        $check->execute([$code]);
+
+        if (!$check->fetchColumn()) {
+            return $code;
+        }
+    }
+
+    throw new RuntimeException('Could not allocate a referral code.');
+}
+
+/** Whatever they typed, in the shape the codes are stored in. */
+function normalise_referral_code(?string $code): string
+{
+    return strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) $code));
+}
+
+/**
+ * The application a code belongs to, or null. Only an application that has
+ * paid in full can refer anyone — that is the point at which the code is
+ * handed out, so an unpaid one is not a valid referrer.
+ */
+function referrer_for_code(string $code): ?array
+{
+    if ($code === '') {
+        return null;
+    }
+
+    $stmt = db()->prepare('SELECT * FROM applications WHERE referral_code = ? AND status = ? LIMIT 1');
+    $stmt->execute([$code, 'complete']);
+
+    return $stmt->fetch() ?: null;
+}
+
+/** An apply-form URL with the code already in the box. */
+function referral_link(string $code, string $product = 'stove'): string
+{
+    $page = $product === 'tuktuk' ? 'apply-tuktuk.html' : 'apply-stove.html';
+
+    return base_url() . '/' . $page . '?ref=' . rawurlencode($code);
+}
+
+/** Everyone who has applied with one application's code, newest first. */
+function referrals_for(int $applicationId): array
+{
+    $stmt = db()->prepare(
+        'SELECT id, reference_code, full_name, product, status, created_at,
+                referral_reward, referral_reward_status, referral_reward_sent_at
+           FROM applications
+          WHERE referred_by_id = ?
+          ORDER BY created_at DESC'
+    );
+    $stmt->execute([$applicationId]);
+
+    return $stmt->fetchAll();
+}
+
+/** Headline numbers for one application's code. */
+function referral_stats(int $applicationId): array
+{
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) AS total,
+                SUM(status = 'complete') AS completed,
+                COALESCE(SUM(CASE WHEN referral_reward_status = 'sent'
+                                  THEN referral_reward ELSE 0 END), 0) AS paid,
+                COALESCE(SUM(CASE WHEN referral_reward_status = 'pending'
+                                  THEN referral_reward ELSE 0 END), 0) AS pending
+           FROM applications
+          WHERE referred_by_id = ?"
+    );
+    $stmt->execute([$applicationId]);
+    $row = $stmt->fetch() ?: [];
+
+    return [
+        'total'     => (int) ($row['total'] ?? 0),
+        'completed' => (int) ($row['completed'] ?? 0),
+        'paid'      => (float) ($row['paid'] ?? 0),
+        'pending'   => (float) ($row['pending'] ?? 0),
+    ];
+}
+
+/**
+ * A reward is only worth paying once the person who used the code has paid
+ * their own fee in full. Until then it sits pending and the office waits.
+ */
+function reward_is_payable(array $referral): bool
+{
+    return $referral['referral_reward_status'] === 'pending'
+        && $referral['status'] === 'complete';
+}
+
 /** MF-2026-00042-R2 — the receipt number for one verified transfer. */
 function next_receipt_no(array $app): string
 {
@@ -413,6 +581,12 @@ function field_groups(string $type): array
                 'Payment preference' => ['payment_method' => 'Preferred method',
                                          'financing_option' => 'Financing option', 'bank_name' => 'Bank'],
                 'Referral' => ['referral_source' => 'Heard about us via', 'referral_other' => 'Referral (other)'],
+                'Referral programme' => ['referral_code' => 'Their own code',
+                                         'referred_by_code' => 'Code they quoted',
+                                         'referral_reward' => 'Reward owed to referrer',
+                                         'referral_reward_status' => 'Reward status',
+                                         'referral_reward_sent_at' => 'Reward sent on',
+                                         'referral_reward_note' => 'Reward note'],
                 'Consent' => ['declaration_accepted' => 'Declaration accepted',
                               'testimonial_consent' => 'Testimonial consent', 'terms_accepted' => 'Terms accepted'],
                 'Tracking' => ['reference_code' => 'Reference', 'payment_amount' => 'Application fee',
@@ -460,7 +634,16 @@ function render_value(string $key, $value): string
             . '&amp;dir=payments" target="_blank" rel="noopener">Open receipt <i class="bi bi-box-arrow-up-right"></i></a>';
     }
 
-    if (in_array($key, ['payment_uploaded_at', 'payment_verified_at', 'confirmed_at', 'completed_at'], true)) {
+    if ($key === 'referral_reward') {
+        return ((float) $value) > 0 ? e(money((float) $value)) : '—';
+    }
+
+    if ($key === 'referral_reward_status') {
+        return $value === 'none' ? '—' : e(reward_label((string) $value));
+    }
+
+    if (in_array($key, ['payment_uploaded_at', 'payment_verified_at', 'confirmed_at', 'completed_at',
+                        'referral_reward_sent_at'], true)) {
         return e(format_datetime((string) $value));
     }
 

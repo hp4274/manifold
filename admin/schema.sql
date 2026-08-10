@@ -1,13 +1,15 @@
 -- ==========================================================================
--- Manifold Clean Energy — fresh install
+-- Manifold Clean Energy — the whole database, in one file
 --
--- Creates the `manifold` database with empty tables and one admin account.
+-- Creates the `manifold` database with empty tables, one admin account and the
+-- default settings. This is the only SQL file the project keeps: there are no
+-- migrations to run in order, so whatever is here is the current structure.
 --
 --   WARNING: this DROPS the existing `manifold` database. Everything in it —
 --   applications, payments, receipts, enquiries — is destroyed. Take a backup
 --   first if this is not a clean machine.
 --
--- Import:  mysql -u root -p < schema-fresh.sql
+-- Import:  mysql -u root -p < schema.sql
 --
 -- Then sign in at /manifold/admin/login.php with
 --   username  admin        (or admin@manifold.com)
@@ -48,6 +50,14 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `product` enum('stove','tuktuk') NOT NULL,
   `status` enum('payment_pending','payment_review','complete','rejected') NOT NULL DEFAULT 'payment_pending',
   `reference_code` varchar(20) NOT NULL DEFAULT '',
+  `referral_code` varchar(20) NOT NULL DEFAULT '',
+  `referred_by_code` varchar(20) DEFAULT NULL,
+  `referred_by_id` int(10) unsigned DEFAULT NULL,
+  `referral_reward` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `referral_reward_status` enum('none','pending','sent','cancelled') NOT NULL DEFAULT 'none',
+  `referral_reward_sent_at` datetime DEFAULT NULL,
+  `referral_reward_note` varchar(255) DEFAULT NULL,
+  `referral_reward_by` int(10) unsigned DEFAULT NULL,
   `full_name` varchar(160) NOT NULL,
   `date_of_birth` date DEFAULT NULL,
   `nationality` varchar(80) DEFAULT NULL,
@@ -111,9 +121,15 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_app_reference` (`reference_code`),
+  UNIQUE KEY `uq_app_referral` (`referral_code`),
   KEY `ix_app_product_status` (`product`,`status`),
   KEY `ix_app_created` (`created_at`),
-  KEY `ix_app_email` (`email`)
+  KEY `ix_app_email` (`email`),
+  KEY `ix_app_referred_by` (`referred_by_id`),
+  KEY `ix_app_reward_status` (`referral_reward_status`),
+  KEY `fk_app_reward_admin` (`referral_reward_by`),
+  CONSTRAINT `fk_app_referrer` FOREIGN KEY (`referred_by_id`) REFERENCES `applications` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_app_reward_admin` FOREIGN KEY (`referral_reward_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
@@ -238,6 +254,19 @@ CREATE TABLE IF NOT EXISTS `login_attempts` (
   PRIMARY KEY (`id`),
   KEY `ix_attempt_email_time` (`email`,`attempted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- Values the admin can change from the dashboard without editing config.php.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `settings` (
+  `name` varchar(60) NOT NULL,
+  `value` varchar(255) NOT NULL,
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `settings` (`name`, `value`) VALUES
+  ('referral_reward', '500');
 
 -- --------------------------------------------------------------------------
 -- The one account you start with.

@@ -91,6 +91,13 @@ function qr_file(): ?string
 
 /** What every application costs, and how it is written. */
 const PAYMENT_AMOUNT   = 3500;
+
+/**
+ * Paid to a customer each time somebody applies with their referral code. The
+ * office transfers it by hand. This is only the starting value — the live
+ * figure lives in the `settings` table and is edited from Settings.
+ */
+const REFERRAL_REWARD_DEFAULT = 500;
 const PAYMENT_CURRENCY = '₹';
 
 function money(float $amount): string

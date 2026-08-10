@@ -14,7 +14,8 @@ require_login();
 $paymentId = (int) ($_GET['payment'] ?? 0);
 
 $stmt = db()->prepare(
-    'SELECT p.*, a.reference_code, a.full_name, a.email, a.mobile_number, a.product, a.payment_amount, a.status AS app_status
+    'SELECT p.*, a.reference_code, a.full_name, a.email, a.mobile_number, a.product, a.payment_amount, a.status AS app_status,
+            a.referral_code, a.referred_by_code, a.referral_reward
        FROM payments p
        JOIN applications a ON a.id = p.application_id
       WHERE p.id = ?'
@@ -40,6 +41,9 @@ $app = [
     'mobile_number'  => $row['mobile_number'],
     'product'        => $row['product'],
     'payment_amount' => $row['payment_amount'],
+    'referral_code'  => $row['referral_code'],
+    'referred_by_code' => $row['referred_by_code'],
+    'referral_reward' => $row['referral_reward'],
     'status'         => $row['app_status'],
 ];
 

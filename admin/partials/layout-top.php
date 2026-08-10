@@ -53,6 +53,18 @@ $pageLead   = $pageLead ?? '';
       </nav>
     </div>
 
+    <div>
+      <p class="sidebar__label">Configuration</p>
+      <nav class="sidebar__nav">
+        <a href="referrals.php" class="<?= $activeType === 'referrals' ? 'is-active' : '' ?>">
+          <i class="bi bi-people" aria-hidden="true"></i> Referrals
+        </a>
+        <a href="settings.php" class="<?= $activeType === 'settings' ? 'is-active' : '' ?>">
+          <i class="bi bi-sliders" aria-hidden="true"></i> Settings
+        </a>
+      </nav>
+    </div>
+
     <div class="sidebar__foot">
       <p class="sidebar__user">
         <strong><?= e($user['name']) ?></strong>

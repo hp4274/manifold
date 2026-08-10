@@ -43,7 +43,7 @@
   var toTop = document.getElementById('toTop');
 
   function onScroll() {
-    header.classList.toggle('is-stuck', window.scrollY > 40);
+    if (header) header.classList.toggle('is-stuck', window.scrollY > 40);
     if (toTop) toTop.classList.toggle('is-visible', window.scrollY > 600);
   }
   onScroll();
@@ -158,6 +158,389 @@
         queueWheel();
       }
     }
+  }
+
+  /* ---------- Referral code from the link ----------
+     A shared link looks like apply-stove.html?ref=MFAB3K7P. Drop the code into
+     the box so the applicant does not have to type it, and highlight it so the
+     discount is visible before they submit. */
+  var referralField = document.getElementById('referral_code');
+  var sharedCode = (params.get('ref') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+  if (referralField && sharedCode) {
+    referralField.value = sharedCode.slice(0, 20);
+    referralField.classList.add('is-prefilled');
+  }
+
+  if (referralField) {
+    referralField.addEventListener('input', function () {
+      referralField.value = referralField.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+  }
+
+  /* ---------- Signed-in account menu ----------
+     The public pages are static HTML, so the PHP session is invisible to them.
+     portal/session.php reports who is signed in and the Login button becomes a
+     name with a dropdown. Without JS the button stays as Login, which still
+     lands on the right page — portal/index.php forwards a live session to the
+     status page. */
+  /* /portal/ pages sit one level down; work the root out of a link the page
+     already carries rather than guessing */
+  var rootLink = document.querySelector('link[href*="assets/vendor/"]');
+  var siteRoot = rootLink ? rootLink.getAttribute('href').split('assets/vendor/')[0] : '';
+
+  /* which page this is, used by the apply-form prefill and the promo popup */
+  var page = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+
+  /* asked for once and shared — the header menu and the promo popup both
+     need to know who is signed in */
+  var sessionAsk = fetch(siteRoot + 'portal/session.php', { credentials: 'same-origin' })
+    .then(function (response) { return response.ok ? response.json() : null; })
+    .catch(function () { return null; });
+
+  var loginLinks = document.querySelectorAll('.nav-login, .nav-login-mobile');
+
+  if (loginLinks.length) {
+    sessionAsk
+      .then(function (session) {
+        if (!session || !session.signedIn) return;
+
+        loginLinks.forEach(function (link, index) {
+          var mobile = link.classList.contains('nav-login-mobile');
+          var menuId = 'accountMenu' + index;
+
+          var account = document.createElement('div');
+          account.className = 'nav-account' + (mobile ? ' nav-account--mobile' : '');
+          account.innerHTML =
+            '<button type="button" class="nav-account__button" aria-expanded="false" aria-controls="' + menuId + '">' +
+              '<span class="nav-account__avatar" aria-hidden="true">' +
+                (session.first || '?').charAt(0).toUpperCase() +
+              '</span>' +
+              '<span class="nav-account__name"></span>' +
+              '<i class="bi bi-chevron-down" aria-hidden="true"></i>' +
+            '</button>' +
+            '<div class="nav-account__menu" id="' + menuId + '" hidden>' +
+              '<p class="nav-account__who"><strong></strong><span></span></p>' +
+              '<a href="' + siteRoot + 'portal/status.php"><i class="bi bi-clipboard-check" aria-hidden="true"></i> View status</a>' +
+              (session.canRefer
+                ? '<a href="' + siteRoot + 'portal/status.php#referral"><i class="bi bi-people" aria-hidden="true"></i> Refer someone</a>'
+                : '') +
+              '<a class="nav-account__out" href="' + siteRoot + 'portal/logout.php"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out</a>' +
+            '</div>';
+
+          /* names go in as text, never as markup */
+          account.querySelector('.nav-account__name').textContent = session.first || 'My account';
+          account.querySelector('.nav-account__who strong').textContent = session.name || '';
+          account.querySelector('.nav-account__who span').textContent = session.email || '';
+
+          var button = account.querySelector('.nav-account__button');
+          var menu   = account.querySelector('.nav-account__menu');
+
+          function setOpen(open) {
+            menu.hidden = !open;
+            account.classList.toggle('is-open', open);
+            button.setAttribute('aria-expanded', String(open));
+          }
+
+          button.addEventListener('click', function (e) {
+            e.stopPropagation();
+            setOpen(menu.hidden);
+          });
+
+          document.addEventListener('click', function (e) {
+            if (!account.contains(e.target)) setOpen(false);
+          });
+
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setOpen(false);
+          });
+
+          link.replaceWith(account);
+        });
+      });
+  }
+
+  /* ---------- Copy to clipboard ----------
+     Referral code and share links in the portal. Falls back to selecting a
+     throwaway input where the async clipboard API is not allowed. */
+  document.addEventListener('click', function (e) {
+    var trigger = e.target.closest('[data-copy]');
+    if (!trigger) return;
+
+    var value = trigger.getAttribute('data-copy');
+    var done = function () {
+      var original = trigger.innerHTML;
+      trigger.classList.add('is-copied');
+      trigger.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i> Copied';
+      setTimeout(function () {
+        trigger.classList.remove('is-copied');
+        trigger.innerHTML = original;
+      }, 1800);
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(value).then(done, function () { window.prompt('Copy this:', value); });
+      return;
+    }
+
+    var scratch = document.createElement('input');
+    scratch.value = value;
+    scratch.setAttribute('readonly', '');
+    scratch.style.position = 'fixed';
+    scratch.style.opacity = '0';
+    document.body.appendChild(scratch);
+    scratch.select();
+
+    try { document.execCommand('copy'); done(); } catch (err) { window.prompt('Copy this:', value); }
+
+    scratch.remove();
+  });
+
+  /* ---------- Cookie bar ----------
+     The top bar's twin along the bottom edge. Built here rather than in the
+     markup so every page picks it up from one place. The answer is kept in
+     localStorage, so the bar is shown once and never again. */
+  var COOKIE_KEY = 'manifold-cookie-consent';
+
+  function storedConsent() {
+    try {
+      return window.localStorage.getItem(COOKIE_KEY);
+    } catch (err) {
+      /* private mode or storage disabled — show the bar, store nothing */
+      return null;
+    }
+  }
+
+  function storeConsent(value) {
+    try {
+      window.localStorage.setItem(COOKIE_KEY, value);
+    } catch (err) { /* nothing we can do, the bar just returns next visit */ }
+  }
+
+  if (!storedConsent()) {
+    /* /portal/*.php sits one level down, so work the site root out of a link
+       the page already carries rather than guessing at the path */
+    var vendorLink = document.querySelector('link[href*="assets/vendor/"]');
+    var root = vendorLink ? vendorLink.getAttribute('href').split('assets/vendor/')[0] : '';
+
+    var bar = document.createElement('aside');
+    bar.className = 'cookie-bar';
+    bar.setAttribute('role', 'region');
+    bar.setAttribute('aria-label', 'Cookie notice');
+    bar.innerHTML =
+      '<div class="container-x cookie-bar__inner">' +
+        '<p class="cookie-bar__text">' +
+          '<svg class="cookie-bar__icon" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true">' +
+            '<path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-75 29-147t81-128.5q52-56.5 125-91T475-881q21 0 43 2t45 7q-9 45 6 85t45 66.5q30 26.5 71.5 36.5t85.5-5q-26 59 7.5 113t99.5 56q1 11 1.5 20.5t.5 20.5q0 82-31.5 154.5t-85.5 127q-54 54.5-127 86T480-80Zm-60-480q25 0 42.5-17.5T480-620q0-25-17.5-42.5T420-680q-25 0-42.5 17.5T360-620q0 25 17.5 42.5T420-560Zm-80 200q25 0 42.5-17.5T400-420q0-25-17.5-42.5T340-480q-25 0-42.5 17.5T280-420q0 25 17.5 42.5T340-360Zm260 40q17 0 28.5-11.5T640-360q0-17-11.5-28.5T600-400q-17 0-28.5 11.5T560-360q0 17 11.5 28.5T600-320ZM480-160q122 0 216.5-84T800-458q-50-22-78.5-60T683-603q-77-11-132-66t-68-132q-80-2-140.5 29t-101 79.5Q201-644 180.5-587T160-480q0 133 93.5 226.5T480-160Z"/>' +
+          '</svg>' +
+          'We use cookies to keep the site working and to understand how it is used. ' +
+          'Read the <a href="' + root + 'privacy-policy.html">privacy policy</a> for the detail.' +
+        '</p>' +
+        '<div class="cookie-bar__actions">' +
+          '<button type="button" class="cookie-btn cookie-btn--decline" data-consent="declined">Decline</button>' +
+          '<button type="button" class="cookie-btn cookie-btn--accept" data-consent="accepted">Accept</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(bar);
+    document.body.classList.add('has-cookie-bar');
+    document.documentElement.style.setProperty('--cookie-h', bar.offsetHeight + 'px');
+    requestAnimationFrame(function () { bar.classList.add('is-visible'); });
+
+    window.addEventListener('resize', function () {
+      if (bar.isConnected) {
+        document.documentElement.style.setProperty('--cookie-h', bar.offsetHeight + 'px');
+      }
+    });
+
+    bar.addEventListener('click', function (e) {
+      var button = e.target.closest('[data-consent]');
+      if (!button) return;
+
+      storeConsent(button.dataset.consent);
+      bar.classList.remove('is-visible');
+      document.body.classList.remove('has-cookie-bar');
+      setTimeout(function () { bar.remove(); }, 500);
+    });
+  }
+
+  /* ---------- Apply form: fill in what we already know ----------
+     Somebody applying for a second product has told us their name, address and
+     ID once already. The form is static HTML, so portal/prefill.php hands over
+     their own details and they are dropped into the empty fields — never over
+     anything already typed, and never the referral code. */
+  var applyForm = document.getElementById('applyForm');
+
+  if (applyForm && page.indexOf('apply-') === 0) {
+    fetch(siteRoot + 'portal/prefill.php', { credentials: 'same-origin' })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (data) {
+        if (!data || !data.signedIn || !data.fields) return;
+
+        var filled = [];
+
+        Object.keys(data.fields).forEach(function (name) {
+          var field = applyForm.querySelector('[name="' + name + '"]');
+          if (!field || field.value !== '') return;
+
+          var value = data.fields[name];
+
+          /* a select can only take a value it actually offers */
+          if (field.tagName === 'SELECT') {
+            var match = Array.prototype.slice.call(field.options).some(function (option) {
+              return option.value === value;
+            });
+            if (!match) return;
+          }
+
+          field.value = value;
+          field.classList.add('is-prefilled');
+          filled.push(field);
+        });
+
+        if (!filled.length) return;
+
+        var note = document.createElement('p');
+        note.className = 'form-prefill';
+        note.innerHTML =
+          '<i class="bi bi-person-check" aria-hidden="true"></i>' +
+          '<span></span>' +
+          '<button type="button" class="form-prefill__clear">Clear and start blank</button>';
+        note.querySelector('span').textContent =
+          'Filled in from your application ' + (data.from || '') + '. Check every box before sending — '
+          + 'anything that has changed can be edited.';
+
+        note.querySelector('.form-prefill__clear').addEventListener('click', function () {
+          filled.forEach(function (field) {
+            field.value = '';
+            field.classList.remove('is-prefilled');
+          });
+          note.remove();
+        });
+
+        applyForm.insertBefore(note, applyForm.firstChild);
+      })
+      .catch(function () { /* signed out or offline — the form stays empty */ });
+  }
+
+  /* ---------- Referral promo popup ----------
+     One offer: buy a unit, then earn on everyone you send our way. It shows
+     itself on every visit to the home page, as soon as the page is ready.
+     Everywhere else it waits to be asked: anything with data-promo-open opens
+     it. */
+  function openPromo(session) {
+    if (document.querySelector('.promo')) return;
+
+    var reward   = (session && session.reward) || '₹500';
+    var canRefer = !!(session && session.canRefer);
+
+    /* Buy now goes to the product line-up; on the home page that is a scroll
+       rather than a reload */
+    var buyHref   = page === 'index.html' ? '#products' : siteRoot + 'index.html#products';
+    var referHref = canRefer
+      ? siteRoot + 'portal/status.php#referral'
+      : siteRoot + 'portal/index.php';
+
+    var promo = document.createElement('div');
+    promo.className = 'promo';
+    promo.innerHTML =
+      '<div class="promo__backdrop" data-promo-close></div>' +
+      '<div class="promo__card" role="dialog" aria-modal="true" aria-labelledby="promoTitle">' +
+        '<button type="button" class="promo__close" data-promo-close aria-label="Close">' +
+          '<i class="bi bi-x-lg" aria-hidden="true"></i>' +
+        '</button>' +
+        '<p class="promo__eyebrow">Referral bonus</p>' +
+        '<h2 class="promo__title" id="promoTitle">Earn <span></span> for every person you bring to hydrogen.</h2>' +
+        '<p class="promo__lead">Own a Manifold unit and your referral code starts working. Anyone who applies ' +
+          'with it pays the same fee as everybody else — and once they have paid, the bonus is yours. ' +
+          'There is no cap on how many you can send.</p>' +
+        '<ol class="promo__steps">' +
+          '<li><span>1</span> Apply for a stove or a TukTuk kit and pay your own application fee.</li>' +
+          '<li><span>2</span> Your code arrives on your receipt and sits in your portal, ready to share.</li>' +
+          '<li><span>3</span> We check each referral by hand and transfer the bonus to you.</li>' +
+        '</ol>' +
+        '<div class="promo__actions">' +
+          '<a class="btn-pill btn-pill--accent" href="' + buyHref + '">Buy now <i class="bi bi-arrow-right"></i></a>' +
+          '<a class="btn-pill btn-pill--outline" href="' + referHref + '">' +
+            (canRefer ? 'Refer now' : 'Refer now — sign in') + ' <i class="bi bi-people"></i></a>' +
+        '</div>' +
+        '<p class="promo__small">Bonuses are paid by transfer once your friend’s own payment clears. ' +
+          'The amount that applies is the one showing on the day they apply.</p>' +
+      '</div>';
+
+    /* the figure comes from the server, so it goes in as text */
+    promo.querySelector('.promo__title span').textContent = reward;
+
+    var opener = document.activeElement;
+
+    function closePromo() {
+      promo.classList.remove('is-open');
+      setTimeout(function () { promo.remove(); }, 300);
+      if (opener && opener.focus) opener.focus();
+    }
+
+    promo.addEventListener('click', function (e) {
+      if (e.target.closest('[data-promo-close]')) closePromo();
+
+      var action = e.target.closest('.promo__actions a');
+      if (!action) return;
+
+      /* an in-page jump would leave the modal sitting over the section it
+         just scrolled to */
+      if (action.getAttribute('href').charAt(0) === '#') closePromo();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && promo.isConnected) closePromo();
+    });
+
+    document.body.appendChild(promo);
+    requestAnimationFrame(function () { promo.classList.add('is-open'); });
+    promo.querySelector('.promo__close').focus();
+  }
+
+  /* anything on the page can ask for it — a footer link, a button, anywhere */
+  document.addEventListener('click', function (e) {
+    var trigger = e.target.closest('[data-promo-open]');
+    if (!trigger) return;
+
+    e.preventDefault();
+    sessionAsk.then(openPromo);
+  });
+
+  if (page === 'index.html') {
+    /* no delay and nothing remembered — the offer greets every visit. The
+       session answer only decides where Refer now points, so do not wait on
+       it if the request is slow. */
+    var promoOpened = false;
+
+    function openHomePromo(session) {
+      if (promoOpened) return;
+      promoOpened = true;
+      openPromo(session);
+    }
+
+    sessionAsk.then(openHomePromo);
+
+    /* if the answer is slow the popup opens anyway on a placeholder figure,
+       then corrects itself the moment the real one lands */
+    setTimeout(function () {
+      if (promoOpened) return;
+      openHomePromo(null);
+
+      sessionAsk.then(function (session) {
+        var promo = document.querySelector('.promo');
+        if (!promo || !session) return;
+
+        promo.querySelector('.promo__title span').textContent = session.reward || '₹500';
+
+        if (session.canRefer) {
+          var refer = promo.querySelectorAll('.promo__actions a')[1];
+          refer.setAttribute('href', siteRoot + 'portal/status.php#referral');
+          refer.innerHTML = 'Refer now <i class="bi bi-people"></i>';
+        }
+      });
+    }, 1200);
   }
 
   /* ---------- Active nav link ---------- */

@@ -195,6 +195,12 @@ function build_receipt_pdf(array $app, array $payment, array $totals): string
         ['Balance',           $settled ? 'Nil - paid in full' : money((float) $totals['balance'])],
     ];
 
+    if (!empty($app['referred_by_code'])) {
+        array_splice($rows, 2, 0, [
+            ['Referred by', (string) $app['referred_by_code']],
+        ]);
+    }
+
     $y = $panel + 104;
     $pdf->text($left, $y, 'DETAILS', 8, true, $muted);
     $y += 16;
@@ -207,6 +213,20 @@ function build_receipt_pdf(array $app, array $payment, array $totals): string
     }
 
     $pdf->line($left, $y - 12, $right);
+
+    /* a fully paid application earns the right to refer others, so the code
+       and the link that carries it are printed on the final receipt */
+    if ($settled && !empty($app['referral_code'])) {
+        $code  = (string) $app['referral_code'];
+        $share = $y + 26;
+
+        $pdf->rect($left, $share, $right - $left, 74, [0.96, 0.98, 0.99]);
+        $pdf->text($left + 20, $share + 24, 'YOUR REFERRAL CODE', 8, true, $muted);
+        $pdf->text($left + 20, $share + 46, $code, 16, true, $green);
+        $pdf->textRight($right - 20, $share + 24,
+            'Earn ' . money(referral_reward()) . ' each time it is used', 9, false, $body);
+        $pdf->textRight($right - 20, $share + 46, referral_link($code, (string) $app['product']), 8, false, $muted);
+    }
 
     /* footer */
     $foot = 742.0;

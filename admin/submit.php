@@ -12,7 +12,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/emails.php';
 
 /* ---------- helpers ---------- */
@@ -208,6 +208,24 @@ try {
             'ip_address'                   => $ip,
         ];
 
+        /* ---------- referral ----------
+           Quoting a code costs this applicant nothing and saves them nothing —
+           it books a reward for whoever's code it is, which the office pays by
+           hand. Only a code whose owner has paid in full counts. An unknown
+           code is still stored as typed so the office can see what was meant. */
+        $quoted   = normalise_referral_code(field('referral_code', 20));
+        $referrer = $quoted === '' ? null : referrer_for_code($quoted);
+        $reward   = $referrer ? referral_reward() : 0.0;
+
+        $columns['referred_by_code']       = $quoted === '' ? null : $quoted;
+        $columns['referred_by_id']         = $referrer ? (int) $referrer['id'] : null;
+        $columns['referral_reward']        = $reward;
+        $columns['referral_reward_status'] = $referrer ? 'pending' : 'none';
+        $columns['payment_amount']         = (float) PAYMENT_AMOUNT;
+
+        /* their own code, theirs for good */
+        $columns['referral_code'] = make_referral_code();
+
         /* placeholder, replaced with MF-YYYY-00000 once the row has an id */
         $columns['reference_code'] = 'tmp-' . bin2hex(random_bytes(6));
 
@@ -225,11 +243,13 @@ try {
         /* the applicant pays first, so the payment email goes out immediately */
         $columns['id']             = $id;
         $columns['reference_code'] = $ref;
-        $columns['payment_amount'] = PAYMENT_AMOUNT;
         send_payment_email($columns);
 
+        $payable = (float) $columns['payment_amount'];
+
         respond(true, 'Application received. We have emailed you the payment details — pay '
-            . money((float) PAYMENT_AMOUNT) . ' and upload the receipt to reserve your place.');
+            . money($payable) . ' and upload the receipt to reserve your place.'
+            . ($referrer ? ' Your referral code has been recorded.' : ''));
     }
 
     if ($form === 'contact') {

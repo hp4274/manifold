@@ -288,7 +288,7 @@ ul{list-style:none;margin:0;padding:0}
   text-transform:uppercase;
   white-space:nowrap;
 }
-.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill::before{content:"";flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:currentColor}
 .pill--new{background:rgba(59,163,220,.14);color:#2273a3}
 .pill--pending{background:rgba(201,138,43,.16);color:var(--warn)}
 .pill--accepted,
@@ -298,6 +298,62 @@ ul{list-style:none;margin:0;padding:0}
 .pill--payment_review{background:rgba(23,176,166,.16);color:#0b7a74}
 .pill--complete{background:rgba(15,44,77,.1);color:var(--ink)}
 .pill--rejected{background:rgba(201,69,92,.12);color:var(--danger)}
+/* referral payouts */
+.pill--reward-pending{background:rgba(201,138,43,.16);color:#8a5f1c}
+.pill--reward-sent{background:rgba(75,180,83,.16);color:#26743a}
+.pill--reward-cancelled{background:rgba(132,153,172,.18);color:var(--muted)}
+.pill--reward-none{background:rgba(132,153,172,.14);color:var(--muted)}
+
+.cell-sub{display:block;font-size:12px;line-height:1.5;color:var(--muted)}
+/* a cell that stacks several lines: one rhythm for all of them, everything
+   flush left, and the pill sized to its own text rather than the column */
+.cell-stack{
+  display:grid;
+  justify-items:start;
+  gap:5px;
+  min-width:0;
+}
+.cell-stack > *{min-width:0;max-width:100%}
+.cell-stack .pill{margin-bottom:1px}
+.cell-sub--note{
+  font-style:italic;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* six columns of real content: rows run to three lines, so cells line up at
+   the top and the padding comes in to buy the columns some width */
+.data-table--referrals{min-width:1180px}
+.data-table--referrals td{vertical-align:top}
+.data-table--referrals td strong{line-height:1.35}
+.data-table--referrals .td-amount{white-space:nowrap}
+.data-table--referrals .pill{max-width:100%}
+
+.reward-form{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+/* buttons stay the width of their own label, not the column */
+.reward-form .btn{white-space:nowrap;flex:0 0 auto}
+/* a payout that cannot be sent yet should not look like a live green button */
+.reward-form .btn--primary[disabled]{
+  background:var(--tint);
+  border:1px solid var(--line);
+  color:var(--muted);
+  opacity:1;
+}
+.reward-form input[type="text"]{
+  flex:1 1 100%;
+  width:auto;
+  padding:8px 12px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm, 10px);
+  font-family:inherit;
+  font-size:13px;
+  color:var(--ink);
+  background:#fff;
+}
+.reward-form input[type="text"]:disabled{background:var(--tint);color:var(--muted)}
+.btn--sm{padding:8px 14px;font-size:13px}
+.btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
 
 /* ---------- filters ---------- */
 .filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px}
@@ -334,6 +390,15 @@ ul{list-style:none;margin:0;padding:0}
   justify-content:space-between;
   gap:16px;
 }
+.panel__body{padding:24px}
+.panel__body .field:last-of-type{margin-bottom:24px}
+.field-hint{
+  font-size:calc(13px * var(--fs, 1));
+  line-height:1.6;
+  color:var(--muted);
+  max-width:70ch;
+}
+
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;min-width:760px}
 th,td{

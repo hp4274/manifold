@@ -263,12 +263,81 @@ require __DIR__ . '/partials/head.php';
           </div>
         <?php endif; ?>
 
+        <?php if ($totals['settled'] && $status !== 'rejected' && !empty($app['referral_code'])): ?>
+          <?php
+            $code      = (string) $app['referral_code'];
+            $rewards   = referral_stats((int) $app['id']);
+            $earning   = money(referral_reward());
+            $referrals = referrals_for((int) $app['id']);
+
+            /* the header's "Refer" link jumps to #referral, so only the first
+               card on the page may claim that id */
+            $anchor = empty($referralAnchorUsed) ? ' id="referral"' : '';
+            $referralAnchorUsed = true;
+          ?>
+          <div class="portal-referral"<?= $anchor ?>>
+            <div class="portal-referral__head">
+              <div>
+                <p class="portal-referral__label">Your referral code</p>
+                <p class="portal-referral__code"><?= e($code) ?></p>
+              </div>
+              <button type="button" class="portal-referral__copy" data-copy="<?= e($code) ?>">
+                <i class="bi bi-clipboard" aria-hidden="true"></i> Copy code
+              </button>
+            </div>
+
+            <p class="portal-referral__copyline">Now that your fee is paid, this code earns you
+              <strong><?= e($earning) ?></strong> every time somebody applies with it and pays their own fee.
+              We check each one and transfer the money to you by hand. Share a link and the code fills itself in.</p>
+
+            <div class="portal-referral__links">
+              <button type="button" class="portal-referral__link"
+                      data-copy="<?= e(referral_link($code, 'stove')) ?>">
+                <i class="bi bi-link-45deg" aria-hidden="true"></i> Copy stove link
+              </button>
+              <button type="button" class="portal-referral__link"
+                      data-copy="<?= e(referral_link($code, 'tuktuk')) ?>">
+                <i class="bi bi-link-45deg" aria-hidden="true"></i> Copy TukTuk link
+              </button>
+            </div>
+
+            <?php if ($rewards['total'] > 0): ?>
+              <p class="portal-referral__stat">
+                <strong><?= (int) $rewards['total'] ?></strong>
+                <?= $rewards['total'] === 1 ? 'person has' : 'people have' ?> applied with your code
+                &middot; <strong><?= e(money($rewards['paid'])) ?></strong> paid to you
+                &middot; <strong><?= e(money($rewards['pending'])) ?></strong> pending.
+              </p>
+
+              <ul class="portal-referral__list">
+                <?php foreach ($referrals as $referral): ?>
+                  <li class="portal-referral__row">
+                    <span class="portal-referral__who"><?= e($referral['full_name']) ?></span>
+                    <span class="portal-referral__when"><?= e(format_datetime($referral['created_at'])) ?></span>
+                    <span class="portal-referral__amount"><?= e(money((float) $referral['referral_reward'])) ?></span>
+                    <span class="portal-referral__state portal-referral__state--<?= e($referral['referral_reward_status']) ?>">
+                      <?php if ($referral['referral_reward_status'] === 'sent'): ?>
+                        <i class="bi bi-check-lg" aria-hidden="true"></i> Sent
+                        <?= $referral['referral_reward_sent_at']
+                              ? e(format_datetime($referral['referral_reward_sent_at']))
+                              : '' ?>
+                      <?php elseif ($referral['referral_reward_status'] === 'cancelled'): ?>
+                        <i class="bi bi-x-lg" aria-hidden="true"></i> Cancelled
+                      <?php elseif ($referral['status'] === 'complete'): ?>
+                        <i class="bi bi-hourglass-split" aria-hidden="true"></i> Pending payout
+                      <?php else: ?>
+                        <i class="bi bi-hourglass" aria-hidden="true"></i> Waiting for their payment
+                      <?php endif; ?>
+                    </span>
+                  </li>
+                <?php endforeach; ?>
+              </ul>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+
       </article>
     <?php endforeach; ?>
-
-    <p class="portal-signout">
-      <a class="link-arrow" href="logout.php">Sign out</a>
-    </p>
 
   </div>
 </section>

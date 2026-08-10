@@ -474,6 +474,90 @@ p{margin:0}
 .site-header .btn-pill--ghost:hover{background:#eef3f7;border-color:#c3d3df}
 .nav-login{font-size:calc(15px * var(--fs))}
 
+
+/* --- signed-in account menu ----------
+   Replaces the Login button once portal/session.php reports a live session. */
+.nav-account{position:relative;margin-left:14px}
+.nav-account--mobile{display:none;margin-left:0;width:100%}
+
+.nav-account__button{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:7px 14px 7px 7px;
+  border:1px solid #d5e0e9;
+  border-radius:999px;
+  background:#fff;
+  font-family:inherit;
+  font-size:calc(15px * var(--fs));
+  font-weight:600;
+  color:var(--nav-ink);
+  cursor:pointer;
+  transition:border-color .2s ease,background .2s ease;
+}
+.nav-account__button:hover{background:#eef3f7;border-color:#c3d3df}
+.nav-account__button i{font-size:13px;transition:transform .25s ease}
+.nav-account.is-open .nav-account__button i{transform:rotate(180deg)}
+
+.nav-account__avatar{
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;
+  border-radius:50%;
+  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  color:#fff;
+  font-size:13px;
+  font-weight:700;
+  line-height:1;
+}
+.nav-account__name{max-width:12ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.nav-account__menu{
+  position:absolute;
+  top:calc(100% + 12px);
+  right:0;
+  min-width:230px;
+  padding:10px;
+  border-radius:14px;
+  background:#fff;
+  border:1px solid #e6edf3;
+  box-shadow:0 20px 38px rgba(15,60,95,.13);
+  display:grid;
+  gap:2px;
+  z-index:60;
+}
+.nav-account__menu[hidden]{display:none}
+.nav-account__who{
+  margin:0 0 6px;
+  padding:8px 12px 12px;
+  border-bottom:1px solid #eef3f7;
+  display:grid;
+  gap:2px;
+  line-height:1.4;
+}
+.nav-account__who strong{font-size:calc(14px * var(--fs));color:var(--ink)}
+.nav-account__who span{
+  font-size:calc(12.5px * var(--fs));
+  color:var(--muted);
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.nav-account__menu a{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:10px;
+  font-size:calc(14.5px * var(--fs));
+  font-weight:600;
+  color:var(--nav-ink);
+  transition:background .2s ease,color .2s ease;
+}
+.nav-account__menu a i{font-size:16px;line-height:1;color:var(--accent-deep)}
+.nav-account__menu a:hover{background:#eef3f7;color:var(--nav-active)}
+.nav-account__out{color:#a3405a}
+.nav-account__out i{color:#a3405a !important}
+.nav-account__out:hover{background:rgba(201,69,92,.08);color:#a3405a}
+
 .nav-cta{margin-left:34px;padding:12px 18px;font-size:calc(15px * var(--fs))}
 .nav-cta-mobile{display:none}
 .nav-login-mobile{display:none}
@@ -1720,6 +1804,227 @@ p{margin:0}
 .to-top.is-visible{opacity:1;visibility:visible;transform:none}
 .to-top:hover{background:var(--accent);color:#fff}
 
+/* ---------- 12b. Cookie bar ----------
+   The top bar's twin, pinned to the bottom of the viewport. Injected by
+   main.js on first visit and removed once a choice is stored. */
+.cookie-bar{
+  position:fixed;
+  inset:auto 0 0 0;
+  z-index:1002;
+  padding:16px 0;
+  background:#04223a;
+  border-top:1px solid rgba(255,255,255,.08);
+  backdrop-filter:blur(12px);
+  transform:translateY(100%);
+  transition:transform .45s cubic-bezier(.22,.61,.36,1);
+}
+.cookie-bar.is-visible{transform:none}
+
+.cookie-bar__inner{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:22px;
+}
+
+.cookie-bar__text{
+  margin:0;
+  min-width:0;
+  color:rgba(255,255,255,.82);
+  font-size:calc(13px * var(--fs));
+  font-weight:500;
+  line-height:1.6;
+}
+.cookie-bar__icon{
+  width:calc(18px * var(--fs));
+  height:calc(18px * var(--fs));
+  margin-right:10px;
+  vertical-align:-.22em;
+  color:var(--accent);
+  flex:0 0 auto;
+}
+.cookie-bar__text a{
+  color:var(--accent-on-dark);
+  font-weight:600;
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+.cookie-bar__text a:hover{color:#fff}
+
+.cookie-bar__actions{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.cookie-btn{
+  border:1px solid transparent;
+  border-radius:999px;
+  padding:9px 22px;
+  font-family:inherit;
+  font-size:calc(12.5px * var(--fs));
+  font-weight:700;
+  letter-spacing:.04em;
+  cursor:pointer;
+  transition:background .2s ease,border-color .2s ease,color .2s ease,transform .2s ease;
+}
+.cookie-btn--accept{
+  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  color:var(--white);
+}
+.cookie-btn--accept:hover{transform:translateY(-1px);filter:brightness(1.06)}
+.cookie-btn--decline{
+  background:rgba(255,255,255,.06);
+  border-color:rgba(255,255,255,.18);
+  color:rgba(255,255,255,.82);
+}
+.cookie-btn--decline:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* the back-to-top button steps over the bar while it is up */
+body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
+
+@media (max-width:767px){
+  .cookie-bar__inner{flex-direction:column;align-items:stretch;gap:14px}
+  .cookie-bar__actions{justify-content:stretch}
+  .cookie-btn{flex:1 1 0}
+  body.has-cookie-bar .to-top{bottom:calc(18px + var(--cookie-h,132px))}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .cookie-bar{transition:none}
+}
+
+/* ---------- 12c. Referral promo popup ----------
+   Injected by main.js once per browser, seven seconds in. */
+.promo{
+  position:fixed;
+  inset:0;
+  z-index:1400;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .3s ease;
+}
+.promo.is-open{opacity:1;pointer-events:auto}
+
+.promo__backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(4,34,58,.55);
+  backdrop-filter:blur(3px);
+}
+
+.promo__card{
+  position:relative;
+  width:min(560px,100%);
+  max-height:calc(100vh - 48px);
+  overflow-y:auto;
+  padding:40px 38px 34px;
+  border-radius:24px;
+  background:#fff;
+  box-shadow:0 30px 80px rgba(4,34,58,.32);
+  transform:translateY(18px) scale(.98);
+  transition:transform .35s cubic-bezier(.22,.61,.36,1);
+}
+.promo.is-open .promo__card{transform:none}
+
+.promo__close{
+  position:absolute;
+  top:16px;right:16px;
+  width:38px;height:38px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);
+  border-radius:50%;
+  background:#fff;
+  color:var(--ink-soft);
+  font-size:15px;
+  cursor:pointer;
+  transition:background .2s ease,color .2s ease,border-color .2s ease;
+}
+.promo__close:hover{background:var(--tint);color:var(--ink);border-color:#c3d3df}
+
+.promo__eyebrow{
+  margin:0 0 12px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--accent-deep);
+}
+.promo__title{
+  margin:0 0 14px;
+  font-size:calc(26px * var(--fs));
+  font-weight:700;
+  line-height:1.3;
+  letter-spacing:-.02em;
+  color:var(--ink);
+  max-width:20ch;
+}
+.promo__title span{
+  color:var(--accent-deep);
+  white-space:nowrap;
+}
+.promo__lead{
+  margin:0 0 22px;
+  font-size:var(--t-sub);
+  line-height:1.65;
+  color:var(--body);
+}
+
+.promo__steps{
+  list-style:none;
+  margin:0 0 26px;
+  padding:0;
+  display:grid;
+  gap:12px;
+}
+.promo__steps li{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  font-size:var(--t-ui);
+  line-height:1.55;
+  color:var(--ink-soft);
+}
+.promo__steps span{
+  flex:0 0 24px;
+  width:24px;height:24px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  background:rgba(23,176,166,.12);
+  color:var(--accent-deep);
+  font-size:12px;
+  font-weight:700;
+  line-height:1;
+}
+
+.promo__actions{display:flex;flex-wrap:wrap;gap:12px}
+.promo__actions .btn-pill{flex:1 1 190px;justify-content:center}
+/* the shared outline pill is drawn for dark bands; on white it needs ink */
+.promo__actions .btn-pill--outline{
+  color:var(--ink);
+  border-color:var(--line);
+  background:#fff;
+}
+.promo__actions .btn-pill--outline:hover{background:var(--tint);border-color:#c3d3df}
+
+.promo__small{
+  margin:20px 0 0;
+  font-size:calc(12.5px * var(--fs));
+  line-height:1.6;
+  color:var(--muted);
+}
+
+@media (max-width:575px){
+  .promo{padding:16px}
+  .promo__card{padding:32px 22px 26px;border-radius:20px}
+  .promo__title{font-size:calc(22px * var(--fs));max-width:none}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .promo,
+  .promo__card{transition:none}
+}
+
 /* ---------- 13. Product page (stove.html) ---------- */
 /* Same two type tiers as every other section: 24px title, 18px subtitle/body. */
 
@@ -2101,7 +2406,9 @@ p{margin:0}
   box-shadow:var(--shadow-card);
 }
 .form-x{display:grid;gap:20px}
-.field{display:grid;gap:8px}
+/* align-content:start stops a control being stretched to fill a row made
+   taller by a neighbour that carries a hint line under it */
+.field{display:grid;gap:8px;align-content:start}
 .field label{
   font-size:var(--t-sub);
   font-weight:600;
@@ -2265,11 +2572,13 @@ p{margin:0}
 }
 
 /* --- file upload --- */
-.upload{
+label.upload{
   display:flex;
   align-items:center;
   gap:12px;
+  /* same padding and line box as a text input, so the boxes match height */
   padding:14px 16px;
+  line-height:1.5;
   border:1px dashed #cbd8e3;
   border-radius:var(--radius-sm);
   background:#fff;
@@ -2813,7 +3122,6 @@ p{margin:0}
 .portal-pay__note strong{color:var(--ink)}
 .portal-pay__form .field:last-of-type{margin-bottom:6px}
 
-.portal-signout{margin-top:10px}
 
 @media (max-width:991px){
   .portal-auth,
@@ -2904,6 +3212,18 @@ p{margin:0}
   .nav-login-mobile{display:inline-flex}
   .nav-cta,
   .nav-login{display:none}
+
+  /* the account menu follows its button: the header one goes, the one inside
+     the drawer takes over and opens in flow rather than floating */
+  .nav-actions--desktop .nav-account{display:none}
+  .nav-account--mobile{display:block}
+  .nav-account--mobile .nav-account__button{width:100%;justify-content:center}
+  .nav-account--mobile .nav-account__menu{
+    position:static;
+    margin-top:10px;
+    min-width:0;
+    box-shadow:none;
+  }
 
   .hero{min-height:640px}
   .hero-inner{padding:calc(var(--header-offset) + 60px) 24px 64px}
@@ -3205,6 +3525,159 @@ body{overflow-x:hidden}
 @media (max-width:991px) and (prefers-reduced-motion:reduce){
   .timeline-item[data-wheel]{opacity:1;transform:none;transition:none}
   .timeline-scroll{-webkit-mask-image:none;mask-image:none}
+}
+
+/* ---------- 13f-c. Portal referral card ----------
+   Only shown once the fee is settled — that is when the code starts working. */
+.portal-referral{
+  margin:26px 0 0;
+  padding:24px;
+  border:1px solid rgba(23,176,166,.28);
+  border-radius:var(--radius);
+  background:linear-gradient(180deg,rgba(23,176,166,.06) 0%,rgba(75,180,83,.05) 100%);
+}
+.portal-referral__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  flex-wrap:wrap;
+}
+.portal-referral__label{
+  margin:0 0 4px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--accent-deep);
+}
+.portal-referral__code{
+  margin:0;
+  font-size:calc(26px * var(--fs));
+  font-weight:700;
+  letter-spacing:.16em;
+  color:var(--ink);
+}
+.portal-referral__copyline{
+  margin:16px 0 0;
+  font-size:var(--t-sub);
+  line-height:1.6;
+  color:var(--body);
+}
+.portal-referral__copyline strong{color:var(--ink)}
+
+.portal-referral__links{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.portal-referral__copy,
+.portal-referral__link{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 18px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-family:inherit;
+  font-size:var(--t-ui);
+  font-weight:600;
+  color:var(--ink);
+  cursor:pointer;
+  transition:border-color .25s ease,color .25s ease,transform .25s ease,background .25s ease;
+}
+.portal-referral__copy i,
+.portal-referral__link i{color:var(--accent-deep);font-size:16px;line-height:1}
+.portal-referral__copy:hover,
+.portal-referral__link:hover{
+  transform:translateY(-1px);
+  border-color:rgba(23,176,166,.45);
+  color:var(--accent-deep);
+}
+.portal-referral__copy.is-copied,
+.portal-referral__link.is-copied{
+  background:var(--accent-deep);
+  border-color:var(--accent-deep);
+  color:#fff;
+}
+.portal-referral__copy.is-copied i,
+.portal-referral__link.is-copied i{color:#fff}
+
+.portal-referral__list{
+  list-style:none;
+  margin:14px 0 0;
+  padding:0;
+  border-top:1px solid rgba(23,176,166,.22);
+}
+.portal-referral__row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px 16px;
+  padding:12px 0;
+  border-bottom:1px solid rgba(23,176,166,.16);
+  font-size:var(--t-ui);
+}
+.portal-referral__who{font-weight:700;color:var(--ink);flex:1 1 40%}
+.portal-referral__when{color:var(--muted)}
+.portal-referral__amount{font-weight:700;color:var(--ink)}
+.portal-referral__state{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  margin-left:auto;
+  font-weight:600;
+  color:var(--body);
+}
+.portal-referral__state i{font-size:15px;line-height:1}
+.portal-referral__state--sent{color:#26743a}
+.portal-referral__state--cancelled{color:var(--muted)}
+
+.portal-referral__stat{
+  margin:18px 0 0;
+  font-size:var(--t-ui);
+  color:var(--body);
+}
+.portal-referral__stat strong{color:var(--ink)}
+
+/* --- what we already knew about a returning applicant --- */
+.form-prefill{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px 14px;
+  margin:0 0 28px;
+  padding:16px 20px;
+  border:1px solid rgba(23,176,166,.3);
+  border-radius:var(--radius);
+  background:rgba(23,176,166,.06);
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--ink-soft);
+}
+.form-prefill > i{color:var(--accent-deep);font-size:18px;line-height:1}
+.form-prefill > span{flex:1 1 300px}
+.form-prefill__clear{
+  padding:8px 16px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#fff;
+  font-family:inherit;
+  font-size:var(--t-ui);
+  font-weight:600;
+  color:var(--ink);
+  cursor:pointer;
+  transition:background .2s ease,border-color .2s ease;
+}
+.form-prefill__clear:hover{background:var(--tint);border-color:#c3d3df}
+
+/* a value we filled in, or a code that arrived in the link */
+.field select.is-prefilled,
+.field input.is-prefilled{
+  border-color:rgba(23,176,166,.5);
+  background:rgba(23,176,166,.05);
+}
+#referral_code.is-prefilled{
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
 }
 
 /* ---------- 13f-b. Portal payment ledger ---------- */

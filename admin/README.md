@@ -6,9 +6,10 @@ framework, no build step.
 
 ## Setup
 
-1. **Create the database.** Import `schema-fresh.sql` —
-   `mysql -u root -p < schema-fresh.sql`, or paste it into phpMyAdmin. It builds
-   the `manifold` database with every table empty and one admin account:
+1. **Create the database.** Import `schema.sql` —
+   `mysql -u root -p < schema.sql`, or paste it into phpMyAdmin. It builds the
+   `manifold` database with every table empty, the default settings and one
+   admin account:
 
    | username | password |
    |---|---|
@@ -18,10 +19,10 @@ framework, no build step.
    running it on a machine that already has data. **Change that password**
    before the site goes anywhere real.
 
-   *Upgrading instead of starting over?* Run `upgrade-portal.sql`,
-   `upgrade-payment-flow.sql` then `upgrade-instalments.sql`, in that order.
-   `schema.sql` is the same structure without the `DROP DATABASE` or the seeded
-   account.
+   `schema.sql` is the only SQL file here and always describes the current
+   structure — there are no migrations to replay in order. On a database that
+   already holds real data, diff it against `mysqldump --no-data` and apply the
+   difference by hand rather than importing.
 2. **Check the credentials** in `config.php`. Stock XAMPP defaults (`root`, no
    password, `127.0.0.1`) are already set.
 3. Sign in at `http://localhost/manifold/admin/login.php`.
@@ -32,8 +33,7 @@ framework, no build step.
 
 | File | Purpose |
 |---|---|
-| `schema-fresh.sql` | Fresh install: empty tables plus the seeded `admin` account |
-| `schema.sql` | The same structure, without dropping anything or seeding |
+| `schema.sql` | The whole database: tables, default settings, seeded `admin` account |
 | `config.php` | Credentials, upload rules, PDO connection |
 | `lib.php` | Session, CSRF, login guard, status vocabulary |
 | `login.php` / `logout.php` | Authentication |
@@ -46,6 +46,8 @@ framework, no build step.
 | `receipt.php` | Generates the PDF receipt for one verified payment |
 | `receipt-pdf.php` | The PDF writer and the receipt layout, no dependencies |
 | `submit.php` | Public endpoint the website forms post to |
+| `referrals.php` | Referral payouts — who owes whom, mark a reward sent |
+| `settings.php` | Values the office can change — currently the referral reward |
 | `create-admin.php` | One-time bootstrap, delete after use |
 | `partials/` | Sidebar, page chrome, row actions, detail drawer, payment panel |
 | `assets/admin.css` | All admin styling |
@@ -128,6 +130,39 @@ because those are regenerated from the payment record each time.
 
 Receipts are also attached to the receipt email and copied to
 `ADMIN_NOTIFY_EMAIL`, so both sides always have one.
+
+## Referrals
+
+Every application is given a permanent code of its own (`MF` plus six
+characters, no O/0 or I/1) the moment it is submitted.
+
+The code only starts working once that application is **paid in full** — that is
+when it is handed over, printed on the final receipt PDF and shown in the
+portal with ready-made apply links (`apply-stove.html?ref=CODE`).
+
+Quoting a code costs the new applicant nothing and saves them nothing: they pay
+the full fee. What it does is book a reward for the owner of the code, held on
+the referred application as `referral_reward` with a status:
+
+| Status | Meaning |
+|---|---|
+| `none` | Not referred, or the code did not match anything |
+| `pending` | Owed. Only payable once the referred applicant has paid in full |
+| `sent` | The office has transferred it and the referrer has been emailed |
+| `cancelled` | Written off by the office |
+
+**Nothing is paid automatically.** `referrals.php` lists every referral with
+both sides, the referred applicant's own payment state and the reward status.
+"Mark sent" stays disabled until that applicant is `complete`; using it stamps
+`referral_reward_sent_at`, records which admin did it and any UPI/UTR note, and
+emails the referrer. Rows can be cancelled or put back to pending.
+
+The amount is `settings.referral_reward`, edited in **Settings** and seeded at
+₹500. Each referral snapshots the figure that applied on the day it came in, so
+changing the setting never rewrites a payout already owed.
+
+An unrecognised code is stored as typed in `referred_by_code` with no reward,
+and the payment email says so — the application is never rejected over a typo.
 
 ## How the website reaches it
 

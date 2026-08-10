@@ -51,8 +51,23 @@ function send_payment_email(array $app): bool
         . e($app['reference_code']) . '</strong>.</p>'
         . '<p style="margin:0 0 20px;">To reserve your place, pay the application fee of '
         . '<strong style="color:#0f2c4d;">' . e($amount) . '</strong> and upload the receipt. '
-        . 'We check every payment by hand and confirm within two working days.</p>'
-        . '<p style="margin:0 0 10px;font-weight:700;color:#0f2c4d;">1. Pay ' . e($amount) . '</p>';
+        . 'We check every payment by hand and confirm within two working days.</p>';
+
+    $referred = ($app['referral_reward_status'] ?? 'none') === 'pending';
+
+    if ($referred) {
+        $inner .= '<p style="margin:0 0 20px;padding:12px 18px;border-radius:12px;background:#eefaf4;'
+            . 'border:1px solid #cdeee0;font-size:15px;color:#0f2c4d;">'
+            . 'Referral code <strong>' . e((string) $app['referred_by_code']) . '</strong> recorded. '
+            . 'Your fee is unchanged — the reward goes to whoever gave you the code, once you have paid.</p>';
+    } elseif (!empty($app['referred_by_code'])) {
+        $inner .= '<p style="margin:0 0 20px;padding:12px 18px;border-radius:12px;background:#fff6ed;'
+            . 'border:1px solid #f4ddc4;font-size:15px;color:#0f2c4d;">'
+            . 'We could not match the referral code <strong>' . e((string) $app['referred_by_code'])
+            . '</strong>. Reply to this email with the correct one and we will credit the right person.</p>';
+    }
+
+    $inner .= '<p style="margin:0 0 10px;font-weight:700;color:#0f2c4d;">1. Pay ' . e($amount) . '</p>';
 
     if ($hasQr) {
         $inner .= '<p style="margin:0 0 8px;text-align:center;">'
@@ -164,9 +179,33 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
         ? '<p style="margin:0 0 14px;">Our team will call you to agree an installation date.</p>'
         : '';
 
+    /* paid in full is when the referral code becomes worth something, so this
+       is where it is handed over */
+    $referral = '';
+
+    if ($settled && !empty($app['referral_code'])) {
+        $code   = (string) $app['referral_code'];
+        $earns  = money(referral_reward());
+
+        $referral = '<div style="margin:0 0 22px;padding:18px;border-radius:14px;background:#f6f9fc;'
+            . 'border:1px solid #e3ebf2;">'
+            . '<p style="margin:0 0 8px;font-weight:700;color:#0f2c4d;">Your referral code</p>'
+            . '<p style="margin:0 0 12px;font-size:22px;font-weight:700;letter-spacing:.12em;color:#0e8f96;">'
+            . e($code) . '</p>'
+            . '<p style="margin:0 0 12px;font-size:15px;color:#5b7186;">Every person who applies with this code '
+            . 'and pays their fee earns you <strong style="color:#0f2c4d;">' . e($earns) . '</strong>, which we '
+            . 'transfer to you once we have checked it. Send them a link with the code already filled in:</p>'
+            . '<p style="margin:0 0 6px;font-size:15px;"><a href="' . e(referral_link($code, 'stove'))
+            . '" style="color:#0e8f96;">Apply for a stove &rarr;</a></p>'
+            . '<p style="margin:0;font-size:15px;"><a href="' . e(referral_link($code, 'tuktuk'))
+            . '" style="color:#0e8f96;">Apply for a TukTuk kit &rarr;</a></p>'
+            . '</div>';
+    }
+
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($app['full_name']) . ',</p>'
         . $lead
         . $table
+        . $referral
         . $closing
         . email_button(base_url() . '/portal/index.php', $settled ? 'View my application' : 'Pay the balance');
 
@@ -190,6 +229,37 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
         null,
         $copies,
         $files
+    );
+}
+
+/**
+ * Told to the referrer when the office has transferred their reward.
+ * $referral is the application that quoted their code.
+ */
+function send_referral_paid_email(array $referrer, array $referral): bool
+{
+    $amount = money((float) $referral['referral_reward']);
+    $code   = (string) $referrer['referral_code'];
+
+    $inner = '<p style="margin:0 0 14px;">Hello ' . e($referrer['full_name']) . ',</p>'
+        . '<p style="margin:0 0 20px;">Somebody applied with your referral code '
+        . '<strong style="color:#0f2c4d;">' . e($code) . '</strong> and has paid their fee, so we have sent you '
+        . '<strong style="color:#0f2c4d;">' . e($amount) . '</strong>'
+        . (!empty($referral['referral_reward_note'])
+            ? ' — ' . e((string) $referral['referral_reward_note'])
+            : '')
+        . '.</p>'
+        . '<p style="margin:0 0 20px;">Thank you for the introduction. Your code keeps working, so anyone else '
+        . 'you send our way earns you the same again.</p>'
+        . email_button(base_url() . '/portal/index.php', 'See my referrals')
+        . '<p style="margin:0;font-size:14px;color:#8499ac;">Not received it after a working day? '
+        . 'Call +91 97251 54186 and we will chase it.</p>';
+
+    return send_mail(
+        $referrer['email'],
+        'Your referral reward of ' . $amount . ' is on its way',
+        email_wrap('Referral reward sent', $inner),
+        'referral'
     );
 }
 
