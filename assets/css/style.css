@@ -1804,13 +1804,27 @@ p{margin:0}
 .to-top.is-visible{opacity:1;visibility:visible;transform:none}
 .to-top:hover{background:var(--accent);color:#fff}
 
-/* ---------- 12b. Cookie bar ----------
-   The top bar's twin, pinned to the bottom of the viewport. Injected by
-   main.js on first visit and removed once a choice is stored. */
+/* ---------- 12b. Cookie gate ----------
+   The top bar's twin, pinned to the bottom of the viewport over a scrim that
+   holds the page until Accept or Decline is chosen. Injected by main.js on
+   first visit and removed once a choice is stored. */
+.cookie-scrim{
+  position:fixed;
+  inset:0;
+  z-index:1001;
+  background:rgba(4,34,58,.55);
+  backdrop-filter:blur(2px);
+  opacity:0;
+  transition:opacity .35s ease;
+}
+.cookie-scrim.is-visible{opacity:1}
+
+/* nothing behind the gate scrolls or answers to a click */
+body.is-cookie-gated{overflow:hidden}
 .cookie-bar{
   position:fixed;
   inset:auto 0 0 0;
-  z-index:1002;
+  z-index:1003;
   padding:16px 0;
   background:#04223a;
   border-top:1px solid rgba(255,255,255,.08);
@@ -1887,7 +1901,8 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 }
 
 @media (prefers-reduced-motion:reduce){
-  .cookie-bar{transition:none}
+  .cookie-bar,
+  .cookie-scrim{transition:none}
 }
 
 /* ---------- 12c. Referral promo popup ----------
@@ -1915,7 +1930,7 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 
 .promo__card{
   position:relative;
-  width:min(560px,100%);
+  width:min(680px,100%);
   max-height:calc(100vh - 48px);
   overflow-y:auto;
   padding:40px 38px 34px;
@@ -1942,16 +1957,9 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 }
 .promo__close:hover{background:var(--tint);color:var(--ink);border-color:#c3d3df}
 
-.promo__eyebrow{
-  margin:0 0 12px;
-  font-size:var(--t-micro);
-  font-weight:700;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  color:var(--accent-deep);
-}
 .promo__title{
   margin:0 0 14px;
+  padding-right:44px;
   font-size:calc(26px * var(--fs));
   font-weight:700;
   line-height:1.3;
@@ -1970,54 +1978,55 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   color:var(--body);
 }
 
-.promo__steps{
+.promo__products{
   list-style:none;
   margin:0 0 26px;
   padding:0;
   display:grid;
-  gap:12px;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;
 }
-.promo__steps li{
+/* side by side, so each product reads top to bottom inside its own box */
+.promo__products li{
   display:flex;
-  align-items:flex-start;
+  flex-direction:column;
   gap:12px;
-  font-size:var(--t-ui);
-  line-height:1.55;
-  color:var(--ink-soft);
+  padding:18px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--tint);
 }
-.promo__steps span{
-  flex:0 0 24px;
-  width:24px;height:24px;
+.promo__products li > span:last-child{
+  display:block;
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--body);
+}
+.promo__products strong{
+  display:block;
+  margin-bottom:3px;
+  font-size:var(--t-ui);
+  color:var(--ink);
+}
+.promo__product-icon{
+  flex:0 0 38px;
+  width:38px;height:38px;
   display:flex;align-items:center;justify-content:center;
   border-radius:50%;
   background:rgba(23,176,166,.12);
   color:var(--accent-deep);
-  font-size:12px;
-  font-weight:700;
+  font-size:18px;
   line-height:1;
 }
 
 .promo__actions{display:flex;flex-wrap:wrap;gap:12px}
 .promo__actions .btn-pill{flex:1 1 190px;justify-content:center}
-/* the shared outline pill is drawn for dark bands; on white it needs ink */
-.promo__actions .btn-pill--outline{
-  color:var(--ink);
-  border-color:var(--line);
-  background:#fff;
-}
-.promo__actions .btn-pill--outline:hover{background:var(--tint);border-color:#c3d3df}
 
-.promo__small{
-  margin:20px 0 0;
-  font-size:calc(12.5px * var(--fs));
-  line-height:1.6;
-  color:var(--muted);
-}
-
-@media (max-width:575px){
+@media (max-width:639px){
   .promo{padding:16px}
   .promo__card{padding:32px 22px 26px;border-radius:20px}
   .promo__title{font-size:calc(22px * var(--fs));max-width:none}
+  .promo__products{grid-template-columns:minmax(0,1fr)}
 }
 
 @media (prefers-reduced-motion:reduce){

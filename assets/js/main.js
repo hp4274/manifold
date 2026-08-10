@@ -296,11 +296,24 @@
     scratch.remove();
   });
 
-  /* ---------- Cookie bar ----------
-     The top bar's twin along the bottom edge. Built here rather than in the
-     markup so every page picks it up from one place. The answer is kept in
-     localStorage, so the bar is shown once and never again. */
+  /* ---------- Cookie gate ----------
+     The top bar's twin along the bottom edge, over a scrim that holds the page
+     until Accept or Decline is chosen — there is deliberately no way to
+     dismiss it otherwise. Built here rather than in the markup so every page
+     picks it up from one place, and the answer is kept in localStorage so it
+     is asked once. */
   var COOKIE_KEY = 'manifold-cookie-consent';
+  var consentWaiting = [];
+
+  /* run something now if the choice is already made, otherwise the moment it is */
+  function afterConsent(callback) {
+    if (storedConsent()) {
+      callback();
+      return;
+    }
+
+    consentWaiting.push(callback);
+  }
 
   function storedConsent() {
     try {
@@ -342,10 +355,41 @@
         '</div>' +
       '</div>';
 
+    var scrim = document.createElement('div');
+    scrim.className = 'cookie-scrim';
+
+    document.body.appendChild(scrim);
     document.body.appendChild(bar);
-    document.body.classList.add('has-cookie-bar');
+    document.body.classList.add('has-cookie-bar', 'is-cookie-gated');
     document.documentElement.style.setProperty('--cookie-h', bar.offsetHeight + 'px');
-    requestAnimationFrame(function () { bar.classList.add('is-visible'); });
+    requestAnimationFrame(function () {
+      bar.classList.add('is-visible');
+      scrim.classList.add('is-visible');
+    });
+
+    /* the choice is the only thing on the page that can be reached */
+    bar.querySelector('.cookie-btn--accept').focus();
+
+    function trapFocus(e) {
+      if (e.key !== 'Tab' || !bar.isConnected) return;
+
+      var buttons = bar.querySelectorAll('.cookie-btn, .cookie-bar__text a');
+      var first = buttons[0];
+      var last = buttons[buttons.length - 1];
+
+      if (!bar.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', trapFocus);
 
     window.addEventListener('resize', function () {
       if (bar.isConnected) {
@@ -359,8 +403,17 @@
 
       storeConsent(button.dataset.consent);
       bar.classList.remove('is-visible');
-      document.body.classList.remove('has-cookie-bar');
-      setTimeout(function () { bar.remove(); }, 500);
+      scrim.classList.remove('is-visible');
+      document.body.classList.remove('has-cookie-bar', 'is-cookie-gated');
+      document.removeEventListener('keydown', trapFocus);
+
+      setTimeout(function () {
+        bar.remove();
+        scrim.remove();
+      }, 500);
+
+      /* whatever was waiting on an answer — the welcome popup — can go now */
+      consentWaiting.splice(0).forEach(function (waiting) { waiting(); });
     });
   }
 
@@ -423,23 +476,11 @@
       .catch(function () { /* signed out or offline — the form stays empty */ });
   }
 
-  /* ---------- Referral promo popup ----------
-     One offer: buy a unit, then earn on everyone you send our way. It shows
-     itself on every visit to the home page, as soon as the page is ready.
-     Everywhere else it waits to be asked: anything with data-promo-open opens
-     it. */
-  function openPromo(session) {
+  /* ---------- Welcome popup ----------
+     A short introduction to the company and the two products, shown on every
+     visit to the home page. Anything with data-promo-open reopens it. */
+  function openPromo() {
     if (document.querySelector('.promo')) return;
-
-    var reward   = (session && session.reward) || '₹500';
-    var canRefer = !!(session && session.canRefer);
-
-    /* Buy now goes to the product line-up; on the home page that is a scroll
-       rather than a reload */
-    var buyHref   = page === 'index.html' ? '#products' : siteRoot + 'index.html#products';
-    var referHref = canRefer
-      ? siteRoot + 'portal/status.php#referral'
-      : siteRoot + 'portal/index.php';
 
     var promo = document.createElement('div');
     promo.className = 'promo';
@@ -449,27 +490,29 @@
         '<button type="button" class="promo__close" data-promo-close aria-label="Close">' +
           '<i class="bi bi-x-lg" aria-hidden="true"></i>' +
         '</button>' +
-        '<p class="promo__eyebrow">Referral bonus</p>' +
-        '<h2 class="promo__title" id="promoTitle">Earn <span></span> for every person you bring to hydrogen.</h2>' +
-        '<p class="promo__lead">Own a Manifold unit and your referral code starts working. Anyone who applies ' +
-          'with it pays the same fee as everybody else — and once they have paid, the bonus is yours. ' +
-          'There is no cap on how many you can send.</p>' +
-        '<ol class="promo__steps">' +
-          '<li><span>1</span> Apply for a stove or a TukTuk kit and pay your own application fee.</li>' +
-          '<li><span>2</span> Your code arrives on your receipt and sits in your portal, ready to share.</li>' +
-          '<li><span>3</span> We check each referral by hand and transfer the bonus to you.</li>' +
-        '</ol>' +
+        '<h2 class="promo__title" id="promoTitle">Hydrogen on demand, made in India.</h2>' +
+        '<p class="promo__lead">Manifold Clean Energy Pvt. Ltd. is an Ahmedabad company turning hydrogen from a ' +
+          'laboratory promise into products people can actually buy — built for two of the hardest places to ' +
+          'decarbonise: the household kitchen and the urban street.</p>' +
+        '<ul class="promo__products">' +
+          '<li>' +
+            '<span class="promo__product-icon"><i class="bi bi-fire" aria-hidden="true"></i></span>' +
+            '<span><strong>Kinetic Hydrogen Cooking Stove</strong>' +
+              'Generates hydrogen on demand for a clean, powerful flame. No smoke, no soot, ' +
+              'and it works with the cookware already in your kitchen.</span>' +
+          '</li>' +
+          '<li>' +
+            '<span class="promo__product-icon"><i class="bi bi-truck-front" aria-hidden="true"></i></span>' +
+            '<span><strong>Hydrogen Conversion Kit for TukTuk</strong>' +
+              'Converts an existing petrol or CNG auto rickshaw to hydrogen — no scrapping, familiar range ' +
+              'and throttle, zero CO₂ at the tailpipe.</span>' +
+          '</li>' +
+        '</ul>' +
         '<div class="promo__actions">' +
-          '<a class="btn-pill btn-pill--accent" href="' + buyHref + '">Buy now <i class="bi bi-arrow-right"></i></a>' +
-          '<a class="btn-pill btn-pill--outline" href="' + referHref + '">' +
-            (canRefer ? 'Refer now' : 'Refer now — sign in') + ' <i class="bi bi-people"></i></a>' +
+          '<a class="btn-pill btn-pill--accent" href="' + (page === 'index.html' ? '#products' : siteRoot + 'index.html#products') + '">' +
+            'See our products <i class="bi bi-arrow-right"></i></a>' +
         '</div>' +
-        '<p class="promo__small">Bonuses are paid by transfer once your friend’s own payment clears. ' +
-          'The amount that applies is the one showing on the day they apply.</p>' +
       '</div>';
-
-    /* the figure comes from the server, so it goes in as text */
-    promo.querySelector('.promo__title span').textContent = reward;
 
     var opener = document.activeElement;
 
@@ -482,12 +525,10 @@
     promo.addEventListener('click', function (e) {
       if (e.target.closest('[data-promo-close]')) closePromo();
 
-      var action = e.target.closest('.promo__actions a');
-      if (!action) return;
-
       /* an in-page jump would leave the modal sitting over the section it
          just scrolled to */
-      if (action.getAttribute('href').charAt(0) === '#') closePromo();
+      var action = e.target.closest('.promo__actions a');
+      if (action && action.getAttribute('href').charAt(0) === '#') closePromo();
     });
 
     document.addEventListener('keydown', function (e) {
@@ -505,42 +546,12 @@
     if (!trigger) return;
 
     e.preventDefault();
-    sessionAsk.then(openPromo);
+    openPromo();
   });
 
   if (page === 'index.html') {
-    /* no delay and nothing remembered — the offer greets every visit. The
-       session answer only decides where Refer now points, so do not wait on
-       it if the request is slow. */
-    var promoOpened = false;
-
-    function openHomePromo(session) {
-      if (promoOpened) return;
-      promoOpened = true;
-      openPromo(session);
-    }
-
-    sessionAsk.then(openHomePromo);
-
-    /* if the answer is slow the popup opens anyway on a placeholder figure,
-       then corrects itself the moment the real one lands */
-    setTimeout(function () {
-      if (promoOpened) return;
-      openHomePromo(null);
-
-      sessionAsk.then(function (session) {
-        var promo = document.querySelector('.promo');
-        if (!promo || !session) return;
-
-        promo.querySelector('.promo__title span').textContent = session.reward || '₹500';
-
-        if (session.canRefer) {
-          var refer = promo.querySelectorAll('.promo__actions a')[1];
-          refer.setAttribute('href', siteRoot + 'portal/status.php#referral');
-          refer.innerHTML = 'Refer now <i class="bi bi-people"></i>';
-        }
-      });
-    }, 1200);
+    /* never on top of the cookie gate — it waits its turn */
+    afterConsent(openPromo);
   }
 
   /* ---------- Active nav link ---------- */
