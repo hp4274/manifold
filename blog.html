@@ -3,10 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Coming Soon — Manifold Clean Energy</title>
+<title>Blog — Manifold Clean Energy</title>
 <link rel="icon" type="image/png" href="assets/images/favicon.png">
-<meta name="description" content="This part of the Manifold Clean Energy site is still being built. Talk to us in the meantime, or read about the hydrogen stove and the TukTuk conversion kit.">
-<meta name="robots" content="noindex">
+<meta name="description" content="Notes on hydrogen as a fuel, the hardware behind it, and what it takes to put both in an ordinary Indian kitchen and street.">
 
 <!-- Fonts, Bootstrap 5 and Bootstrap Icons — self-hosted, works offline -->
 <link rel="stylesheet" href="assets/vendor/figtree/figtree.css">
@@ -73,53 +72,24 @@
 
 <main id="top">
 
-<!-- ============ COMING SOON ============ -->
-<section class="soon">
-  <span class="soon-glow" aria-hidden="true"></span>
-  <span class="tech-dots soon-dots" aria-hidden="true"></span>
-
-  <div class="container-x soon__inner">
-    <span class="eyebrow-badge soon__badge">In the workshop</span>
-    <h1 class="soon__title">This page is<br><span>coming soon.</span></h1>
-    <p class="soon__text">
-      We are building this section now. Everything about the hydrogen stove and
-      the TukTuk conversion kit is already live, and a person on the product team
-      will answer anything you ask in the meantime.
-    </p>
-
-    <div class="soon__actions">
-      <a href="contact.html" class="btn-pill btn-pill--white">Talk to us <i class="bi bi-arrow-right"></i></a>
-      <a href="index.html" class="btn-pill btn-pill--ghost">Back to home <i class="bi bi-arrow-left"></i></a>
-    </div>
-
-    <div class="soon__links">
-      <a class="soon-link" href="stove.html">
-        <span class="soon-link__icon"><i class="bi bi-fire"></i></span>
-        <span>
-          <strong>Kinetic Hydrogen Stove</strong>
-          Specifications, features and FAQ
-        </span>
-      </a>
-
-      <a class="soon-link" href="tuktuk.html">
-        <span class="soon-link__icon"><i class="bi bi-truck-front"></i></span>
-        <span>
-          <strong>TukTuk Conversion Kit</strong>
-          Fitment, range and running cost
-        </span>
-      </a>
-
-      <a class="soon-link" href="contact.html">
-        <span class="soon-link__icon"><i class="bi bi-telephone"></i></span>
-        <span>
-          <strong>Contact the team</strong>
-          +91 97251 54186, Ahmedabad
-        </span>
-      </a>
-    </div>
+<!-- ============ PAGE HEAD ============ -->
+<section class="legal-head">
+  <div class="container-x">
+    <p class="eyebrow eyebrow--rule">From the blog</p>
+    <h1>Hydrogen, explained by the people building with it.</h1>
+    <p>Notes on the fuel, the hardware and what it takes to put both in an ordinary Indian kitchen
+      and street. Read one below.</p>
   </div>
 </section>
 
+<!-- ============ EVERY POST ============
+     Cards are rendered by main.js from blog.php. -->
+<section class="section blog-section blog-section--all" id="blog">
+  <div class="container-x">
+    <div class="blog-grid" id="blogGrid"></div>
+    <p class="blog-empty" id="blogEmpty" hidden>Nothing published yet — do come back.</p>
+  </div>
+</section>
 </main>
 
 <!-- ============ FOOTER ============ -->
@@ -138,8 +108,8 @@
       <div class="footer-connect">
         <form class="footer-subscribe" action="admin/submit.php" method="post">
           <input type="hidden" name="form" value="newsletter">
-          <input type="hidden" name="source_page" value="coming-soon.html">
-          <input type="hidden" name="return" value="coming-soon.html">
+          <input type="hidden" name="source_page" value="privacy-policy.html">
+          <input type="hidden" name="return" value="privacy-policy.html">
           <label class="visually-hidden" for="footerEmail">Email address</label>
           <input id="footerEmail" type="email" name="email" placeholder="Enter your email address" required>
           <button type="submit" class="footer-subscribe__btn">Subscribe</button>
@@ -253,5 +223,6 @@
 
 <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="assets/js/main.js"></script>
+<script src="assets/js/legal.js"></script>
 </body>
 </html>

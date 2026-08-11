@@ -560,12 +560,23 @@
      put in it, so an empty blog leaves no hole in the page. */
   var blogGrid = document.getElementById('blogGrid');
 
+  /* the home page is a taste of four; the blog page is the whole thing */
+  var blogIsTeaser = page !== 'blog.html';
+
   if (blogGrid) {
-    fetch(siteRoot + 'blog.php?limit=6')
+    fetch(siteRoot + 'blog.php?limit=' + (blogIsTeaser ? 4 : 12))
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (data) {
         var posts = (data && data.posts) || [];
-        if (!posts.length) return;
+
+        if (!posts.length) {
+          if (!blogIsTeaser) {
+            document.getElementById('blog').hidden = false;
+            document.getElementById('blogEmpty').hidden = false;
+          }
+
+          return;
+        }
 
         posts.forEach(function (post, index) {
           var card = document.createElement('article');
@@ -603,6 +614,16 @@
         var section = document.getElementById('blog');
         section.hidden = false;
         section.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('is-visible'); });
+
+        if (blogIsTeaser) {
+          var more = document.createElement('div');
+          more.className = 'blog-more';
+          more.innerHTML =
+            '<a class="blog-more__link" href="' + siteRoot + 'blog.html">' +
+              'View more <i class="bi bi-arrow-right" aria-hidden="true"></i></a>';
+
+          blogGrid.parentNode.appendChild(more);
+        }
       })
       .catch(function () { /* no feed, no section */ });
   }

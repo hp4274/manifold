@@ -1521,6 +1521,14 @@ p{margin:0}
    Cards are injected by main.js from blog.php; the whole section is hidden
    until at least one post is live. */
 .blog-section{background:var(--tint)}
+.blog-section--all{padding-top:0}
+.blog-empty{
+  margin:0;
+  padding:60px 0;
+  text-align:center;
+  font-size:var(--t-sub);
+  color:var(--muted);
+}
 .blog-section[hidden]{display:none}
 
 .blog-grid{
@@ -1529,6 +1537,25 @@ p{margin:0}
   gap:26px;
   margin-top:44px;
 }
+
+/* on the home page the last row fades out under a View more button, so the
+   section reads as an excerpt rather than the whole blog */
+/* the home page shows four posts and then points at the rest */
+.blog-more{
+  display:flex;
+  justify-content:center;
+  margin-top:34px;
+}
+.blog-more__link{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  font-size:var(--t-sub);
+  font-weight:700;
+  color:var(--accent-deep);
+}
+.blog-more__link i{font-size:15px;line-height:1;transition:transform .25s ease}
+.blog-more__link:hover i{transform:translateX(4px)}
 
 .blog-card{
   display:flex;

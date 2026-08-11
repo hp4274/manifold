@@ -148,8 +148,10 @@ A scheduled post needs no second visit: `blog_live_posts()` treats
 `scheduled` with a past `publish_at` as published, and the list shows it as
 Published with a note that its date has passed.
 
-The home page is static HTML, so it fetches `/blog.php` (root, public,
-read-only JSON) and renders the cards itself above the call to action. Read
+The pages are static HTML, so they fetch `/blog.php` (root, public, read-only
+JSON — not to be confused with `blog.html`, the page) and render the cards
+themselves. The home page shows four and fades into a View more that leads to
+`blog.html`, which lists the lot. Read
 more slides the whole piece out of the right-hand edge; the body is plain text
 and each blank line becomes a paragraph, so nothing an author types can inject
 markup.
