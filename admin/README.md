@@ -46,8 +46,9 @@ framework, no build step.
 | `receipt.php` | Generates the PDF receipt for one verified payment |
 | `receipt-pdf.php` | The PDF writer and the receipt layout, no dependencies |
 | `submit.php` | Public endpoint the website forms post to |
+| `blog.php` | Blog posts — write, schedule, publish, unpublish, delete |
 | `referrals.php` | Referral payouts — who owes whom, mark a reward sent |
-| `settings.php` | Values the office can change — currently the referral reward |
+| `settings.php` | The referral reward, and the accounts that can sign in |
 | `create-admin.php` | One-time bootstrap, delete after use |
 | `partials/` | Sidebar, page chrome, row actions, detail drawer, payment panel |
 | `assets/admin.css` | All admin styling |
@@ -130,6 +131,33 @@ because those are regenerated from the payment record each time.
 
 Receipts are also attached to the receipt email and copied to
 `ADMIN_NOTIFY_EMAIL`, so both sides always have one.
+
+## Blog
+
+Posts live in `blog_posts` and are written at **Blog** in the sidebar. Four
+states:
+
+| Status | On the website |
+|---|---|
+| `draft` | Invisible. Nothing outside the admin can reach it |
+| `scheduled` | Invisible until `publish_at` passes, then live on its own |
+| `published` | Live |
+| `unpublished` | Pulled down, kept for later |
+
+A scheduled post needs no second visit: `blog_live_posts()` treats
+`scheduled` with a past `publish_at` as published, and the list shows it as
+Published with a note that its date has passed.
+
+The home page is static HTML, so it fetches `/blog.php` (root, public,
+read-only JSON) and renders the cards itself above the call to action. Read
+more slides the whole piece out of the right-hand edge; the body is plain text
+and each blank line becomes a paragraph, so nothing an author types can inject
+markup.
+
+Pictures go to `assets/images/blog/` rather than `admin/uploads/`, because
+the public site has to load them and `uploads/` is deliberately closed.
+Deleting a post removes its picture, but only when the file sits in that
+folder.
 
 ## Referrals
 

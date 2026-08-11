@@ -101,6 +101,31 @@
     });
   }
 
+  /* ---------- blog: the schedule date belongs to one status ----------
+     A draft or a published post has nothing to say about a future moment, so
+     the field only appears once Scheduled is chosen. */
+  var statusPick = document.getElementById('status');
+  var scheduleField = document.getElementById('publish_at');
+
+  if (statusPick && scheduleField) {
+    var scheduleRow = scheduleField.closest('.field');
+
+    var showSchedule = function () {
+      var scheduling = statusPick.value === 'scheduled';
+
+      scheduleRow.hidden = !scheduling;
+
+      if (scheduling) {
+        scheduleField.setAttribute('required', 'required');
+      } else {
+        scheduleField.removeAttribute('required');
+      }
+    };
+
+    statusPick.addEventListener('change', showSchedule);
+    showSchedule();
+  }
+
   /* ---------- click-to-cycle column filters ----------
      Each header button steps through the values actually present in the
      table — All → first → second → … → All. Two headers combine with AND. */

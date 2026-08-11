@@ -256,6 +256,30 @@ CREATE TABLE IF NOT EXISTS `login_attempts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
+-- Blog posts shown on the home page above the call to action.
+-- 'scheduled' is 'published' with a date in the future: the post appears on
+-- its own once publish_at passes.
+-- --------------------------------------------------------------------------
+CREATE TABLE `blog_posts` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `slug` varchar(160) NOT NULL,
+  `title` varchar(200) NOT NULL,
+  `subtitle` varchar(300) DEFAULT NULL,
+  `body` mediumtext NOT NULL,
+  `image_path` varchar(255) DEFAULT NULL,
+  `status` enum('draft','scheduled','published','unpublished') NOT NULL DEFAULT 'draft',
+  `publish_at` datetime DEFAULT NULL,
+  `created_by` int(10) unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_blog_slug` (`slug`),
+  KEY `ix_blog_live` (`status`,`publish_at`),
+  KEY `fk_blog_author` (`created_by`),
+  CONSTRAINT `fk_blog_author` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
 -- Values the admin can change from the dashboard without editing config.php.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `settings` (

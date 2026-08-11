@@ -24,6 +24,9 @@ memory.md
 config.local.php
 
 # Uploaded Application Files & Payment Proofs
+uploads/
+images/blog/
+assets/images/blog/
 admin/uploads/*
 !admin/uploads/.htaccess
 !admin/uploads/index.html

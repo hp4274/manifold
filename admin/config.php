@@ -15,6 +15,15 @@ const DB_PASS = '';
 const DB_PORT = 3306;
 
 /** Absolute path where uploaded application documents are stored. */
+/**
+ * The clock the whole application runs on: the office's, in Ahmedabad.
+ * PHP and MySQL are both pinned to it below, because a default install has
+ * them on different ones and then SQL and PHP disagree about what is due.
+ */
+const SITE_TIMEZONE = 'Asia/Kolkata';
+
+date_default_timezone_set(SITE_TIMEZONE);
+
 const UPLOAD_DIR = __DIR__ . '/uploads';
 
 /** Largest accepted upload, in bytes. */
@@ -142,6 +151,9 @@ function db(): PDO
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]);
+
+            /* NOW() has to mean the same moment as PHP's time() */
+            $pdo->exec("SET time_zone = '" . (new DateTime('now'))->format('P') . "'");
         } catch (PDOException $e) {
             http_response_code(500);
             exit('Database connection failed. Check admin/config.php and that schema.sql has been imported.');

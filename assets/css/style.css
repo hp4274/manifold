@@ -1517,6 +1517,194 @@ p{margin:0}
 }
 .partner-row img:hover{opacity:1;transform:translateY(-2px)}
 
+/* ---------- 10b. Blog ----------
+   Cards are injected by main.js from blog.php; the whole section is hidden
+   until at least one post is live. */
+.blog-section{background:var(--tint)}
+.blog-section[hidden]{display:none}
+
+.blog-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:26px;
+  margin-top:44px;
+}
+
+.blog-card{
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg);
+  background:#fff;
+  box-shadow:var(--shadow-card);
+  transition:transform .3s ease,box-shadow .3s ease,border-color .3s ease;
+}
+.blog-card:hover{
+  transform:translateY(-5px);
+  border-color:rgba(23,176,166,.35);
+  box-shadow:0 18px 40px rgba(10,45,80,.12);
+}
+
+.blog-card__media{
+  position:relative;
+  aspect-ratio:16/9;
+  overflow:hidden;
+  background:var(--tint);
+}
+.blog-card__media img{
+  width:100%;height:100%;
+  object-fit:cover;
+  transition:transform .6s ease;
+}
+.blog-card:hover .blog-card__media img{transform:scale(1.05)}
+.blog-card__placeholder{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(140deg,rgba(23,176,166,.14),rgba(75,180,83,.12));
+  color:var(--accent-deep);
+  font-size:34px;
+}
+
+.blog-card__body{
+  display:flex;
+  flex-direction:column;
+  flex:1 1 auto;
+  padding:24px 24px 26px;
+}
+.blog-card__meta{
+  margin:0 0 10px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--accent-deep);
+}
+.blog-card__title{
+  margin:0 0 10px;
+  font-size:var(--t-sub);
+  font-weight:700;
+  line-height:1.4;
+  color:var(--ink);
+}
+.blog-card__sub{
+  margin:0 0 20px;
+  font-size:var(--t-ui);
+  line-height:1.65;
+  color:var(--body);
+}
+.blog-card__more{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  margin-top:auto;
+  padding:0;
+  border:0;
+  background:none;
+  font-family:inherit;
+  font-size:var(--t-ui);
+  font-weight:700;
+  color:var(--accent-deep);
+  cursor:pointer;
+  align-self:flex-start;
+}
+.blog-card__more i{font-size:15px;line-height:1;transition:transform .25s ease}
+.blog-card__more:hover i{transform:translateX(4px)}
+
+/* --- the post itself, out of the right-hand edge --- */
+.post-drawer{
+  position:fixed;
+  inset:0;
+  z-index:1500;
+  pointer-events:none;
+}
+.post-drawer__backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(4,34,58,.5);
+  backdrop-filter:blur(2px);
+  opacity:0;
+  transition:opacity .35s ease;
+}
+.post-drawer.is-open{pointer-events:auto}
+.post-drawer.is-open .post-drawer__backdrop{opacity:1}
+
+.post-drawer__panel{
+  position:absolute;
+  top:0;right:0;bottom:0;
+  width:min(620px,100%);
+  overflow-y:auto;
+  background:#fff;
+  box-shadow:-24px 0 60px rgba(4,34,58,.22);
+  transform:translateX(100%);
+  transition:transform .4s cubic-bezier(.22,.61,.36,1);
+  outline:none;
+}
+.post-drawer.is-open .post-drawer__panel{transform:none}
+
+.post-drawer__close{
+  position:absolute;
+  top:18px;right:18px;
+  z-index:2;
+  width:40px;height:40px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid rgba(255,255,255,.5);
+  border-radius:50%;
+  background:rgba(255,255,255,.9);
+  color:var(--ink);
+  font-size:15px;
+  cursor:pointer;
+  transition:background .2s ease,transform .2s ease;
+}
+.post-drawer__close:hover{background:#fff;transform:scale(1.05)}
+
+.post-drawer__media{aspect-ratio:16/9;overflow:hidden;background:var(--tint)}
+.post-drawer__media img{width:100%;height:100%;object-fit:cover}
+
+.post-drawer__body{padding:34px 38px 48px}
+.post-drawer__meta{
+  margin:0 0 12px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--accent-deep);
+}
+.post-drawer__title{
+  margin:0 0 12px;
+  font-size:calc(26px * var(--fs));
+  font-weight:700;
+  line-height:1.3;
+  letter-spacing:-.02em;
+  color:var(--ink);
+}
+.post-drawer__sub{
+  margin:0 0 24px;
+  font-size:var(--t-sub);
+  line-height:1.6;
+  color:var(--ink-soft);
+}
+.post-drawer__text p{
+  margin:0 0 18px;
+  font-size:var(--t-sub);
+  line-height:1.75;
+  color:var(--body);
+}
+.post-drawer__text p:last-child{margin-bottom:0}
+
+/* the page behind a post does not scroll */
+body.has-drawer{overflow:hidden}
+
+@media (max-width:575px){
+  .post-drawer__body{padding:28px 22px 40px}
+  .post-drawer__title{font-size:calc(22px * var(--fs))}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .post-drawer__panel,
+  .post-drawer__backdrop{transition:none}
+}
+
 /* ---------- 11. CTA ---------- */
 .cta-section{padding:var(--sec-pad) 0;background:var(--white)}
 
@@ -2441,6 +2629,45 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   transition:border-color .2s ease,box-shadow .2s ease;
 }
 .field textarea{resize:vertical;min-height:150px}
+
+/* --- date fields ---
+   Left alone, a date input wears the browser's own furniture: a grey glyph at
+   a different size to our icons, and a hit area of a few pixels. */
+.field input[type="date"]:not(.datefield__input),
+.field input[type="datetime-local"]:not(.datefield__input){
+  position:relative;
+  appearance:none;
+  -webkit-appearance:none;
+  padding-right:48px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%230e8f96'%3E%3Cpath d='M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2M1 3.857C1 3.384 1.448 3 2 3h12c.552 0 1 .384 1 .857v10.286c0 .473-.448.857-1 .857H2c-.552 0-1-.384-1-.857z'/%3E%3Cpath d='M6.5 7a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-9 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 17px center;
+  background-size:17px 17px;
+  cursor:pointer;
+}
+/* the native button is kept — it is what opens the picker — but made
+   invisible and stretched over the whole control */
+.field input[type="date"]:not(.datefield__input)::-webkit-calendar-picker-indicator,
+.field input[type="datetime-local"]:not(.datefield__input)::-webkit-calendar-picker-indicator{
+  position:absolute;
+  inset:0;
+  width:auto;height:auto;
+  margin:0;padding:0;
+  opacity:0;
+  cursor:pointer;
+}
+.field input[type="date"]:not(.datefield__input)::-webkit-datetime-edit,
+.field input[type="datetime-local"]:not(.datefield__input)::-webkit-datetime-edit{color:var(--ink)}
+.field input[type="date"]:not(.datefield__input):hover,
+.field input[type="datetime-local"]:not(.datefield__input):hover{border-color:#c3d3df}
+
+/* Firefox draws its own indicator and has no way to hide it, so it keeps that
+   one and goes without ours rather than wearing two */
+@supports (-moz-appearance:none){
+  .field input[type="date"]:not(.datefield__input),
+  .field input[type="datetime-local"]:not(.datefield__input){background-image:none;padding-right:16px}
+}
+
 .field input::placeholder,
 .field textarea::placeholder{color:var(--muted)}
 .field input:focus,

@@ -554,6 +554,119 @@
     afterConsent(openPromo);
   }
 
+  /* ---------- Blog ----------
+     Cards come from blog.php, and Read more slides the whole piece out of the
+     right-hand edge. The section stays hidden until there is something live to
+     put in it, so an empty blog leaves no hole in the page. */
+  var blogGrid = document.getElementById('blogGrid');
+
+  if (blogGrid) {
+    fetch(siteRoot + 'blog.php?limit=6')
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (data) {
+        var posts = (data && data.posts) || [];
+        if (!posts.length) return;
+
+        posts.forEach(function (post, index) {
+          var card = document.createElement('article');
+          card.className = 'blog-card reveal';
+
+          card.innerHTML =
+            '<div class="blog-card__media">' +
+              (post.image
+                ? '<img alt="" loading="lazy" src="' + siteRoot + post.image + '">'
+                : '<span class="blog-card__placeholder" aria-hidden="true"><i class="bi bi-droplet-half"></i></span>') +
+            '</div>' +
+            '<div class="blog-card__body">' +
+              '<p class="blog-card__meta"></p>' +
+              '<h3 class="blog-card__title"></h3>' +
+              '<p class="blog-card__sub"></p>' +
+              '<button type="button" class="blog-card__more">Read more <i class="bi bi-arrow-right" aria-hidden="true"></i></button>' +
+            '</div>';
+
+          /* everything the office typed goes in as text, never as markup */
+          card.querySelector('.blog-card__meta').textContent =
+            post.date + ' · ' + post.minutes + ' min read';
+          card.querySelector('.blog-card__title').textContent = post.title;
+          card.querySelector('.blog-card__sub').textContent = post.subtitle || '';
+
+          card.querySelector('.blog-card__more').addEventListener('click', function () {
+            openPost(post, this);
+          });
+
+          blogGrid.appendChild(card);
+
+          /* the reveal observer has already run by now, so wake these up */
+          setTimeout(function () { card.classList.add('is-visible'); }, 60 * index);
+        });
+
+        var section = document.getElementById('blog');
+        section.hidden = false;
+        section.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('is-visible'); });
+      })
+      .catch(function () { /* no feed, no section */ });
+  }
+
+  /* one blank line, however it is typed, separates two paragraphs */
+  var BLANK_LINE = new RegExp("\\n\\s*\\n");
+
+  function openPost(post, opener) {
+    var existing = document.querySelector('.post-drawer');
+    if (existing) existing.remove();
+
+    var drawer = document.createElement('div');
+    drawer.className = 'post-drawer';
+    drawer.innerHTML =
+      '<div class="post-drawer__backdrop" data-post-close></div>' +
+      '<article class="post-drawer__panel" role="dialog" aria-modal="true" aria-labelledby="postTitle" tabindex="-1">' +
+        '<button type="button" class="post-drawer__close" data-post-close aria-label="Close">' +
+          '<i class="bi bi-x-lg" aria-hidden="true"></i>' +
+        '</button>' +
+        (post.image ? '<div class="post-drawer__media"><img alt="" src="' + siteRoot + post.image + '"></div>' : '') +
+        '<div class="post-drawer__body">' +
+          '<p class="post-drawer__meta"></p>' +
+          '<h2 class="post-drawer__title" id="postTitle"></h2>' +
+          '<p class="post-drawer__sub"></p>' +
+          '<div class="post-drawer__text"></div>' +
+        '</div>' +
+      '</article>';
+
+    drawer.querySelector('.post-drawer__meta').textContent = post.date + ' · ' + post.minutes + ' min read';
+    drawer.querySelector('.post-drawer__title').textContent = post.title;
+
+    var sub = drawer.querySelector('.post-drawer__sub');
+    if (post.subtitle) { sub.textContent = post.subtitle; } else { sub.remove(); }
+
+    /* a blank line starts a new paragraph; the text itself is never HTML */
+    var text = drawer.querySelector('.post-drawer__text');
+    String(post.body).split(BLANK_LINE).forEach(function (para) {
+      if (!para.trim()) return;
+      var p = document.createElement('p');
+      p.textContent = para.trim();
+      text.appendChild(p);
+    });
+
+    function closeDrawer() {
+      drawer.classList.remove('is-open');
+      document.body.classList.remove('has-drawer');
+      setTimeout(function () { drawer.remove(); }, 350);
+      if (opener && opener.focus) opener.focus();
+    }
+
+    drawer.addEventListener('click', function (e) {
+      if (e.target.closest('[data-post-close]')) closeDrawer();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && drawer.isConnected) closeDrawer();
+    });
+
+    document.body.appendChild(drawer);
+    document.body.classList.add('has-drawer');
+    requestAnimationFrame(function () { drawer.classList.add('is-open'); });
+    drawer.querySelector('.post-drawer__panel').focus();
+  }
+
   /* ---------- Active nav link ---------- */
   var sections = document.querySelectorAll('main section[id]');
   var links    = nav ? nav.querySelectorAll('a[href^="#"]') : [];

@@ -352,6 +352,99 @@ function reward_is_payable(array $referral): bool
         && $referral['status'] === 'complete';
 }
 
+/* ---------- blog ----------
+   Four states. `scheduled` is `published` with a date in the future: the post
+   goes live on its own when that moment passes, so nobody has to come back and
+   press a button. */
+
+const BLOG_STATUSES = ['draft', 'scheduled', 'published', 'unpublished'];
+
+function blog_status_label(string $status): string
+{
+    $labels = [
+        'draft'       => 'Draft',
+        'scheduled'   => 'Scheduled',
+        'published'   => 'Published',
+        'unpublished' => 'Unpublished',
+    ];
+
+    return $labels[$status] ?? ucfirst($status);
+}
+
+/** Is this row visible to the public right now? */
+function blog_is_live(array $post): bool
+{
+    if ($post['status'] === 'published') {
+        return true;
+    }
+
+    return $post['status'] === 'scheduled'
+        && !empty($post['publish_at'])
+        && strtotime((string) $post['publish_at']) <= time();
+}
+
+/**
+ * What the office should read on the row: a scheduled post that has passed its
+ * date is simply live, whatever the column still says.
+ */
+function blog_state(array $post): string
+{
+    if ($post['status'] === 'scheduled' && blog_is_live($post)) {
+        return 'published';
+    }
+
+    return (string) $post['status'];
+}
+
+/** Posts the website may show, newest first. */
+function blog_live_posts(int $limit = 12): array
+{
+    $stmt = db()->prepare(
+        "SELECT * FROM blog_posts
+          WHERE status = 'published'
+             OR (status = 'scheduled' AND publish_at IS NOT NULL AND publish_at <= NOW())
+          ORDER BY COALESCE(publish_at, created_at) DESC
+          LIMIT " . max(1, $limit)
+    );
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+/** A URL-safe, unique slug built from the title. */
+function blog_slug(string $title, ?int $ignoreId = null): string
+{
+    $slug = strtolower(trim($title));
+    $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+    $slug = trim((string) $slug, '-');
+
+    if ($slug === '') {
+        $slug = 'post';
+    }
+
+    $slug = mb_substr($slug, 0, 140);
+    $base = $slug;
+
+    for ($n = 2; $n < 50; $n++) {
+        $stmt = db()->prepare('SELECT id FROM blog_posts WHERE slug = ? AND id <> ?');
+        $stmt->execute([$slug, (int) $ignoreId]);
+
+        if (!$stmt->fetchColumn()) {
+            return $slug;
+        }
+
+        $slug = $base . '-' . $n;
+    }
+
+    return $base . '-' . bin2hex(random_bytes(3));
+}
+
+/** Roughly how long the piece takes to read, in whole minutes. */
+function blog_read_minutes(string $body): int
+{
+    return max(1, (int) round(str_word_count(strip_tags($body)) / 200));
+}
+
 /** MF-2026-00042-R2 — the receipt number for one verified transfer. */
 function next_receipt_no(array $app): string
 {

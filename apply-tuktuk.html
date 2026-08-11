@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
 
 <link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/datepicker.css">
 </head>
 <body>
 
@@ -128,7 +129,7 @@
 
           <div class="field">
             <label for="date_of_birth">Date of birth</label>
-            <input id="date_of_birth" name="date_of_birth" type="date">
+            <input id="date_of_birth" name="date_of_birth" type="date" data-limit="past">
           </div>
 
           <div class="field">
@@ -339,7 +340,7 @@
 
           <div class="field">
             <label for="preferred_install_date">Preferred installation date</label>
-            <input id="preferred_install_date" name="preferred_install_date" type="date">
+            <input id="preferred_install_date" name="preferred_install_date" type="date" data-limit="future">
           </div>
         </div>
       </section>
@@ -766,6 +767,7 @@
 </footer>
 
 <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="assets/js/datepicker.js"></script>
 <script src="assets/js/main.js"></script>
 <script src="assets/js/apply.js"></script>
 </body>

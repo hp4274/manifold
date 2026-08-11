@@ -208,6 +208,20 @@ try {
             'ip_address'                   => $ip,
         ];
 
+        /* ---------- dates ----------
+           Nobody is born tomorrow, and an installation cannot be arranged for
+           a day that has gone. The picker greys both out; this is the copy of
+           the rule that a hand-made request cannot get past. */
+        if ($columns['date_of_birth'] !== null
+            && strtotime((string) $columns['date_of_birth']) > strtotime('today 23:59:59')) {
+            respond(false, 'That date of birth is in the future — please check it.');
+        }
+
+        if ($columns['preferred_install_date'] !== null
+            && strtotime((string) $columns['preferred_install_date']) < strtotime('today')) {
+            respond(false, 'The preferred installation date has already passed. Please pick a later day.');
+        }
+
         /* ---------- referral ----------
            Quoting a code costs this applicant nothing and saves them nothing —
            it books a reward for whoever's code it is, which the office pays by

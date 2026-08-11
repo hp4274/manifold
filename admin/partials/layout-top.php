@@ -22,6 +22,7 @@ $pageLead   = $pageLead ?? '';
 <link rel="stylesheet" href="<?= SITE_URL ?>/assets/vendor/figtree/figtree.css">
 <link rel="stylesheet" href="<?= SITE_URL ?>/assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="<?= asset_url('assets/admin.css') ?>">
+<link rel="stylesheet" href="<?= SITE_URL ?>/assets/css/datepicker.css">
 </head>
 <body>
 
@@ -56,6 +57,9 @@ $pageLead   = $pageLead ?? '';
     <div>
       <p class="sidebar__label">Configuration</p>
       <nav class="sidebar__nav">
+        <a href="blog.php" class="<?= $activeType === 'blog' ? 'is-active' : '' ?>">
+          <i class="bi bi-journal-text" aria-hidden="true"></i> Blog
+        </a>
         <a href="referrals.php" class="<?= $activeType === 'referrals' ? 'is-active' : '' ?>">
           <i class="bi bi-people" aria-hidden="true"></i> Referrals
         </a>
