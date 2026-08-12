@@ -33,6 +33,7 @@ function settings_done(string $message): void
 
 /* the account being edited, if the page was opened that way */
 $editingAdmin = null;
+$openAccountModal = false;
 
 /** How many accounts could still sign in if this one were gone. */
 function other_active_admins(int $exceptId): int
@@ -137,6 +138,7 @@ if (($_GET['admin'] ?? '') !== '') {
     $stmt = db()->prepare('SELECT * FROM admin_users WHERE id = ?');
     $stmt->execute([(int) $_GET['admin']]);
     $editingAdmin = $stmt->fetch() ?: null;
+    $openAccountModal = $editingAdmin !== null;
 }
 
 $admins = db()->query(
@@ -217,8 +219,13 @@ require __DIR__ . '/partials/layout-top.php';
 </div>
 <div class="panel">
   <div class="panel__head">
-    <h2>Who can sign in</h2>
-    <span class="eyebrow"><?= count($admins) ?> account<?= count($admins) === 1 ? '' : 's' ?></span>
+    <div class="panel__head-text">
+      <h2>Who can sign in</h2>
+      <span class="eyebrow"><?= count($admins) ?> account<?= count($admins) === 1 ? '' : 's' ?></span>
+    </div>
+    <button type="button" class="btn-add" data-modal-open="accountModal">
+      <i class="bi bi-plus-lg" aria-hidden="true"></i> Add an account
+    </button>
   </div>
 
   <div class="table-wrap">
@@ -289,46 +296,49 @@ require __DIR__ . '/partials/layout-top.php';
   </div>
 </div>
 
-<div class="panel panel--open">
-  <div class="panel__head">
-    <h2><?= $editingAdmin ? 'Edit account' : 'Add an account' ?></h2>
-    <?php if ($editingAdmin): ?>
-      <a class="eyebrow" href="settings.php">Cancel and add a new one</a>
-    <?php endif; ?>
+<!-- the account form lives in a dialog, opened by the + on the list above -->
+<div class="modal-x<?= $openAccountModal ? ' is-open' : '' ?>" id="accountModal" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
+  <div class="modal-x__backdrop" data-modal-close></div>
+
+  <div class="modal-x__card">
+    <div class="modal-x__head">
+      <h2 id="accountModalTitle"><?= $editingAdmin ? 'Edit account' : 'Add an account' ?></h2>
+      <button type="button" class="modal-x__close" data-modal-close aria-label="Close">
+        <i class="bi bi-x-lg" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <form method="post" class="modal-x__body">
+      <?= csrf_field() ?>
+      <input type="hidden" name="action" value="admin_save">
+      <input type="hidden" name="id" value="<?= $editingAdmin ? (int) $editingAdmin['id'] : 0 ?>">
+
+      <div class="field">
+        <label for="admin_name">Name</label>
+        <input id="admin_name" name="name" type="text" maxlength="120" required
+               value="<?= e($editingAdmin['name'] ?? '') ?>">
+      </div>
+
+      <div class="field">
+        <label for="admin_email">Email</label>
+        <input id="admin_email" name="email" type="email" maxlength="190" required
+               value="<?= e($editingAdmin['email'] ?? '') ?>">
+        <span class="field-hint">They sign in with this, or with their name.</span>
+      </div>
+
+      <div class="field">
+        <label for="admin_password">Password</label>
+        <input id="admin_password" name="password" type="password" autocomplete="new-password"
+               <?= $editingAdmin ? '' : 'required' ?>>
+        <span class="field-hint">
+          At least 10 characters.
+          <?= $editingAdmin ? 'Leave it blank to keep the current one.' : '' ?>
+        </span>
+      </div>
+
+      <button type="submit" class="btn btn--primary"><?= $editingAdmin ? 'Save account' : 'Create account' ?></button>
+    </form>
   </div>
-
-  <form method="post" class="panel__body">
-    <?= csrf_field() ?>
-    <input type="hidden" name="action" value="admin_save">
-    <input type="hidden" name="id" value="<?= $editingAdmin ? (int) $editingAdmin['id'] : 0 ?>">
-
-    <div class="field">
-      <label for="admin_name">Name</label>
-      <input id="admin_name" name="name" type="text" maxlength="120" required
-             value="<?= e($editingAdmin['name'] ?? '') ?>">
-    </div>
-
-    <div class="field">
-      <label for="admin_email">Email</label>
-      <input id="admin_email" name="email" type="email" maxlength="190" required
-             value="<?= e($editingAdmin['email'] ?? '') ?>">
-      <span class="field-hint">They sign in with this, or with their name.</span>
-    </div>
-
-    <div class="field">
-      <label for="admin_password">Password</label>
-      <input id="admin_password" name="password" type="password" autocomplete="new-password"
-             <?= $editingAdmin ? '' : 'required' ?>>
-      <span class="field-hint">
-        At least 10 characters.
-        <?= $editingAdmin ? 'Leave it blank to keep the current one.' : '' ?>
-      </span>
-    </div>
-
-    <button type="submit" class="btn btn--primary"><?= $editingAdmin ? 'Save account' : 'Create account' ?></button>
-  </form>
 </div>
-
-
 
 <?php require __DIR__ . '/partials/layout-bottom.php'; ?>

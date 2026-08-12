@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How It Works — Hydrogen-On-Demand™ | Manifold Clean Energy</title>
+  <link rel="icon" type="image/png" href="assets/images/favicon.png">
+  <meta name="description"
+    content="How Kinetic7 Hydrogen-On-Demand™ works: water and electricity become hydrogen at the burner, the moment it is needed. Nothing stored, nothing piped, no carbon at the point of use.">
+
+  <!-- Fonts, Bootstrap 5 and Bootstrap Icons — self-hosted, works offline -->
+  <link rel="stylesheet" href="assets/vendor/figtree/figtree.css">
+  <link rel="stylesheet" href="assets/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
+
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+
+<body>
+
+  <!-- ============ TOP BAR ============ -->
+  <div class="top-bar" role="banner">
+    <div class="container-x top-bar__inner">
+      <a class="top-bar__email" href="mailto:info@manifoldcleanenergy.com">
+        <i class="bi bi-envelope"></i>
+        <span>info@manifoldcleanenergy.com</span>
+      </a>
+
+      <div class="top-bar__social" aria-label="Social media links">
+        <a href="#" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+        <a href="#" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+        <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+        <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HEADER / NAVBAR ============ -->
+  <header class="site-header" id="siteHeader">
+    <div class="nav-wrap">
+      <a class="brand" href="index.html" aria-label="Manifold Clean Energy home">
+        <img class="brand-logo" src="assets/images/manifold.png" alt="Manifold Clean Energy Pvt. Ltd.">
+      </a>
+
+      <nav class="main-nav" id="mainNav" aria-label="Main">
+        <a href="index.html#products">Products</a>
+        <a href="technology.html">Technology</a>
+        <a href="index.html#about">About Us</a>
+        <details class="nav-dropdown">
+          <summary>Apply Now <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+          <div class="nav-dropdown__menu">
+            <a href="apply-tuktuk.html">TukTuk</a>
+            <a href="apply-stove.html">Stove</a>
+          </div>
+        </details>
+        <a href="contact.html">Contact</a>
+
+        <div class="nav-actions">
+          <button type="button" class="btn-pill btn-pill--ghost nav-raffle-mobile"
+                  data-raffle-open>
+            <i class="bi bi-ticket-perforated" aria-hidden="true"></i> Gold Raffle
+          </button>
+          <a href="contact.html" class="btn-pill btn-pill--white nav-cta-mobile">Get In touch</a>
+          <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login-mobile">Login</a>
+        </div>
+      </nav>
+
+      <div class="nav-actions nav-actions--desktop">
+        <button type="button" class="btn-pill btn-pill--ghost nav-raffle"
+                data-raffle-open aria-label="Gold raffle" title="Gold raffle">
+          <i class="bi bi-ticket-perforated" aria-hidden="true"></i>
+        </button>
+        <a href="contact.html" class="btn-pill btn-pill--white nav-cta">Get In touch</a>
+        <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login">Login</a>
+      </div>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mainNav">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ============ HERO ============ -->
+    <section class="page-hero page-hero--tech">
+      <span class="tech-hero__molecule" aria-hidden="true">
+        <svg viewBox="0 0 320 260">
+          <g fill="none" stroke="rgba(127,224,200,.34)" stroke-width="1.4">
+            <path d="M164 92 250 60M164 92 236 158M236 158 274 196M250 60 268 44" />
+          </g>
+          <circle cx="164" cy="92" r="72" fill="rgba(127,224,200,.07)" />
+          <circle cx="164" cy="92" r="72" fill="none" stroke="rgba(127,224,200,.34)" stroke-width="1.4" />
+          <circle cx="250" cy="60" r="30" fill="rgba(127,224,200,.07)" />
+          <circle cx="250" cy="60" r="30" fill="none" stroke="rgba(127,224,200,.34)" stroke-width="1.4" />
+          <circle cx="236" cy="158" r="24" fill="rgba(127,224,200,.07)" />
+          <circle cx="236" cy="158" r="24" fill="none" stroke="rgba(127,224,200,.34)" stroke-width="1.4" />
+          <circle cx="278" cy="200" r="16" fill="rgba(127,224,200,.07)" />
+          <circle cx="278" cy="200" r="16" fill="none" stroke="rgba(127,224,200,.34)" stroke-width="1.4" />
+          <text x="164" y="106" text-anchor="middle" font-family="Figtree, sans-serif" font-size="52" font-weight="600"
+            fill="rgba(127,224,200,.5)">H</text>
+          <text x="196" y="118" text-anchor="middle" font-family="Figtree, sans-serif" font-size="30" font-weight="600"
+            fill="rgba(127,224,200,.5)">2</text>
+        </svg>
+      </span>
+      <span class="tech-hero__dots" aria-hidden="true"></span>
+
+      <div class="container-x page-hero__inner">
+        <nav class="breadcrumb-x" aria-label="Breadcrumb">
+          <a href="index.html">Home</a>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">Technology</span>
+        </nav>
+
+        <span class="eyebrow-badge">Kinetic7 Hydrogen-On-Demand&trade;</span>
+        <h1 class="page-hero__title">We do not store hydrogen.<br>We make it at the burner.</h1>
+        <p class="page-hero__text">
+          Water and electricity go in, a clean flame comes out, and nothing sits in a cylinder in
+          between. No pipeline to dig, no refuelling station to reach, no fuel in the building when
+          the kitchen is empty.
+        </p>
+
+        <div class="page-hero__actions">
+          <a href="#how" class="btn-pill btn-pill--white">How it works <i class="bi bi-arrow-down"></i></a>
+          <a href="#numbers" class="btn-pill btn-pill--ghost">See the numbers <i class="bi bi-arrow-right"></i></a>
+        </div>
+
+        <ul class="tech-hero__stats">
+          <li><strong>2,800&deg;C</strong><span>flame, against 1,950&deg;C on gas</span></li>
+          <li><strong>82%</strong><span>of input delivered as heat</span></li>
+          <li><strong>Zero</strong><span>CO<sub>2</sub> at the point of use</span></li>
+          <li><strong>Nothing</strong><span>stored, piped or delivered</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ THE THREE STEPS ============ -->
+    <section class="section tech-page" id="how">
+      <div class="container-x">
+        <p class="eyebrow eyebrow--rule reveal">How it works</p>
+
+        <div class="section-head reveal">
+          <h2 class="section-title">Three steps, and none of them involve a delivery.</h2>
+          <p class="section-sub">An electrolytic cell splits water into hydrogen and oxygen and sends the gas
+            straight to the burner. Generation starts when you open the dial and stops when you close it.</p>
+        </div>
+
+        <ol class="tech-steps reveal">
+          <li>
+            <span class="tech-steps__num">01</span>
+            <h3>Water goes in</h3>
+            <p>Purified water fills the tank. That is the only fuel the system consumes &mdash; roughly
+              60&nbsp;ml for every kilowatt-hour of cooking. The electrolyte itself recirculates, so only the
+              water actually turned into gas ever leaves the loop.</p>
+          </li>
+          <li>
+            <span class="tech-steps__num">02</span>
+            <h3>Electricity splits it</h3>
+            <p>The cell separates the water into hydrogen and oxygen &mdash; HHO gas. It is produced at the
+              rate the burner is using it, which is why there is no tank of fuel anywhere in the appliance and
+              nothing to refill.</p>
+          </li>
+          <li>
+            <span class="tech-steps__num">03</span>
+            <h3>The flame does the rest</h3>
+            <p>The gas is conditioned, dried and burned. The only combustion product is water vapour: no
+              carbon dioxide at the point of use, no smoke, no soot on the base of the pan.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ THE NUMBERS ============ -->
+    <section class="section metrics-band" id="numbers">
+      <span class="metrics-band__glow" aria-hidden="true"></span>
+
+      <div class="container-x">
+        <p class="eyebrow eyebrow--rule reveal">Measured, not estimated</p>
+
+        <div class="section-head reveal">
+          <h2 class="section-title">Put beside gas, on the numbers that decide a kitchen.</h2>
+          <p class="section-sub">From validated retrofit testing on the Kinetic7 platform &mdash; a 5.4&nbsp;kW
+            Lincat natural gas griddle, converted and run side by side.</p>
+        </div>
+
+        <div class="metrics reveal">
+          <div class="metrics__key" aria-hidden="true">
+            <span class="metrics__key-item metrics__key-item--ours">Hydrogen-On-Demand&trade;</span>
+            <span class="metrics__key-item">Natural gas</span>
+          </div>
+
+          <div class="metric">
+            <p class="metric__label">Flame temperature</p>
+            <div class="metric__row">
+              <span class="metric__bar metric__bar--ours" style="--fill:100%"><b>2,800&deg;C</b></span>
+              <span class="metric__bar" style="--fill:70%"><b>1,950&deg;C</b></span>
+            </div>
+          </div>
+
+          <div class="metric">
+            <p class="metric__label">Time to reach 180&deg;C <span>lower is better</span></p>
+            <div class="metric__row">
+              <span class="metric__bar metric__bar--ours" style="--fill:40%"><b>8 min</b></span>
+              <span class="metric__bar" style="--fill:100%"><b>15&ndash;20 min</b></span>
+            </div>
+          </div>
+
+          <div class="metric metric__plain">
+            <p class="metric__label">At the point of use</p>
+            <div class="metric__row">
+              <span class="metric__word metric__word--ours">Water vapour only</span>
+              <span class="metric__word">CO<sub>2</sub>, and a cylinder to store</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="metrics-notes reveal">
+          <div class="metrics-note">
+            <strong>82%</strong>
+            <span>of the electrical input arrives as useful combustion heat.</span>
+          </div>
+          <div class="metrics-note">
+            <strong>60 ml</strong>
+            <span>of water per kilowatt-hour &mdash; a full commercial line drinks less in a month than a
+              household shower uses in a week.</span>
+          </div>
+          <div class="metrics-note">
+            <strong>3.8 kW</strong>
+            <span>drawn to do the work the griddle previously did on 5.4&nbsp;kW of gas.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SAFETY ============ -->
+    <section class="section" id="safety">
+      <div class="container-x">
+        <p class="eyebrow eyebrow--rule reveal">Safety by design</p>
+
+        <div class="section-head reveal">
+          <h2 class="section-title">The safest gas is the one that was never stored.</h2>
+          <p class="section-sub">Gas exists only while the appliance is running, and only between the cell and
+            the burner. Everything below sits in that short path.</p>
+        </div>
+
+        <ul class="safety-grid reveal">
+          <li class="safety-card">
+            <span class="safety-card__icon"><i class="bi bi-droplet" aria-hidden="true"></i></span>
+            <span class="safety-card__step">01</span>
+            <h3>Bubbler</h3>
+            <span class="safety-card__rule" aria-hidden="true"></span>
+            <p>A water-sealed trap takes any liquid carried along with the gas back out of the stream.</p>
+            <span class="safety-card__foot" aria-hidden="true"></span>
+          </li>
+          <li class="safety-card">
+            <span class="safety-card__icon"><i class="bi bi-funnel" aria-hidden="true"></i></span>
+            <span class="safety-card__step">02</span>
+            <h3>Demister</h3>
+            <span class="safety-card__rule" aria-hidden="true"></span>
+            <p>A coalescing filter catches electrolyte aerosol and returns it to the tank.</p>
+            <span class="safety-card__foot" aria-hidden="true"></span>
+          </li>
+          <li class="safety-card">
+            <span class="safety-card__icon"><i class="bi bi-thermometer-half" aria-hidden="true"></i></span>
+            <span class="safety-card__step">03</span>
+            <h3>Desiccant stage</h3>
+            <span class="safety-card__rule" aria-hidden="true"></span>
+            <p>Dries the gas below 5% moisture, which is what gives the flame its stability.</p>
+            <span class="safety-card__foot" aria-hidden="true"></span>
+          </li>
+          <li class="safety-card">
+            <span class="safety-card__icon"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
+            <span class="safety-card__step">04</span>
+            <h3>Dual flashback arrestors</h3>
+            <span class="safety-card__rule" aria-hidden="true"></span>
+            <p>Certified sintered stainless elements on both gas lines stop a flame travelling back into the unit.</p>
+            <span class="safety-card__foot" aria-hidden="true"></span>
+          </li>
+          <li class="safety-card">
+            <span class="safety-card__icon"><i class="bi bi-activity" aria-hidden="true"></i></span>
+            <span class="safety-card__step">05</span>
+            <h3>Continuous monitoring</h3>
+            <span class="safety-card__rule" aria-hidden="true"></span>
+            <p>Temperature, voltage, current, gas flow, humidity, conductivity and tank level all feed automatic
+              shut-off interlocks, with the readings logged.</p>
+            <span class="safety-card__foot" aria-hidden="true"></span>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ THE RANGE ============ -->
+    <section class="section section--tint" id="range">
+      <div class="container-x">
+        <p class="eyebrow eyebrow--rule reveal">One technology, several sizes</p>
+
+        <div class="section-head reveal">
+          <h2 class="section-title">From a two-burner stove to a hundred-kilowatt kitchen.</h2>
+          <p class="section-sub">The same cell, the same flame, scaled to what the room actually cooks.</p>
+        </div>
+
+        <div class="tech-range reveal">
+          <article class="tech-range__item">
+            <h3>Nomad&trade;</h3>
+            <p class="tech-range__kind">Two-burner portable</p>
+            <p>Clean cooking where conventional fuel is not practical or not available, without asking anyone
+              to change how they cook.</p>
+          </article>
+          <article class="tech-range__item">
+            <h3>Tribe&trade;</h3>
+            <p class="tech-range__kind">Three-burner portable</p>
+            <p>More burners and higher output for schools, community kitchens and households cooking in
+              volume every day. IoT metering built in.</p>
+          </article>
+          <article class="tech-range__item">
+            <h3>Nomad One&trade;</h3>
+            <p class="tech-range__kind">Four-burner, next generation</p>
+            <p>Compact, with a swappable battery and a form factor built for everyday homes rather than for a
+              demonstration.</p>
+          </article>
+          <article class="tech-range__item">
+            <h3>HODbox&trade;</h3>
+            <p class="tech-range__kind">Commercial production unit</p>
+            <p>Modular hydrogen for a whole service line: a 10&nbsp;kW base unit with stacks placed on top of
+              it, up to 100&nbsp;kW.</p>
+          </article>
+          <article class="tech-range__item">
+            <h3>Carbon Free Kitchen&trade;</h3>
+            <p class="tech-range__kind">Deployable kitchen</p>
+            <p>A self-contained cooking station &mdash; 36 stove tops, rooftop solar, 60&nbsp;L of water storage
+              and an air-to-water system &mdash; that arrives ready to serve hundreds.</p>
+          </article>
+        </div>
+
+        <div class="tech-table-wrap reveal">
+          <table class="tech-table">
+            <caption>HODbox output by configuration</caption>
+            <thead>
+              <tr>
+                <th scope="col">Configuration</th>
+                <th scope="col">Electrical input</th>
+                <th scope="col">Heat output (82%)</th>
+                <th scope="col">Equivalent gas appliance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Base unit</td>
+                <td>10 kW</td>
+                <td>8.2 kW &middot; ~28,000 BTU/hr</td>
+                <td>Griddle and fryer, or a multi-burner station</td>
+              </tr>
+              <tr>
+                <td>Base + 10 kW stack</td>
+                <td>20 kW</td>
+                <td>16.4 kW &middot; ~56,000 BTU/hr</td>
+                <td>Multi-station cook line</td>
+              </tr>
+              <tr>
+                <td>Base + 10 kW + 15 kW stacks</td>
+                <td>35 kW</td>
+                <td>28.7 kW &middot; ~98,000 BTU/hr</td>
+                <td>Full commercial kitchen line</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ METERING ============ -->
+    <section class="section" id="metering">
+      <div class="container-x">
+        <div class="row gx-5 gy-4 align-items-center">
+          <div class="col-lg-6 reveal">
+            <p class="eyebrow eyebrow--rule">Every flame counted</p>
+            <h2 class="section-title">Usage data, not estimates.</h2>
+            <p class="tech-copy">The stoves meter themselves. Usage streams from the kitchen to a registry, which
+              turns clean cooking into audit-grade evidence rather than a survey answer &mdash; the basis for
+              verified carbon credits under standards such as Verra and Gold Standard.</p>
+            <p class="tech-copy">The same readings tell an owner what their cooking actually costs, in water and
+              in electricity, day by day.</p>
+          </div>
+          <div class="col-lg-6 reveal">
+            <ul class="tech-list tech-list--plain">
+              <li><i class="bi bi-broadcast" aria-hidden="true"></i>
+                <div><strong>IoT metering</strong><span>Built into the appliance, not bolted on afterwards.</span></div>
+              </li>
+              <li><i class="bi bi-clipboard-data" aria-hidden="true"></i>
+                <div><strong>Real-time MRV</strong><span>Measurement, reporting and verification without a field
+                    survey.</span></div>
+              </li>
+              <li><i class="bi bi-patch-check" aria-hidden="true"></i>
+                <div><strong>Validated platform</strong><span>The Kinetic7 technology has been validated by Imperial
+                    College London and declared ready for mass production.</span></div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CTA ============ -->
+    <section class="cta-section section" id="contact">
+      <div class="container-x">
+        <div class="cta-band reveal">
+          <div class="cta-inner">
+            <span class="cta-rule" aria-hidden="true"></span>
+            <h2>Let&rsquo;s build India&rsquo;s<br><span>hydrogen future</span> together.</h2>
+            <p>We are always open to partnerships, pilot projects and distributors who share our vision.</p>
+            <a href="contact.html" class="btn-pill btn-pill--teal">Get in touch <i class="bi bi-arrow-right"></i></a>
+          </div>
+
+          <div class="cta-media" aria-hidden="true">
+            <img src="assets/images/about-ahmedabad.jpg" alt="">
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="site-footer">
+    <div class="container-x">
+
+      <div class="footer-top">
+        <div class="footer-intro">
+          <a class="footer-brand" href="index.html" aria-label="Manifold Clean Energy home">
+            <img src="assets/images/manifold.png" alt="Manifold Clean Energy Pvt. Ltd.">
+          </a>
+          <p class="footer-blurb">Manifold Clean Energy builds hydrogen-powered products for everyday life — clean
+            cooking and zero-emission mobility, made in India.</p>
+
+        </div>
+
+        <div class="footer-connect">
+          <form class="footer-subscribe" action="admin/submit.php" method="post">
+            <input type="hidden" name="form" value="newsletter">
+            <input type="hidden" name="source_page" value="technology.html">
+            <input type="hidden" name="return" value="privacy-policy.html">
+            <label class="visually-hidden" for="footerEmail">Email address</label>
+            <input id="footerEmail" type="email" name="email" placeholder="Enter your email address" required>
+            <button type="submit" class="footer-subscribe__btn">Subscribe</button>
+          </form>
+
+          <div class="footer-social" aria-label="Social media links">
+            <a href="#" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+            <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+            <a href="#" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+            <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
+            <a href="#" aria-label="X"><i class="bi bi-twitter-x"></i></a>
+            <a href="#" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-cols">
+
+        <div class="footer-col">
+          <h4>Company</h4>
+          <ul class="footer-links">
+            <li><a href="index.html#about">About Manifold</a></li>
+            <li><a href="coming-soon.html">Our Team</a></li>
+            <li><a href="coming-soon.html">Milestones</a></li>
+            <li><a href="coming-soon.html">Partners</a></li>
+            <li><a href="contact.html">Contact Us</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Products</h4>
+          <ul class="footer-links">
+            <li><a href="stove.html">Kinetic Hydrogen Stove</a></li>
+            <li><a href="tuktuk.html">TukTuk Conversion Kit</a></li>
+            <li><a href="apply-stove.html">Apply: Stove</a></li>
+            <li><a href="apply-tuktuk.html">Apply: TukTuk Kit</a></li>
+            <li><a href="index.html#products">All Products</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Technology</h4>
+          <ul class="footer-links">
+            <li><a href="technology.html">How It Works</a></li>
+            <li><a href="technology.html#numbers">On-demand Generation</a></li>
+            <li><a href="technology.html#safety">Safety by Design</a></li>
+            <li><a href="stove.html#specifications">Specifications</a></li>
+            <li><a href="index.html#technology">Research &amp; Development</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Applications</h4>
+          <ul class="footer-links">
+            <li><a href="index.html#applications">Clean Cooking</a></li>
+            <li><a href="index.html#applications">Zero Emission Mobility</a></li>
+            <li><a href="index.html#applications">Commercial Kitchens</a></li>
+            <li><a href="index.html#applications">Industrial Heat</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <ul class="footer-links">
+            <li><a href="blog.html">Blog</a></li>
+            <li><a href="coming-soon.html">Newsroom</a></li>
+            <li><a href="coming-soon.html">Case Studies</a></li>
+            <li><a href="coming-soon.html">Downloads</a></li>
+            <li><a href="coming-soon.html">FAQs</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Support</h4>
+          <ul class="footer-links">
+            <li><a href="contact.html">Contact Support</a></li>
+            <li><a href="coming-soon.html">Service Centres</a></li>
+            <li><a href="coming-soon.html">Warranty</a></li>
+            <li><a href="coming-soon.html">Report an Issue</a></li>
+            <li><a href="coming-soon.html">Sitemap</a></li>
+          </ul>
+        </div>
+
+      </div>
+
+      <div class="footer-bottom">
+        <p class="footer-legal">&copy; 2026 Manifold Clean Energy Pvt. Ltd. All rights reserved.</p>
+
+        <nav class="footer-policy" aria-label="Legal">
+          <a href="privacy-policy.html#privacy-policy">Privacy Policy</a>
+          <a href="privacy-policy.html#terms-of-service">Terms of Service</a>
+          <a href="privacy-policy.html#website-terms">Website Terms</a>
+          <a href="privacy-policy.html#refund-policy">Refund Policy</a>
+          <a href="privacy-policy.html#data-deletion">Data Deletion</a>
+          <a href="privacy-policy.html#disclosure-policy">Disclosure Policy</a>
+          <a href="privacy-policy.html#cookies">Cookies</a>
+        </nav>
+
+
+        <p class="footer-credit">Designed and developed by
+          <a href="https://keryar.com" target="_blank" rel="noopener">Keryar</a>
+        </p>
+      </div>
+
+    </div>
+
+    <button class="to-top" id="toTop" type="button" aria-label="Back to top">
+      <i class="bi bi-arrow-up"></i>
+    </button>
+  </footer>
+
+  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/main.js"></script>
+  <script src="assets/js/legal.js"></script>
+</body>
+
+</html>

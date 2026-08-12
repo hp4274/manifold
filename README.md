@@ -62,6 +62,23 @@ npx serve .          # or: python3 -m http.server 8000
 | Scroll reveal | `IntersectionObserver` fades `.reveal` elements in, staggered |
 | Active nav link | Highlights the nav item for the section currently in view |
 
+## Gold raffle
+
+Every 90 days five applicants who have paid in full win one gram of pure gold
+each, or its cash value less 5–7%. The ticket icon in the header — a plain ghost
+pill like Login, no label — opens a popup with a live countdown to the next draw
+and the winners of every draw already made public.
+
+The pages are static, so the popup asks `raffle.php` (root) for its data — the
+same arrangement as `blog.php`. Nobody is drawn automatically: the office holds the
+draw in front of witnesses and records the winners by hand in the admin. That feed
+only ever returns draws whose reveal time has passed, so a list being put together
+never reaches it. The header button is removed from every page when the raffle is
+switched off in the admin, with nothing to edit here.
+
+Dates, the number of winners, the prize, the gold rate and the cash discount are
+all set under **Raffle** in the admin — see `admin/README.md`.
+
 ## Customising
 
 **Colours and type** live as CSS custom properties at the top of `style.css`:

@@ -23,6 +23,12 @@
   --accent-2:#17b0a6;
   --accent-deep:#0e8f96;
   --accent-on-dark:#7fe0c8;   /* accents on the navy bands */
+  /* the gold raffle: the only place on the site that is not navy or mint */
+  --gold:#b8862b;
+  --gold-mid:#e0b551;
+  --gold-light:#f2d488;
+  --gold-ink:#3a2a06;
+
   --nav-ink:#04223a;      /* navbar link colour */
   --nav-active:#4bb453;   /* active / hover navbar link */
   --tint:#f6f9fc;
@@ -261,6 +267,9 @@ p{margin:0}
   box-shadow:0 2px 8px rgba(10,45,80,.08);
 }
 .site-header .btn-pill--white:hover{background:#f4f8fb;box-shadow:0 6px 16px rgba(10,45,80,.12)}
+
+/* main.js reveals the raffle button once raffle.php says the promotion is running */
+.btn-pill[hidden]{display:none}
 
 .btn-pill--ghost{
   color:#fff;
@@ -559,6 +568,19 @@ p{margin:0}
 .nav-account__out:hover{background:rgba(201,69,92,.08);color:#a3405a}
 
 .nav-cta{margin-left:34px;padding:12px 18px;font-size:calc(15px * var(--fs))}
+/* icon only, so it sits as a square beside the two worded pills */
+.nav-raffle{
+  margin-left:34px;
+  padding:0;
+  width:44px;
+  height:44px;
+  justify-content:center;
+}
+.nav-raffle i{font-size:17px}
+/* nothing to lead into, so the icon stays put on hover */
+.nav-raffle:hover i{transform:none}
+.nav-raffle + .nav-cta{margin-left:0}
+.nav-raffle-mobile{display:none}
 .nav-cta-mobile{display:none}
 .nav-login-mobile{display:none}
 
@@ -2249,6 +2271,350 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   .promo__card{transition:none}
 }
 
+/* ---------- 12d. Gold raffle popup ----------
+   Opened by the gold pill in the header. Built by main.js from raffle.php: a
+   countdown to the next draw on a navy panel, what a winner gets, then the
+   winners of every draw already public. Same shell as the welcome popup so the
+   two feel like one family. */
+.raffle{
+  position:fixed;
+  inset:0;
+  z-index:1500;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .3s ease;
+}
+.raffle.is-open{opacity:1;pointer-events:auto}
+
+.raffle__backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(4,34,58,.6);
+  backdrop-filter:blur(3px);
+}
+
+.raffle__card{
+  position:relative;
+  width:min(700px,100%);
+  max-height:calc(100vh - 48px);
+  overflow-y:auto;
+  padding:38px 38px 32px;
+  border-radius:24px;
+  background:#fff;
+  box-shadow:0 30px 80px rgba(4,34,58,.34);
+  transform:translateY(18px) scale(.98);
+  transition:transform .35s cubic-bezier(.22,.61,.36,1);
+}
+.raffle.is-open .raffle__card{transform:none}
+/* the gold edge is the only badge the popup needs */
+.raffle__card::before{
+  content:"";
+  position:absolute;
+  top:0;left:0;right:0;
+  height:4px;
+  background:linear-gradient(90deg,var(--gold) 0%,var(--gold-mid) 50%,var(--gold-light) 100%);
+}
+
+.raffle__close{
+  position:absolute;
+  top:16px;right:16px;
+  width:38px;height:38px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);
+  border-radius:50%;
+  background:#fff;
+  color:var(--ink-soft);
+  font-size:15px;
+  cursor:pointer;
+  transition:background .2s ease,color .2s ease,border-color .2s ease;
+}
+.raffle__close:hover{background:var(--tint);color:var(--ink);border-color:#c3d3df}
+
+.raffle__eyebrow{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:12px;
+  padding:6px 13px;
+  border-radius:999px;
+  background:rgba(184,134,43,.12);
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:#8a6318;
+}
+.raffle__eyebrow i{font-size:13px;letter-spacing:0}
+
+.raffle__title{
+  margin:0 0 12px;
+  padding-right:44px;
+  font-size:calc(26px * var(--fs));
+  font-weight:700;
+  line-height:1.3;
+  letter-spacing:-.02em;
+  color:var(--ink);
+}
+.raffle__lead{
+  margin:0 0 22px;
+  font-size:var(--t-sub);
+  line-height:1.65;
+  color:var(--body);
+}
+
+/* --- the countdown --- */
+.raffle__clock{
+  display:flex;
+  align-items:center;
+  gap:22px;
+  padding:22px 24px;
+  margin-bottom:24px;
+  border-radius:var(--radius-lg);
+  background:linear-gradient(140deg,var(--navy-700) 0%,var(--navy-900) 100%);
+  text-align:center;
+}
+/* the prize itself, beside the clock counting down to it */
+.raffle__coin{
+  flex:0 0 auto;
+  width:min(160px,26vw);
+  height:auto;
+  filter:drop-shadow(0 8px 22px rgba(184,134,43,.35));
+}
+.raffle__clock-main{flex:1 1 auto;min-width:0}
+.raffle__clock-label{
+  display:block;
+  margin-bottom:16px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.6);
+}
+.raffle__units{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin-bottom:14px;
+}
+.raffle__unit{
+  padding:14px 6px 11px;
+  border:1px solid rgba(242,212,136,.24);
+  border-radius:var(--radius);
+  background:rgba(255,255,255,.05);
+}
+.raffle__unit strong{
+  display:block;
+  font-size:32px;
+  font-weight:800;
+  line-height:1.05;
+  letter-spacing:-.02em;
+  color:var(--gold-light);
+  font-variant-numeric:tabular-nums;
+}
+.raffle__unit span{
+  display:block;
+  margin-top:4px;
+  font-size:var(--t-micro);
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.55);
+}
+.raffle__at{
+  display:block;
+  font-size:calc(var(--t-ui) - 1px);
+  color:rgba(255,255,255,.66);
+}
+/* no date set yet: the panel keeps its place but says so plainly */
+.raffle__clock--waiting .raffle__at{max-width:46ch;margin:0 auto}
+
+/* --- what a winner gets --- */
+.raffle__facts{
+  list-style:none;
+  margin:0 0 26px;
+  padding:0;
+  display:grid;
+  gap:12px;
+}
+.raffle__facts li{
+  display:flex;
+  align-items:flex-start;
+  gap:13px;
+  padding:15px 17px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--tint);
+}
+.raffle__facts strong{
+  display:block;
+  margin-bottom:3px;
+  font-size:var(--t-ui);
+  color:var(--ink);
+}
+.raffle__fact-text{
+  display:block;
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--body);
+}
+.raffle__fact-icon{
+  flex:0 0 36px;
+  width:36px;height:36px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  background:rgba(184,134,43,.14);
+  color:#8a6318;
+  font-size:17px;
+  line-height:1;
+}
+
+/* --- the winners themselves --- */
+.raffle__winners-title{
+  margin:0 0 12px;
+  font-size:var(--t-title);
+  font-weight:700;
+  letter-spacing:-.02em;
+  color:var(--ink);
+}
+.raffle__none{
+  margin:0 0 20px;
+  padding:20px;
+  border:1px dashed var(--line);
+  border-radius:var(--radius);
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--muted);
+  text-align:center;
+}
+
+/* one draw folds open; the newest starts open, the older ones closed */
+.raffle__draw{
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+.raffle__draw + .raffle__draw{margin-top:10px}
+.raffle__draw summary{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:13px 16px;
+  background:var(--tint);
+  cursor:pointer;
+  list-style:none;
+}
+.raffle__draw summary::-webkit-details-marker{display:none}
+.raffle__draw-no{
+  font-size:var(--t-ui);
+  font-weight:700;
+  color:var(--ink);
+}
+.raffle__draw-at{
+  flex:1 1 auto;
+  font-size:calc(var(--t-ui) - 1px);
+  color:var(--muted);
+}
+.raffle__draw summary i{
+  font-size:12px;
+  color:var(--muted);
+  transition:transform .2s ease;
+}
+.raffle__draw[open] summary i{transform:rotate(180deg)}
+
+.raffle__list{
+  list-style:none;
+  margin:0;
+  padding:6px 16px 12px;
+}
+.raffle__winner{
+  display:flex;
+  align-items:center;
+  gap:13px;
+  padding:11px 0;
+  border-bottom:1px solid var(--line);
+}
+.raffle__winner:last-child{border-bottom:0}
+.raffle__place{
+  flex:0 0 30px;
+  width:30px;height:30px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  background:linear-gradient(140deg,var(--gold) 0%,var(--gold-mid) 100%);
+  font-size:13px;
+  font-weight:800;
+  color:var(--gold-ink);
+}
+.raffle__who{
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+}
+.raffle__who strong{
+  font-size:var(--t-ui);
+  font-weight:700;
+  color:var(--ink);
+}
+.raffle__who > span{
+  font-size:calc(var(--t-ui) - 2px);
+  color:var(--muted);
+  overflow-wrap:anywhere;
+}
+.raffle__prize{
+  flex:0 0 auto;
+  padding:5px 11px;
+  border-radius:999px;
+  background:rgba(75,180,83,.14);
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:#26743a;
+}
+
+/* --- the way in, for anybody not in the hat yet --- */
+.raffle__foot{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:16px;
+  margin-top:24px;
+  padding-top:20px;
+  border-top:1px solid var(--line);
+}
+.raffle__pool{
+  flex:1 1 260px;
+  margin:0;
+  font-size:calc(var(--t-ui) - 1px);
+  line-height:1.6;
+  color:var(--body);
+}
+.raffle__foot .btn-pill{flex:0 0 auto}
+
+@media (max-width:639px){
+  .raffle{padding:14px}
+  .raffle__card{padding:30px 20px 24px;border-radius:20px}
+  .raffle__title{font-size:calc(21px * var(--fs))}
+  /* the coin sits above the clock rather than squeezing it */
+  .raffle__clock{flex-direction:column;gap:14px;padding:18px 14px}
+  .raffle__coin{width:112px}
+  .raffle__clock-main{width:100%}
+  .raffle__units{gap:7px}
+  .raffle__unit{padding:11px 4px 9px}
+  .raffle__unit strong{font-size:24px}
+  .raffle__unit span{font-size:9px;letter-spacing:.08em}
+  .raffle__foot .btn-pill{flex:1 1 100%;justify-content:center}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .raffle,
+  .raffle__card{transition:none}
+}
+
 /* ---------- 13. Product page (stove.html) ---------- */
 /* Same two type tiers as every other section: 24px title, 18px subtitle/body. */
 
@@ -3398,6 +3764,532 @@ label.upload{
   .portal-step__dot{margin:0}
 }
 
+/* ---------- 13g. Technology page (technology.html) ---------- */
+/* the hero: no photograph, just the molecule the whole page is about */
+.page-hero--tech{
+  align-items:center;
+  min-height:520px;
+  background:linear-gradient(120deg,#03121f 0%,#043d6b 58%,#0a5d6b 100%);
+}
+.tech-hero__molecule{
+  position:absolute;
+  top:50%;right:4%;
+  width:min(520px,42vw);
+  transform:translateY(-50%);
+  pointer-events:none;
+}
+.tech-hero__molecule svg{width:100%;height:auto;display:block}
+.tech-hero__dots{
+  position:absolute;
+  left:-40px;bottom:-30px;
+  width:280px;height:200px;
+  pointer-events:none;
+  background-image:radial-gradient(rgba(255,255,255,.16) 1.5px,transparent 1.5px);
+  background-size:16px 16px;
+}
+.page-hero--tech .page-hero__inner{
+  padding-top:calc(var(--header-offset) + 56px);
+  padding-bottom:56px;
+}
+.page-hero--tech .page-hero__text{max-width:56ch}
+
+.tech-hero__stats{
+  list-style:none;
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px;
+  margin:40px 0 0;
+  padding:0;
+}
+.tech-hero__stats li{
+  flex:1 1 190px;
+  padding:16px 20px;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:var(--radius);
+  background:rgba(255,255,255,.06);
+  backdrop-filter:blur(4px);
+}
+.tech-hero__stats strong{
+  display:block;
+  margin-bottom:4px;
+  font-size:calc(22px * var(--fs));
+  font-weight:700;
+  line-height:1.15;
+  letter-spacing:-.01em;
+  color:var(--accent-on-dark);
+}
+.tech-hero__stats span{
+  display:block;
+  font-size:var(--t-ui);
+  line-height:1.55;
+  color:rgba(255,255,255,.7);
+}
+
+@media (max-width:991px){
+  .tech-hero__molecule{opacity:.4;right:-8%}
+}
+@media (max-width:767px){
+  .page-hero--tech{min-height:0}
+  .tech-hero__stats li{flex:1 1 100%}
+}
+
+.tech-page .section-head{margin-bottom:8px}
+
+/* the three steps */
+.tech-steps{
+  list-style:none;
+  margin:44px 0 0;
+  padding:0;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:26px;
+}
+.tech-steps li{
+  padding:30px 28px 32px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg);
+  background:#fff;
+  box-shadow:var(--shadow-card);
+}
+.tech-steps__num{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:46px;height:46px;
+  margin-bottom:18px;
+  border-radius:50%;
+  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  color:var(--white);
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.06em;
+}
+.tech-steps h3{
+  font-size:var(--t-sub);
+  font-weight:700;
+  line-height:1.4;
+  color:var(--ink);
+  margin-bottom:10px;
+}
+.tech-steps p{
+  margin:0;
+  font-size:var(--t-ui);
+  line-height:1.7;
+  color:var(--body);
+}
+
+/* the comparison band: a dark stretch in the middle of a light page */
+.metrics-band{
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(10deg,#043d6b 70%,#4bb453 100%);
+}
+.metrics-band__glow{
+  position:absolute;
+  top:-120px;right:-80px;
+  width:420px;height:420px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(127,224,200,.22) 0%,rgba(127,224,200,0) 70%);
+  pointer-events:none;
+}
+.metrics-band .container-x{position:relative;z-index:2}
+.metrics-band .eyebrow--rule{color:var(--accent-on-dark)}
+.metrics-band .eyebrow--rule::after{background:var(--accent-on-dark)}
+.metrics-band .section-title{color:#fff;max-width:24ch}
+.metrics-band .section-sub{color:rgba(255,255,255,.66)}
+
+.metrics{
+  margin-top:44px;
+  padding:30px 32px 34px;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:var(--radius-lg);
+  background:rgba(255,255,255,.06);
+}
+.metrics__key{display:flex;flex-wrap:wrap;gap:22px;margin-bottom:26px}
+.metrics__key-item{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.7);
+}
+.metrics__key-item::before{
+  content:"";
+  width:12px;height:12px;
+  border-radius:3px;
+  background:rgba(255,255,255,.28);
+}
+.metrics__key-item--ours{color:#fff}
+.metrics__key-item--ours::before{
+  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-on-dark) 100%);
+}
+
+.metric + .metric{margin-top:24px;padding-top:24px;border-top:1px solid rgba(255,255,255,.12)}
+.metric__label{
+  margin:0 0 14px;
+  font-size:var(--t-ui);
+  font-weight:600;
+  color:#fff;
+}
+.metric__label span{
+  margin-left:10px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.5);
+}
+.metric__row{display:grid;gap:10px}
+
+.metric__bar{
+  position:relative;
+  display:flex;
+  align-items:center;
+  height:42px;
+  padding:0 18px;
+  border-radius:10px;
+  width:var(--fill);
+  min-width:130px;
+  background:rgba(255,255,255,.14);
+  color:#fff;
+  transition:width .8s cubic-bezier(.22,.61,.36,1);
+}
+.metric__bar b{font-size:var(--t-ui);font-weight:700;white-space:nowrap}
+.metric__bar--ours{
+  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  box-shadow:0 10px 26px rgba(4,34,58,.28);
+}
+
+.metric__word{
+  display:block;
+  padding:11px 18px;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:10px;
+  font-size:var(--t-ui);
+  color:rgba(255,255,255,.72);
+}
+.metric__word--ours{
+  border-color:rgba(127,224,200,.45);
+  background:rgba(127,224,200,.1);
+  color:#fff;
+  font-weight:600;
+}
+
+.metrics-notes{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:24px;
+  margin-top:34px;
+}
+.metrics-note strong{
+  display:block;
+  margin-bottom:8px;
+  font-size:calc(28px * var(--fs));
+  font-weight:700;
+  line-height:1.1;
+  letter-spacing:-.02em;
+  color:var(--accent-on-dark);
+}
+.metrics-note span{
+  display:block;
+  font-size:var(--t-ui);
+  line-height:1.7;
+  color:rgba(255,255,255,.7);
+}
+
+@media (max-width:575px){
+  .metrics{padding:24px 20px 26px}
+  .metric__bar{min-width:0;padding:0 12px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .metric__bar{transition:none}
+}
+
+/* the safety train, and the metering list */
+.tech-list{
+  list-style:none;
+  margin:44px 0 0;
+  padding:0;
+  display:grid;
+  gap:14px;
+}
+.tech-list li{
+  display:flex;
+  align-items:flex-start;
+  gap:16px;
+  padding:20px 24px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:#fff;
+}
+.tech-list--plain{margin-top:0}
+.tech-list > li > i{
+  flex:none;
+  width:40px;height:40px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  background:rgba(23,176,166,.12);
+  color:var(--accent-deep);
+  font-size:18px;
+  line-height:1;
+}
+.tech-list strong{
+  display:block;
+  margin-bottom:3px;
+  font-size:var(--t-sub);
+  color:var(--ink);
+}
+.tech-list span{
+  display:block;
+  font-size:var(--t-ui);
+  line-height:1.7;
+  color:var(--body);
+}
+
+/* the safety train: five upright cards, each with a pointer at its foot */
+.safety-grid{
+  list-style:none;
+  margin:44px 0 22px;
+  padding:0;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(196px,1fr));
+  gap:22px;
+}
+.safety-card{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+  padding:30px 20px 34px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg);
+  background:#fff;
+  box-shadow:var(--shadow-card);
+  transition:transform .3s ease,box-shadow .3s ease;
+}
+.safety-card:hover{transform:translateY(-4px);box-shadow:0 18px 40px rgba(10,45,80,.1)}
+
+.safety-card__icon{
+  position:relative;
+  width:84px;height:84px;
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:18px;
+  border-radius:50%;
+  background:rgba(23,176,166,.09);
+  color:var(--accent-deep);
+  font-size:32px;
+  line-height:1;
+}
+/* the small mark that sits on the rim of the disc */
+.safety-card__icon::after{
+  content:"";
+  position:absolute;
+  top:6px;right:8px;
+  width:9px;height:9px;
+  border-radius:50%;
+  background:var(--accent-2);
+}
+
+.safety-card__step{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:34px;
+  padding:3px 9px;
+  margin-bottom:14px;
+  border:1px solid rgba(23,176,166,.45);
+  border-radius:8px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.06em;
+  color:var(--accent-deep);
+}
+
+.safety-card h3{
+  font-size:var(--t-sub);
+  font-weight:700;
+  line-height:1.35;
+  color:var(--ink);
+  margin:0 0 12px;
+}
+.safety-card__rule{
+  display:block;
+  width:30px;height:2px;
+  margin-bottom:14px;
+  border-radius:2px;
+  background:var(--accent-2);
+}
+.safety-card p{
+  margin:0;
+  font-size:var(--t-ui);
+  line-height:1.7;
+  color:var(--body);
+}
+
+.safety-card__foot{
+  position:absolute;
+  left:0;right:0;bottom:0;
+  height:13px;
+  border-radius:0 0 var(--radius-lg) var(--radius-lg);
+  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+}
+.safety-card__foot::after{
+  content:"";
+  position:absolute;
+  top:100%;left:50%;
+  transform:translateX(-50%);
+  border-left:13px solid transparent;
+  border-right:13px solid transparent;
+  border-top:11px solid var(--accent-2);
+}
+
+/* the range */
+.tech-range{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:22px;
+  margin-top:44px;
+}
+.tech-range__item{
+  padding:26px 24px 28px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg);
+  background:#fff;
+  box-shadow:var(--shadow-card);
+}
+.tech-range__item h3{
+  font-size:var(--t-sub);
+  font-weight:700;
+  color:var(--ink);
+  margin-bottom:4px;
+}
+.tech-range__kind{
+  margin:0 0 12px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--accent-deep);
+}
+.tech-range__item p:last-child{
+  margin:0;
+  font-size:var(--t-ui);
+  line-height:1.7;
+  color:var(--body);
+}
+
+/* the output table */
+.tech-table-wrap{margin-top:34px;overflow-x:auto}
+.tech-table{
+  width:100%;
+  min-width:680px;
+  border-collapse:collapse;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+.tech-table caption{
+  caption-side:top;
+  padding:0 0 12px;
+  text-align:left;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.tech-table th,
+.tech-table td{
+  padding:16px 20px;
+  text-align:left;
+  font-size:var(--t-ui);
+  line-height:1.6;
+  border-bottom:1px solid var(--line);
+}
+.tech-table th{
+  background:var(--tint);
+  font-weight:700;
+  color:var(--ink);
+}
+.tech-table td{color:var(--body)}
+.tech-table tbody tr:last-child td{border-bottom:0}
+.tech-table td:first-child{font-weight:600;color:var(--ink)}
+
+.tech-copy{
+  font-size:var(--t-sub);
+  line-height:1.75;
+  color:var(--body);
+  margin:0 0 16px;
+}
+
+/* the closing panel: one centred block rather than a split heading row */
+.tech-cta{padding-bottom:calc(var(--sec-pad) + 10px)}
+.tech-cta__panel{
+  max-width:820px;
+  margin-inline:auto;
+  padding:52px 48px 46px;
+  text-align:center;
+  border:1px solid var(--line);
+  border-radius:26px;
+  background:linear-gradient(115deg,#f4f9fc 0%,#eaf3f9 52%,#e4eff6 100%);
+  box-shadow:0 18px 50px rgba(15,60,95,.07);
+}
+.tech-cta__mark{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:58px;height:58px;
+  margin:0 auto 22px;
+  border-radius:50%;
+  background:#fff;
+  color:var(--accent-deep);
+  font-size:24px;
+  line-height:1;
+  box-shadow:0 8px 22px rgba(15,60,95,.08);
+}
+.tech-cta__panel h2{
+  margin:0 0 14px;
+  font-size:var(--t-title);
+  font-weight:700;
+  line-height:var(--t-title-lh);
+  letter-spacing:-.02em;
+  color:var(--ink);
+}
+.tech-cta__panel > p{
+  max-width:56ch;
+  margin:0 auto 28px;
+  font-size:var(--t-sub);
+  line-height:var(--t-sub-lh);
+  color:var(--body);
+}
+.tech-cta__actions{display:flex;flex-wrap:wrap;justify-content:center;gap:14px}
+/* the outline pill is drawn for dark bands; on this one it needs ink */
+.tech-cta__actions .btn-pill--outline{
+  color:var(--ink);
+  border-color:#d5e0e9;
+  background:#fff;
+}
+.tech-cta__actions .btn-pill--outline:hover{background:#fff;border-color:#c3d3df}
+
+.tech-cta__aside{
+  margin:32px 0 0;
+  font-size:var(--t-ui);
+  color:var(--muted);
+}
+.tech-cta__aside a{font-weight:700;color:var(--accent-deep)}
+.tech-cta__aside a:hover{text-decoration:underline}
+
+@media (max-width:575px){
+  .tech-cta__panel{padding:38px 22px 34px;border-radius:20px}
+  .tech-cta__actions .btn-pill{width:100%;justify-content:center}
+}
+
 /* ---------- 14. Responsive ---------- */
 @media (max-width:1199px){
   .main-nav{gap:20px}
@@ -3472,9 +4364,13 @@ label.upload{
     justify-content:center;
   }
   .nav-cta-mobile,
-  .nav-login-mobile{display:inline-flex}
+  .nav-login-mobile,
+  .nav-raffle-mobile{display:inline-flex}
   .nav-cta,
-  .nav-login{display:none}
+  .nav-login,
+  .nav-raffle{display:none}
+  /* [hidden] still wins: an off raffle leaves no button in the drawer either */
+  .nav-actions .btn-pill[hidden]{display:none}
 
   /* the account menu follows its button: the header one goes, the one inside
      the drawer takes over and opens in flow rather than floating */

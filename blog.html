@@ -42,7 +42,7 @@
 
     <nav class="main-nav" id="mainNav" aria-label="Main">
       <a href="index.html#products">Products</a>
-      <a href="index.html#technology">Technology</a>
+      <a href="technology.html">Technology</a>
       <a href="index.html#about">About Us</a>
       <details class="nav-dropdown">
         <summary>Apply Now <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
@@ -54,12 +54,20 @@
       <a href="contact.html">Contact</a>
 
       <div class="nav-actions">
+        <button type="button" class="btn-pill btn-pill--ghost nav-raffle-mobile"
+                data-raffle-open>
+          <i class="bi bi-ticket-perforated" aria-hidden="true"></i> Gold Raffle
+        </button>
         <a href="contact.html" class="btn-pill btn-pill--white nav-cta-mobile">Get In touch</a>
         <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login-mobile">Login</a>
       </div>
     </nav>
 
     <div class="nav-actions nav-actions--desktop">
+      <button type="button" class="btn-pill btn-pill--ghost nav-raffle"
+              data-raffle-open aria-label="Gold raffle" title="Gold raffle">
+        <i class="bi bi-ticket-perforated" aria-hidden="true"></i>
+      </button>
       <a href="contact.html" class="btn-pill btn-pill--white nav-cta">Get In touch</a>
       <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login">Login</a>
     </div>
@@ -108,7 +116,7 @@
       <div class="footer-connect">
         <form class="footer-subscribe" action="admin/submit.php" method="post">
           <input type="hidden" name="form" value="newsletter">
-          <input type="hidden" name="source_page" value="privacy-policy.html">
+          <input type="hidden" name="source_page" value="blog.html">
           <input type="hidden" name="return" value="privacy-policy.html">
           <label class="visually-hidden" for="footerEmail">Email address</label>
           <input id="footerEmail" type="email" name="email" placeholder="Enter your email address" required>
@@ -153,9 +161,9 @@
       <div class="footer-col">
         <h4>Technology</h4>
         <ul class="footer-links">
-          <li><a href="index.html#technology">How It Works</a></li>
-          <li><a href="index.html#technology">On-demand Generation</a></li>
-          <li><a href="index.html#technology">Safety by Design</a></li>
+          <li><a href="technology.html">How It Works</a></li>
+          <li><a href="technology.html#numbers">On-demand Generation</a></li>
+          <li><a href="technology.html#safety">Safety by Design</a></li>
           <li><a href="stove.html#specifications">Specifications</a></li>
           <li><a href="index.html#technology">Research &amp; Development</a></li>
         </ul>

@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS `newsletter_subscribers` (
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `status_log` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `entity` enum('application','contact','newsletter') NOT NULL,
+  `entity` enum('application','contact','newsletter','raffle_winner') NOT NULL,
   `entity_id` int(10) unsigned NOT NULL,
   `old_status` varchar(20) DEFAULT NULL,
   `new_status` varchar(20) NOT NULL,
@@ -280,6 +280,68 @@ CREATE TABLE `blog_posts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
+-- Raffle
+--
+-- Every cycle (90 days as advertised) the office draws winners from the
+-- applicants who have paid in full. Each takes one gram of pure gold or the
+-- cash value of it, less the discount in `settings` below.
+--
+-- One row per cycle in `raffle_draws`, one per place in `raffle_winners`.
+-- Nobody is picked automatically: the office holds the draw in front of
+-- witnesses and records each winner by hand from the Raffle screen, searching
+-- by name, reference code or mobile number. A list appears on the website once
+-- its draw's reveal_at has passed.
+--
+-- Several columns here are left from an earlier version that drew winners
+-- automatically and tracked what each of them took. Nothing reads or writes
+-- them now, and they are kept only so this file still describes a database
+-- that has been running:
+--
+--   raffle_draws     pool_size, drawn_at, drawn_by
+--   raffle_winners   prize_choice, cash_amount, payout_status, paid_at,
+--                    note, shuffles
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `raffle_draws` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `draw_no` int(10) unsigned NOT NULL,
+  `reveal_at` datetime NOT NULL,
+  `winner_count` tinyint(3) unsigned NOT NULL DEFAULT 5,
+  `gold_grams` decimal(6,3) NOT NULL DEFAULT 1.000,
+  `gold_rate` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `pool_size` int(10) unsigned NOT NULL DEFAULT 0,
+  `drawn_at` datetime DEFAULT NULL,
+  `drawn_by` int(10) unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_raffle_draw_no` (`draw_no`),
+  KEY `ix_raffle_reveal` (`reveal_at`),
+  KEY `fk_raffle_drawn_by` (`drawn_by`),
+  CONSTRAINT `fk_raffle_drawn_by` FOREIGN KEY (`drawn_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- A place is unique twice over: one person per place, and one place per person.
+CREATE TABLE IF NOT EXISTS `raffle_winners` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `draw_id` int(10) unsigned NOT NULL,
+  `application_id` int(10) unsigned NOT NULL,
+  `position` tinyint(3) unsigned NOT NULL,
+  `prize_choice` enum('undecided','gold','cash') NOT NULL DEFAULT 'undecided',
+  `cash_amount` decimal(10,2) DEFAULT NULL,
+  `payout_status` enum('pending','paid','cancelled') NOT NULL DEFAULT 'pending',
+  `paid_at` datetime DEFAULT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `shuffles` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_raffle_position` (`draw_id`,`position`),
+  UNIQUE KEY `uq_raffle_application` (`draw_id`,`application_id`),
+  KEY `ix_raffle_winner_app` (`application_id`),
+  CONSTRAINT `fk_raffle_winner_draw` FOREIGN KEY (`draw_id`) REFERENCES `raffle_draws` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_raffle_winner_app` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
 -- Values the admin can change from the dashboard without editing config.php.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `settings` (
@@ -289,8 +351,20 @@ CREATE TABLE IF NOT EXISTS `settings` (
   PRIMARY KEY (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- A blank raffle_first_draw means the promotion is not running: there is nothing
+-- to count down to and the popup on the website says the dates are still to come.
+-- Only the raffle date, cycle and winner count are editable from the admin; the
+-- prize figures below are changed here or straight in the `settings` table.
 INSERT INTO `settings` (`name`, `value`) VALUES
-  ('referral_reward', '500');
+  ('referral_reward',           '500'),
+  ('raffle_enabled',            '1'),
+  ('raffle_first_draw',         ''),
+  ('raffle_cycle_days',         '90'),
+  ('raffle_winner_count',       '5'),
+  ('raffle_gold_grams',         '1'),
+  ('raffle_gold_rate',          '7000'),
+  ('raffle_cash_discount_min',  '5'),
+  ('raffle_cash_discount_max',  '7');
 
 -- --------------------------------------------------------------------------
 -- The one account you start with.

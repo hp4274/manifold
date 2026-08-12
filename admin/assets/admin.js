@@ -101,6 +101,44 @@
     });
   }
 
+  /* ---------- dialogs ----------
+     Anything with data-modal-open="id" opens that dialog; the backdrop, the
+     cross and Escape all close it. */
+  function openModal(modal) {
+    modal.classList.add('is-open');
+    document.body.classList.add('has-modal');
+
+    var first = modal.querySelector('input:not([type="hidden"]), select, textarea');
+    if (first) first.focus();
+  }
+
+  function closeModal(modal) {
+    modal.classList.remove('is-open');
+    document.body.classList.remove('has-modal');
+  }
+
+  document.addEventListener('click', function (e) {
+    var opener = e.target.closest('[data-modal-open]');
+    if (opener) {
+      var target = document.getElementById(opener.dataset.modalOpen);
+      if (target) openModal(target);
+      return;
+    }
+
+    var closer = e.target.closest('[data-modal-close]');
+    if (closer) closeModal(closer.closest('.modal-x'));
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+
+    var open = document.querySelector('.modal-x.is-open');
+    if (open) closeModal(open);
+  });
+
+  /* a dialog rendered open (editing an account) still locks the page behind it */
+  if (document.querySelector('.modal-x.is-open')) document.body.classList.add('has-modal');
+
   /* ---------- blog: the schedule date belongs to one status ----------
      A draft or a published post has nothing to say about a future moment, so
      the field only appears once Scheduled is chosen. */
@@ -135,6 +173,11 @@
     var rows    = Array.prototype.slice.call(table.tBodies[0].rows);
     var buttons = Array.prototype.slice.call(table.querySelectorAll('.th-filter'));
     var state   = {};
+
+    /* whatever the page put there is what clearing a filter goes back to, so the
+       wording lives in the markup and cannot drift from it */
+    var count        = document.querySelector('[data-table-count]');
+    var countDefault = count ? count.textContent : '';
 
     /* distinct values per filter, in the order they appear */
     function optionsFor(key) {
@@ -191,12 +234,11 @@
       var empty = document.querySelector('[data-table-empty]');
       if (empty) empty.hidden = shown > 0;
 
-      var count = document.querySelector('[data-table-count]');
       if (count) {
         var active = Object.keys(state).filter(function (k) { return state[k]; });
         count.textContent = active.length
           ? shown + (shown === 1 ? ' match' : ' matches')
-          : 'Across all forms';
+          : countDefault;
       }
     }
 
@@ -224,6 +266,124 @@
         apply();
       });
     });
+  }
+
+  /* ---------- live search ----------
+     Anything with data-finder answers as it is typed: the endpoint returns the
+     same markup the page rendered, so the block is swapped whole rather than
+     rebuilt here. A quarter of a second of quiet before asking keeps it to one
+     request per word, and an older answer arriving late is thrown away.
+
+     Without JS the form still posts as a plain GET and the server renders the
+     same list, so nothing here is load-bearing. */
+  var finder = document.querySelector('[data-finder]');
+  var target = document.getElementById('raffleResults');
+
+  if (finder && target && window.fetch) {
+    var box      = finder.querySelector('input[type="search"]');
+    var clear    = finder.querySelector('.finder__clear');
+    var endpoint = finder.dataset.endpoint;
+    var draw     = finder.dataset.draw;
+    var timer    = null;
+    var seq      = 0;
+    var shown    = box.value.trim();
+
+    function paint(query) {
+      /* the page already shows this, so asking again would only flicker */
+      if (query === shown) return;
+
+      var mine = ++seq;
+
+      finder.classList.add('is-busy');
+
+      fetch(endpoint + '?q=' + encodeURIComponent(query) + '&draw=' + encodeURIComponent(draw),
+            { credentials: 'same-origin' })
+        .then(function (response) { return response.text(); })
+        .then(function (html) {
+          /* a slower earlier request must not overwrite a newer answer */
+          if (mine !== seq) return;
+
+          shown = query;
+          target.innerHTML = html;
+          finder.classList.remove('is-busy');
+        })
+        .catch(function () {
+          if (mine !== seq) return;
+
+          finder.classList.remove('is-busy');
+        });
+    }
+
+    function queue() {
+      var query = box.value.trim();
+
+      if (clear) clear.hidden = query === '';
+
+      if (timer) clearTimeout(timer);
+
+      /* an empty box needs no request — the server would say the same thing */
+      if (query === '') {
+        seq++;
+        shown = '';
+        target.innerHTML = '<p class="finder__none finder__none--idle">Start typing to find somebody.</p>';
+        finder.classList.remove('is-busy');
+        return;
+      }
+
+      timer = setTimeout(function () { paint(query); }, 250);
+    }
+
+    box.addEventListener('input', queue);
+    /* the × inside a search box fires search, not input, in some browsers */
+    box.addEventListener('search', queue);
+
+    /* Enter would reload the page for a list that is already on screen */
+    finder.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      if (timer) clearTimeout(timer);
+
+      paint(box.value.trim());
+    });
+  }
+
+  /* ---------- countdowns ----------
+     Anything with data-countdown="<ISO timestamp>" counts down to it, once a
+     second. Zero is not a special case worth a reload: the page says what
+     happens next either way, so it just stops at "now". */
+  var clocks = document.querySelectorAll('[data-countdown]');
+
+  if (clocks.length) {
+    function spell(ms) {
+      if (ms <= 0) return 'now';
+
+      var total   = Math.floor(ms / 1000);
+      var days    = Math.floor(total / 86400);
+      var hours   = Math.floor((total % 86400) / 3600);
+      var minutes = Math.floor((total % 3600) / 60);
+      var seconds = total % 60;
+
+      function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+      if (days > 0) return days + 'd ' + pad(hours) + 'h ' + pad(minutes) + 'm';
+
+      return pad(hours) + ':' + pad(minutes) + ':' + pad(seconds);
+    }
+
+    function tickClocks() {
+      var now = Date.now();
+
+      clocks.forEach(function (clock) {
+        var target = Date.parse(clock.dataset.countdown);
+
+        if (isNaN(target)) return;
+
+        clock.textContent = spell(target - now);
+      });
+    }
+
+    tickClocks();
+    setInterval(tickClocks, 1000);
   }
 
   document.documentElement.classList.add('js');

@@ -17,7 +17,9 @@ $types     = submission_types();
 $savedId   = (int) ($_GET['saved'] ?? 0);
 $deletedId = (int) ($_GET['deleted'] ?? 0);
 
-/* newest across all four forms — filtered in the browser by the column headers */
+/* Newest ten across all four forms, and only ten — the dashboard is a glance at
+   what has just come in, not a place to work through a backlog. Each form's own
+   list under Forms pages through everything, ten at a time. */
 $recent = db()->query(
     "SELECT product AS type, id, full_name AS title, email, status, created_at,
             reminder_count, reminded_at
@@ -27,7 +29,7 @@ $recent = db()->query(
      UNION ALL
      SELECT 'newsletter', id, email, email, status, created_at, 0, NULL FROM newsletter_subscribers
      ORDER BY created_at DESC
-     LIMIT 60"
+     LIMIT 10"
 )->fetchAll();
 
 /* full records for the rows above, so Details can open without another page */
@@ -86,7 +88,7 @@ require __DIR__ . '/partials/layout-top.php';
 <div class="panel">
   <div class="panel__head">
     <h2>Latest submissions</h2>
-    <span class="eyebrow" data-table-count>Across all forms</span>
+    <span class="eyebrow" data-table-count>The newest 10, across all forms</span>
   </div>
 
   <?php if (!$recent): ?>

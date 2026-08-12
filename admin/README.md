@@ -29,6 +29,29 @@ framework, no build step.
    `create-admin.php` is still there for making the first account by hand on a
    database seeded without one — **delete it after use**.
 
+## Lists and paging
+
+Every form's list shows **ten rows a page**. `LIST_PER_PAGE` at the top of
+`list.php` is the only place that number lives; changing it changes the query, the
+numbering and the pager together.
+
+- Row numbers keep counting across pages, so #11 is the eleventh record, not the
+  first on page 2.
+- The status filters above the table always go back to page 1, and each of them
+  pages separately — "New 10" is its own two pages if there are more than ten.
+- A page number past the end lands on the last real page. That is also what
+  happens when the last row on the last page is deleted.
+- Saving or deleting a row returns to the page it was on, not to page 1.
+- The pager (`partials/pager.php`) draws nothing at all when everything fits on
+  one page, and only ever renders first, last and the pages either side of the
+  current one, so a long list does not grow a hundred links.
+
+Only the ten rows on screen get their detail drawer built, which is what keeps the
+page small however many records there are.
+
+The dashboard is different on purpose: it shows the newest ten across all four
+forms and does not page. It is a glance at what has just come in.
+
 ## Files
 
 | File | Purpose |
@@ -54,6 +77,17 @@ framework, no build step.
 | `assets/admin.css` | All admin styling |
 | `assets/admin.js` | Column filters, detail drawer, delete confirmation |
 | `uploads/` | Uploaded ID and address documents (not web-readable) |
+
+### Raffle files
+
+| File | What it is |
+|---|---|
+| `raffle.php` | The Raffle screen: the countdown, the search, the winners, setup |
+| `raffle-lib.php` | The cycle, the search, add and remove, masking — no markup |
+| `raffle-search.php` | Answers the search box as it is typed. Signed-in staff only |
+| `partials/raffle-results.php` | The result list, rendered by both of the above |
+| `partials/raffle-winners.php` | The winners table, shared by every draw panel |
+| `../raffle.php` | The public feed the popup on the website reads |
 
 ## Email (SMTP)
 
@@ -193,6 +227,109 @@ changing the setting never rewrites a payout already owed.
 
 An unrecognised code is stored as typed in `referred_by_code` with no reward,
 and the payment email says so — the application is never rejected over a typo.
+
+## Raffle
+
+Every cycle (90 days as advertised) five applicants who have **paid in full** win
+one gram of pure gold each, or the cash value of it less 5–7%.
+
+**Nothing is drawn here.** The office holds the draw however it likes — in front
+of witnesses, as the promotion says — and then records who won. The Raffle screen
+does two things: it counts down to the next reveal, and it lets you put names
+against it.
+
+### The calendar
+
+Only one date is ever entered: **first draw revealed at**, under *Raffle setup*.
+Every following reveal is that date plus a whole number of cycles, so the calendar
+looks after itself. Leave the date empty and the raffle is not running — the popup
+on the website says the dates are still to be announced.
+
+A draw row is created for each cycle so winners have something to hang off.
+`raffle_sync()` does that whenever the Raffle screen or the public feed is loaded.
+It picks nobody.
+
+### Recording a winner
+
+One search box, three ways in:
+
+| Type | Matches |
+|---|---|
+| Part of a name | `patel`, `meera` |
+| A reference code | `MF-2026-00031` |
+| A mobile number | `9773444404`, `+91 97734 44404`, `977-344-4404` |
+
+Results appear as you type — a quarter of a second of quiet and the list refreshes,
+no button to press. `raffle-search.php` answers, and it returns the very markup
+`raffle.php` renders (both `require partials/raffle-results.php`), so the live list
+and the one you get on a plain page load cannot drift apart. An older answer that
+arrives late is discarded rather than overwriting a newer one.
+
+Without JavaScript the form still posts as a plain GET and the server renders the
+same list; the Search button is there for exactly that case and is hidden once JS
+has run.
+
+`raffle-search.php` hands out applicants' names, numbers and email addresses, so a
+request with no session gets a 401 and nothing else.
+
+Only applicants with status `complete` are ever returned — that is the rule the
+promotion is run on. A row that already holds a place says so, and one who won an
+earlier draw is flagged, though nothing stops you adding them again if that is
+what happened.
+
+**Add** puts somebody in the lowest free place, so removing #2 and adding again
+fills #2. **Remove** takes a name off. A draw refuses a name beyond its winner
+count — raise *Winners per draw* in setup, or remove somebody first.
+
+Lists stay editable, including after they are public. The office, not this screen,
+decides what is right. Every add and remove is recorded in `status_log` under the
+`raffle_winner` entity.
+
+### What the public sees
+
+`raffle.php` at the site root is the feed the popup reads. It returns draws whose
+reveal time has passed and nothing else, and each winner as a masked name, a masked
+mobile number and a city — `Harsh P. · 97******04 · Anand`. Full names, emails and
+reference codes never leave the admin.
+
+Nothing about who took the coin and who took the money is recorded here.
+
+### The prize is not editable from the admin
+
+*Raffle setup* covers the calendar only: whether the raffle runs, the first reveal
+date, the cycle length and how many places a draw has.
+
+The prize itself lives in four `settings` rows with no form behind them:
+
+| Setting | Now | Drives |
+|---|---|---|
+| `raffle_gold_grams` | 1.000 | "1 gram of pure gold each" in the popup, snapshotted onto each draw |
+| `raffle_gold_rate` | 15513.00 | The cash figure the popup quotes |
+| `raffle_cash_discount_min` | 5.00 | The lower end of the band |
+| `raffle_cash_discount_max` | 7.00 | The upper end |
+
+Change them in phpMyAdmin (the `settings` table) or in `schema.sql` for a fresh
+install. `raffle_config()` and `raffle_cash_range()` still read them, so the
+website keeps quoting a figure — which means **a stale gold rate goes on being
+shown to the public with no way to correct it from the admin.** Worth a look
+whenever the market moves.
+
+### Tables
+
+`raffle_draws` (one row per cycle) and `raffle_winners` (one row per place), plus
+eight `raffle_*` rows in `settings`. They are all in `schema.sql` along with
+everything else — there is no separate raffle migration.
+
+If the two tables are ever missing, the Raffle screen says so and points at
+`schema.sql`. Copy the `CREATE TABLE` statements out of it rather than importing
+the file, which drops the database.
+
+Some columns are left from an earlier version that drew winners automatically and
+recorded what each of them took: `pool_size`, `drawn_at` and `drawn_by` on
+`raffle_draws`, and `prize_choice`, `cash_amount`, `payout_status`, `paid_at`,
+`note` and `shuffles` on `raffle_winners`. Nothing reads or writes them now. They
+are listed in `schema.sql` too, so the file still describes a database that has
+been running.
 
 ## How the website reaches it
 

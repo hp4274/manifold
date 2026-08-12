@@ -688,6 +688,330 @@
     drawer.querySelector('.post-drawer__panel').focus();
   }
 
+  /* ---------- Gold raffle ----------
+     Every 90 days five paid-up applicants win a gram of gold. raffle.php has
+     the countdown and the winners of every draw already made public; the list
+     the office sees 48 hours early never reaches it. The button is in the markup
+     and visible from the start — only an explicit "switched off" from the feed
+     takes it away, so turning the raffle off in the admin removes it from every
+     page while a slow or failed request leaves it alone. */
+  var raffleAsk = null;
+
+  function askRaffle() {
+    if (!raffleAsk) {
+      raffleAsk = fetch(siteRoot + 'raffle.php', { credentials: 'same-origin' })
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .catch(function () { return null; });
+    }
+
+    return raffleAsk;
+  }
+
+  var raffleTriggers = document.querySelectorAll('[data-raffle-open]');
+
+  if (raffleTriggers.length) {
+    askRaffle().then(function (data) {
+      if (!data || data.enabled !== false) return;
+
+      raffleTriggers.forEach(function (trigger) { trigger.hidden = true; });
+    });
+  }
+
+  function rupees(currency, value) {
+    var whole = Math.round(value);
+
+    try {
+      return (currency || '₹') + whole.toLocaleString('en-IN');
+    } catch (e) {
+      return (currency || '₹') + whole;
+    }
+  }
+
+  /* d / h / m / s, and never a negative number on screen */
+  function raffleParts(ms) {
+    var total = Math.max(0, Math.floor(ms / 1000));
+
+    return [
+      { value: Math.floor(total / 86400),      label: 'days' },
+      { value: Math.floor((total % 86400) / 3600), label: 'hours' },
+      { value: Math.floor((total % 3600) / 60),    label: 'minutes' },
+      { value: total % 60,                          label: 'seconds' }
+    ];
+  }
+
+  /* one winner row. Names and numbers arrive already masked from the server,
+     and still go in as text rather than markup. */
+  function raffleWinnerRow(winner, place) {
+    var row = document.createElement('li');
+    row.className = 'raffle__winner';
+
+    var badge = document.createElement('span');
+    badge.className = 'raffle__place';
+    badge.textContent = place;
+
+    var who = document.createElement('span');
+    who.className = 'raffle__who';
+
+    var name = document.createElement('strong');
+    name.textContent = winner.name;
+
+    var meta = document.createElement('span');
+    meta.textContent = [winner.mobile, winner.city].filter(Boolean).join(' · ');
+
+    who.appendChild(name);
+    who.appendChild(meta);
+
+    var prize = document.createElement('span');
+    prize.className = 'raffle__prize';
+    prize.textContent = 'Won';
+
+    row.appendChild(badge);
+    row.appendChild(who);
+    row.appendChild(prize);
+
+    return row;
+  }
+
+  function raffleDrawBlock(draw, open) {
+    var block = document.createElement('details');
+    block.className = 'raffle__draw';
+    block.open = !!open;
+
+    var head = document.createElement('summary');
+    head.innerHTML = '<span class="raffle__draw-no"></span><span class="raffle__draw-at"></span>'
+      + '<i class="bi bi-chevron-down" aria-hidden="true"></i>';
+    head.querySelector('.raffle__draw-no').textContent = 'Draw ' + draw.drawNo;
+    head.querySelector('.raffle__draw-at').textContent = draw.label;
+
+    var list = document.createElement('ol');
+    list.className = 'raffle__list';
+
+    draw.winners.forEach(function (winner, index) {
+      list.appendChild(raffleWinnerRow(winner, index + 1));
+    });
+
+    block.appendChild(head);
+    block.appendChild(list);
+
+    return block;
+  }
+
+  function openRaffle() {
+    if (document.querySelector('.raffle')) return;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'raffle';
+    wrap.innerHTML =
+      '<div class="raffle__backdrop" data-raffle-close></div>' +
+      '<div class="raffle__card" role="dialog" aria-modal="true" aria-labelledby="raffleTitle">' +
+        '<button type="button" class="raffle__close" data-raffle-close aria-label="Close">' +
+          '<i class="bi bi-x-lg" aria-hidden="true"></i>' +
+        '</button>' +
+        '<span class="raffle__eyebrow"><i class="bi bi-ticket-perforated" aria-hidden="true"></i> ' +
+          '<span class="raffle__cycle">Gold raffle</span></span>' +
+        '<h2 class="raffle__title" id="raffleTitle">Five winners. One gram of pure gold each.</h2>' +
+        '<p class="raffle__lead"></p>' +
+        '<div class="raffle__clock">' +
+          '<img class="raffle__coin" src="' + siteRoot + 'assets/images/gold-coin-320.png"' +
+            ' alt="" width="160" height="160" loading="lazy" decoding="async">' +
+          '<div class="raffle__clock-main">' +
+            '<span class="raffle__clock-label">Next draw revealed in</span>' +
+            '<div class="raffle__units"></div>' +
+            '<span class="raffle__at"></span>' +
+          '</div>' +
+        '</div>' +
+        '<ul class="raffle__facts"></ul>' +
+        '<div class="raffle__winners"></div>' +
+        '<div class="raffle__foot"></div>' +
+      '</div>';
+
+    var opener = document.activeElement;
+    var timer  = null;
+
+    function closeRaffle() {
+      if (timer) clearInterval(timer);
+      wrap.classList.remove('is-open');
+      setTimeout(function () { wrap.remove(); }, 300);
+      if (opener && opener.focus) opener.focus();
+    }
+
+    wrap.addEventListener('click', function (e) {
+      if (e.target.closest('[data-raffle-close]')) closeRaffle();
+
+      /* an in-page jump would leave the popup over the section it scrolled to */
+      var action = e.target.closest('.raffle__foot a');
+      if (action && action.getAttribute('href').charAt(0) === '#') closeRaffle();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && wrap.isConnected) closeRaffle();
+    });
+
+    document.body.appendChild(wrap);
+    requestAnimationFrame(function () { wrap.classList.add('is-open'); });
+    wrap.querySelector('.raffle__close').focus();
+
+    askRaffle().then(function (data) {
+      if (!wrap.isConnected) return;
+
+      var card  = wrap.querySelector('.raffle__card');
+      var clock = wrap.querySelector('.raffle__clock');
+      var units = wrap.querySelector('.raffle__units');
+      var lead  = wrap.querySelector('.raffle__lead');
+      var facts = wrap.querySelector('.raffle__facts');
+      var list  = wrap.querySelector('.raffle__winners');
+      var foot  = wrap.querySelector('.raffle__foot');
+
+      if (!data) {
+        lead.textContent = 'The raffle details could not be loaded just now. Please try again in a moment.';
+        clock.remove();
+        return;
+      }
+
+      var currency = data.currency || '₹';
+      var days     = data.cycleDays || 90;
+      var count    = data.winnerCount || 5;
+      var grams    = data.goldGrams || 1;
+      var gramsSaid = (Math.round(grams * 1000) / 1000) + (grams === 1 ? ' gram' : ' grams');
+
+      wrap.querySelector('.raffle__cycle').textContent = 'Every ' + days + ' days · drawn in public';
+      wrap.querySelector('.raffle__title').textContent =
+        count + ' winners. ' + gramsSaid + ' of pure gold each.';
+
+      lead.textContent = 'Every ' + days + ' days we draw ' + count + ' winners from everybody who has '
+        + 'completed an application and paid in full. The draw is held in front of neutral, independent '
+        + 'witnesses so anyone can see the selection is fair.';
+
+      /* the countdown, or an honest note when no date has been set yet */
+      if (data.running && data.nextDraw) {
+        var target = Date.parse(data.nextDraw.revealAt);
+
+        wrap.querySelector('.raffle__at').textContent =
+          'Draw ' + data.nextDraw.drawNo + ' · ' + data.nextDraw.label;
+
+        function tick() {
+          if (!wrap.isConnected) {
+            clearInterval(timer);
+            return;
+          }
+
+          var parts = raffleParts(target - Date.now());
+
+          if (!units.children.length) {
+            parts.forEach(function () {
+              var unit = document.createElement('span');
+              unit.className = 'raffle__unit';
+              unit.innerHTML = '<strong></strong><span></span>';
+              units.appendChild(unit);
+            });
+          }
+
+          parts.forEach(function (part, index) {
+            var unit = units.children[index];
+            var digits = String(part.value);
+
+            unit.querySelector('strong').textContent = digits.length < 2 ? '0' + digits : digits;
+            unit.querySelector('span').textContent = part.label;
+          });
+        }
+
+        tick();
+        timer = setInterval(tick, 1000);
+      } else {
+        clock.classList.add('raffle__clock--waiting');
+        wrap.querySelector('.raffle__clock-label').textContent = 'Next draw';
+        units.remove();
+        wrap.querySelector('.raffle__at').textContent =
+          'The date of the first draw is announced here as soon as it is set.';
+      }
+
+      /* what a winner gets, and the cash alternative */
+      var cash = data.cashRange;
+      var cashSaid = cash
+        ? rupees(currency, cash.low) + '–' + rupees(currency, cash.high)
+        : '';
+      var band = data.discount
+        ? (Math.round(data.discount.min * 100) / 100) + '–' + (Math.round(data.discount.max * 100) / 100) + '%'
+        : '5–7%';
+
+      [
+        {
+          icon: 'bi-coin',
+          title: gramsSaid + ' of pure gold',
+          text: 'Handed over as a coin. ' + count + ' winners in every draw, ' + days + ' days apart.'
+        },
+        {
+          icon: 'bi-cash-stack',
+          title: 'Or the cash value instead',
+          text: cashSaid
+            ? 'A winner who would rather have money takes ' + band + ' under the market value of '
+              + gramsSaid + ' — about ' + cashSaid + ' at today’s ' + rupees(currency, data.goldRate) + ' a gram.'
+            : 'A winner who would rather have money takes ' + band + ' under the market value of the gold.'
+        },
+        {
+          icon: 'bi-eye',
+          title: 'Drawn in front of witnesses',
+          text: 'Neutral, independent people watch every draw, so the selection can be seen to be fair.'
+        }
+      ].forEach(function (fact) {
+        var item = document.createElement('li');
+        item.innerHTML = '<span class="raffle__fact-icon"><i class="bi ' + fact.icon + '" aria-hidden="true"></i></span>' +
+          '<span><strong></strong><span class="raffle__fact-text"></span></span>';
+        item.querySelector('strong').textContent = fact.title;
+        item.querySelector('.raffle__fact-text').textContent = fact.text;
+        facts.appendChild(item);
+      });
+
+      /* winners, newest draw open and the rest folded away */
+      var heading = document.createElement('h3');
+      heading.className = 'raffle__winners-title';
+      heading.textContent = 'Winners so far';
+      list.appendChild(heading);
+
+      if (!data.draws || !data.draws.length) {
+        var none = document.createElement('p');
+        none.className = 'raffle__none';
+        none.textContent = data.running
+          ? 'No draw has been held yet. The first ' + count + ' winners appear here the moment they are drawn.'
+          : 'Winners appear here after the first draw.';
+        list.appendChild(none);
+      } else {
+        data.draws.forEach(function (draw, index) {
+          list.appendChild(raffleDrawBlock(draw, index === 0));
+        });
+      }
+
+      /* how many are in the hat, and the way in for anybody who is not */
+      var applyHref = page === 'index.html' ? '#products' : siteRoot + 'index.html#products';
+
+      foot.innerHTML = '<p class="raffle__pool"></p>' +
+        '<a class="btn-pill btn-pill--accent" href="' + applyHref + '">Apply and be entered ' +
+        '<i class="bi bi-arrow-right"></i></a>';
+
+      foot.querySelector('.raffle__pool').textContent = data.poolSize
+        ? data.poolSize + (data.poolSize === 1 ? ' applicant is' : ' applicants are')
+          + ' in the next draw. Every completed, fully paid application is one entry, '
+          + 'and a past winner does not go back in.'
+        : 'Every completed, fully paid application is one entry in the next draw.';
+
+      /* the popup grew while it was open — keep the top in view */
+      card.scrollTop = 0;
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var trigger = e.target.closest('[data-raffle-open]');
+    if (!trigger) return;
+
+    e.preventDefault();
+
+    /* the drawer copy of the button: shut the menu, or it is still open behind
+       the popup once that closes */
+    if (nav && toggle && nav.contains(trigger)) closeMenu();
+
+    openRaffle();
+  });
+
   /* ---------- Active nav link ---------- */
   var sections = document.querySelectorAll('main section[id]');
   var links    = nav ? nav.querySelectorAll('a[href^="#"]') : [];

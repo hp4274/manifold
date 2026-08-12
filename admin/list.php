@@ -1,14 +1,17 @@
 <?php
 /**
- * One form's submissions, filterable by status.
+ * One form's submissions, filterable by status, ten to a page.
  * Each row switches its own status and expands to show the full record.
- * list.php?type=stove|tuktuk|contact|newsletter&status=new|accepted|contacted|rejected
+ * list.php?type=stove|tuktuk|contact|newsletter&status=new|...&page=2
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/mailer.php';
+
+/** Rows on one page. The dashboard shows the same number at a glance. */
+const LIST_PER_PAGE = 10;
 
 $user   = require_login();
 $type   = (string) ($_GET['type'] ?? 'stove');
@@ -32,13 +35,25 @@ if ($status !== '') {
     $params[] = $status;
 }
 
-$sql = 'SELECT * FROM ' . $config['table'];
-if ($where) {
-    $sql .= ' WHERE ' . implode(' AND ', $where);
-}
-$sql .= ' ORDER BY created_at DESC LIMIT 300';
+$clause = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 
-$stmt = db()->prepare($sql);
+/* how many there are before deciding which ten to ask for */
+$countStmt = db()->prepare('SELECT COUNT(*) FROM ' . $config['table'] . $clause);
+$countStmt->execute($params);
+
+$total = (int) $countStmt->fetchColumn();
+$pages = max(1, (int) ceil($total / LIST_PER_PAGE));
+
+/* a page number out of range lands on the nearest real one, which is also what
+   happens when the last row on the last page is deleted */
+$page   = max(1, min((int) ($_GET['page'] ?? 1), $pages));
+$offset = ($page - 1) * LIST_PER_PAGE;
+
+/* both are integers we worked out ourselves; MySQL will not take them bound */
+$stmt = db()->prepare(
+    'SELECT * FROM ' . $config['table'] . $clause
+    . ' ORDER BY created_at DESC LIMIT ' . LIST_PER_PAGE . ' OFFSET ' . $offset
+);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
 
@@ -46,7 +61,9 @@ $groups    = field_groups($type);
 $counts    = status_counts($type);
 $savedId   = (int) ($_GET['saved'] ?? 0);
 $deletedId = (int) ($_GET['deleted'] ?? 0);
-$returnUrl = 'list.php?type=' . urlencode($type) . ($status !== '' ? '&status=' . urlencode($status) : '');
+/* without the page, saving a row on page 3 would come back to page 1 */
+$listUrl   = 'list.php?type=' . urlencode($type) . ($status !== '' ? '&status=' . urlencode($status) : '');
+$returnUrl = $listUrl . ($page > 1 ? '&page=' . $page : '');
 
 [$attentionKey, $attentionLabel] = attention_status($type);
 
@@ -81,7 +98,15 @@ require __DIR__ . '/partials/layout-top.php';
 <div class="panel">
   <div class="panel__head">
     <h2><?= $status === '' ? 'All submissions' : e(status_label($status)) ?></h2>
-    <span class="eyebrow"><?= count($rows) ?> shown</span>
+    <span class="eyebrow">
+      <?php if ($total === 0): ?>
+        none
+      <?php elseif ($pages > 1): ?>
+        <?= $offset + 1 ?>–<?= $offset + count($rows) ?> of <?= (int) $total ?> · page <?= $page ?> of <?= $pages ?>
+      <?php else: ?>
+        <?= (int) $total ?> shown
+      <?php endif; ?>
+    </span>
   </div>
 
   <?php if (!$rows): ?>
@@ -103,7 +128,8 @@ require __DIR__ . '/partials/layout-top.php';
           </tr>
         </thead>
         <tbody>
-          <?php $seq = 0; ?>
+          <?php /* keep counting where the previous page left off */ ?>
+          <?php $seq = $offset; ?>
           <?php foreach ($rows as $row): ?>
             <?php $rowId = (int) $row['id']; $seq++; ?>
             <tr id="row-<?= $rowId ?>" class="<?= $savedId === $rowId ? 'is-flagged' : '' ?>">
@@ -137,6 +163,16 @@ require __DIR__ . '/partials/layout-top.php';
         </tbody>
       </table>
     </div>
+
+    <?php
+      $pagerPage  = $page;
+      $pagerPages = $pages;
+      $pagerTotal = $total;
+      $pagerFrom  = $offset + 1;
+      $pagerTo    = $offset + count($rows);
+      $pagerBase  = $listUrl;
+      require __DIR__ . '/partials/pager.php';
+    ?>
   <?php endif; ?>
 </div>
 
