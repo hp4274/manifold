@@ -15,7 +15,7 @@ framework, no build step.
    |---|---|
    | `admin` (or `admin@manifold.com`) | `admin12345` |
 
-   **It drops any existing `manifold` database first**, so back up before
+   **It resets any existing tables in the `manifold` database**, so back up before
    running it on a machine that already has data. **Change that password**
    before the site goes anywhere real.
 
@@ -71,7 +71,9 @@ forms and does not page. It is a glance at what has just come in.
 | `submit.php` | Public endpoint the website forms post to |
 | `blog.php` | Blog posts — write, schedule, publish, unpublish, delete |
 | `referrals.php` | Referral payouts — who owes whom, mark a reward sent |
-| `settings.php` | The referral reward, and the accounts that can sign in |
+| `settings.php` | The referral reward, the accounts that can sign in, and the sample data |
+| `seed-lib.php` | The sample data itself, and the add/remove/count functions |
+| `seed-sample.php` | The same sample data from the command line |
 | `create-admin.php` | One-time bootstrap, delete after use |
 | `partials/` | Sidebar, page chrome, row actions, detail drawer, payment panel |
 | `assets/admin.css` | All admin styling |
@@ -105,6 +107,16 @@ The payment QR code is picked up from the first of these that exists:
 an inline image and shown on the payment step in the portal, so an applicant can
 scan it from either place. If no file is found, the email says the QR will
 follow separately.
+
+Every body lives in `emails.php` and shares `email_wrap()`, so all of them look
+the same. A contact enquiry gets an immediate thank you
+(`send_contact_thanks_email()`, logged as kind `contact_thanks`) quoting the
+message back to the sender; a bad address only costs a failed row in
+`email_log`. A new newsletter address gets a welcome
+(`send_newsletter_welcome_email()`, kind `newsletter_welcome`); an address that
+is already on the list only has its record refreshed and is not written to
+again. There is no unsubscribe link — the email asks people to reply, and the
+office removes the row.
 
 ## Statuses
 
@@ -345,6 +357,49 @@ in-place thank-you panel. The contact and newsletter forms post normally and
 come back to the page with `?sent=1`, which `assets/js/main.js` turns into a
 toast.
 
+## Sample data
+
+Settings has a **Sample data** panel that fills every queue at once, so a new
+database can be shown and tried out instead of sitting empty:
+
+| | records |
+|---|---|
+| Stove applications | 20 |
+| TukTuk applications | 20 |
+| Contact enquiries | 40 |
+| Newsletter signups | 50 |
+| Blog posts | 10 |
+
+The two application queues deliberately sit at different points of the payment
+flow, so they do not read the same:
+
+| | complete | payment review | payment pending | rejected |
+|---|---|---|---|---|
+| Stove | 8 | 5 | 5 | 2 |
+| TukTuk | 5 | 4 | 8 | 3 |
+
+Each application carries the payment row that justifies its status and is put
+through `sync_application_status()` on the way in, so accepting and rejecting
+behave exactly as they do with a real one. Of the ten posts, seven are live —
+six published and one scheduled post whose date has passed — and the rest are a
+scheduled post still to come, a draft and an unpublished one.
+
+Everything is in `seed-lib.php`; the panel and the command line are two doors
+onto the same functions.
+
+    php admin/seed-sample.php            add it
+    php admin/seed-sample.php --remove   take it out again
+    php admin/seed-sample.php --status   say what is there
+
+Adding twice is safe — anything already there is left alone. Every address is
+`@example.com`, every IP is in 203.0.113.0/24 and every row carries a marker in
+`admin_note` (posts are matched by slug), which is how removal finds this data
+and nothing else. `seed-dummy.php` is the older, smaller set and still works.
+
+**These rows are indistinguishable from real ones to anybody using the admin.**
+On a live database the dashboard counts, the exports and the raffle pool all
+include them — a sample `complete` application can be drawn as a winner. Take
+them out before the site carries real traffic.
 ## Security notes
 
 - Passwords are stored with `password_hash()`; logins are throttled to 8 failed

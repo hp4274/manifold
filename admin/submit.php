@@ -271,22 +271,29 @@ try {
             respond(false, 'Name, email, phone and message are required.');
         }
 
+        $enquiry = [
+            'name'     => field('name', 160),
+            'company'  => field('company', 160),
+            'email'    => field('email', 190),
+            'phone'    => field('phone', 32),
+            'interest' => field('interest', 60),
+            'city'     => field('city', 120),
+            'message'  => field('message', 5000),
+            'consent'  => checkbox('consent'),
+        ];
+
         db()->prepare(
             'INSERT INTO contact_messages (name, company, email, phone, interest, city, message, consent, ip_address)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        )->execute([
-            field('name', 160),
-            field('company', 160),
-            field('email', 190),
-            field('phone', 32),
-            field('interest', 60),
-            field('city', 120),
-            field('message', 5000),
-            checkbox('consent'),
-            $ip,
-        ]);
+        )->execute(array_merge(array_values($enquiry), [$ip]));
 
-        respond(true, 'Thank you — your enquiry has reached the Ahmedabad team.');
+        /* a thank you goes back straight away, so nobody is left wondering
+           whether the form worked; a bad address only costs a line in email_log */
+        if (filter_var((string) $enquiry['email'], FILTER_VALIDATE_EMAIL)) {
+            send_contact_thanks_email($enquiry);
+        }
+
+        respond(true, 'Thank you — your enquiry has reached the Ahmedabad team. We have emailed you a copy.');
     }
 
     if ($form === 'newsletter') {
@@ -297,11 +304,19 @@ try {
         }
 
         /* re-subscribing an existing address just refreshes the record */
-        db()->prepare(
+        $stmt = db()->prepare(
             'INSERT INTO newsletter_subscribers (email, source_page, ip_address)
              VALUES (?, ?, ?)
              ON DUPLICATE KEY UPDATE source_page = VALUES(source_page), updated_at = NOW()'
-        )->execute([$email, field('source_page', 120), $ip]);
+        );
+        $stmt->execute([$email, field('source_page', 120), $ip]);
+
+        /* MySQL reports 1 affected row for a fresh insert and 2 for a row it
+           updated instead, so only somebody genuinely new gets welcomed —
+           signing up twice does not send the same email twice */
+        if ($stmt->rowCount() === 1) {
+            send_newsletter_welcome_email($email);
+        }
 
         respond(true, 'You are on the list.');
     }

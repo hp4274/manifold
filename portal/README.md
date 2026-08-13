@@ -9,9 +9,15 @@ No passwords. The applicant types the email address they applied with, and a
 six-digit code is emailed to it (`applicant_otps`). The code lasts 10 minutes,
 allows 5 wrong guesses and is limited to 6 requests per address per hour.
 
-The page gives the same answer whether or not the address is known, so it cannot
-be used to find out who is a customer. A code is only actually generated and
-sent when an application with that address exists.
+An address with no application against it is turned away — *"We do not recognise
+that email address"* — rather than being shown the code box. Somebody who
+mistypes their address finds out immediately instead of waiting for a code that
+was never sent.
+
+The cost is that the form will confirm whether a given address has applied, so
+the portal can be used to test addresses one at a time. The per-address throttle
+does not cover this, because an unknown address never creates a row to count.
+If that ever matters, rate-limit by IP on this form.
 
 ## What the applicant sees
 

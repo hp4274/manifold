@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($error === '') {
                 $_SESSION['otp_email'] = $email;
                 $step = 'code';
-                $note = 'If that address has an application with us, a six-digit code is on its way. '
+                $note = 'A six-digit code is on its way to ' . $email . '. '
                     . 'It is valid for ' . OTP_TTL_MINUTES . ' minutes.';
             }
         }

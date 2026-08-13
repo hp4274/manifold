@@ -30,7 +30,7 @@ $pageLead   = $pageLead ?? '';
 
   <aside class="sidebar">
     <a class="sidebar__brand" href="index.php" aria-label="Manifold Clean Energy admin">
-      <img src="<?= SITE_URL ?>/assets/images/manifold.png" alt="Manifold Clean Energy">
+      <img src="<?= SITE_URL ?>/assets/images/manifold-white.png" alt="Manifold Clean Energy">
     </a>
 
     <div>

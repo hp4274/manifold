@@ -491,6 +491,7 @@
           '<i class="bi bi-x-lg" aria-hidden="true"></i>' +
         '</button>' +
         '<h2 class="promo__title" id="promoTitle">Hydrogen on demand, made in India.</h2>' +
+        '<p class="promo__by">Powered by <strong>K7 Technology</strong></p>' +
         '<p class="promo__lead">Manifold Clean Energy Pvt. Ltd. is an Ahmedabad company turning hydrogen from a ' +
           'laboratory promise into products people can actually buy — built for two of the hardest places to ' +
           'decarbonise: the household kitchen and the urban street.</p>' +

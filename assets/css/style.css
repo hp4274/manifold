@@ -23,6 +23,7 @@
   --accent-2:#17b0a6;
   --accent-deep:#0e8f96;
   --accent-on-dark:#7fe0c8;   /* accents on the navy bands */
+  --accent-ink:#2e7d34;       /* the green dark enough to read as small text on white */
   /* the gold raffle: the only place on the site that is not navy or mint */
   --gold:#b8862b;
   --gold-mid:#e0b551;
@@ -784,6 +785,65 @@ p{margin:0}
 .app-card:hover .soon-badge{background:var(--accent);border-color:var(--accent);color:#06332f}
 
 /* ---------- 6. Products ---------- */
+
+/* Technology partner band, directly above the products.
+   The K7 artwork is a wide banner on its own black ground, so it sits on the
+   dark navy panel the rest of the site uses for bands and is blended with
+   `screen`: black turns into the panel and only the mark and its glow are
+   left, with no rectangle around it. */
+.powered{
+  display:flex;
+  align-items:center;
+  gap:38px;
+  padding:34px 40px;
+  border-radius:var(--radius-lg);
+  background:linear-gradient(10deg,#043d6b 70%,#4bb453 100%);
+  box-shadow:var(--shadow-card);
+}
+/* the artwork is a wide banner whose wordmark is black on black — invisible
+   once the ground is blended away — so the box crops to the mark on its left
+   and the name is carried by the heading instead */
+.powered__mark{
+  flex:0 0 128px;
+  width:128px;
+  height:164px;
+  overflow:hidden;
+}
+.powered__mark img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:left center;
+  mix-blend-mode:screen;
+}
+.powered__text{min-width:0;max-width:82ch}
+.powered .eyebrow{color:var(--accent-on-dark)}
+.powered__title{
+  margin:0 0 10px;
+  font-size:var(--t-title);
+  line-height:var(--t-title-lh);
+  font-weight:700;
+  color:#fff;
+}
+.powered__title span{color:var(--accent-on-dark);white-space:nowrap}
+.powered__lead{
+  margin:0;
+  font-size:var(--t-sub);
+  line-height:var(--t-sub-lh);
+  color:rgba(233,243,250,.86);
+}
+
+@media (max-width:991.98px){
+  .powered{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:22px;
+    padding:28px 26px;
+  }
+  .powered__mark{height:132px;flex:0 0 104px;width:104px}
+}
+
 .product-card{
   display:flex;
   align-items:center;
@@ -2208,6 +2268,22 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   color:var(--accent-deep);
   white-space:nowrap;
 }
+/* whose technology this is, sitting between the title and the lead */
+.promo__by{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin:0 0 18px;
+  padding:6px 14px;
+  border:1px solid rgba(75,180,83,.3);
+  border-radius:999px;
+  background:rgba(75,180,83,.12);
+  font-size:calc(14px * var(--fs));
+  font-weight:600;
+  color:var(--accent-ink);
+}
+.promo__by strong{font-weight:800}
+
 .promo__lead{
   margin:0 0 22px;
   font-size:var(--t-sub);

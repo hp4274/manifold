@@ -42,8 +42,11 @@ function applications_for(string $email): array
 
 /**
  * Issues a code and emails it. Returns an error string, or '' on success.
- * Says nothing about whether the address exists — that is answered the same
- * way either way so the portal cannot be used to test for customers.
+ *
+ * An address with no application is turned away by name, because somebody who
+ * mistypes their address should be told so rather than left waiting for a code
+ * that will never arrive. The cost of that is that the form will confirm
+ * whether a given address applied — see portal/README.md.
  */
 function issue_otp(string $email): string
 {
@@ -61,16 +64,19 @@ function issue_otp(string $email): string
     $known = db()->prepare('SELECT COUNT(*) FROM applications WHERE email = ?');
     $known->execute([$email]);
 
-    if ((int) $known->fetchColumn() > 0) {
-        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-
-        db()->prepare(
-            'INSERT INTO applicant_otps (email, code_hash, expires_at, ip_address)
-             VALUES (?, ?, (NOW() + INTERVAL ? MINUTE), ?)'
-        )->execute([$email, password_hash($code, PASSWORD_DEFAULT), OTP_TTL_MINUTES, $ip]);
-
-        send_otp_email($email, $code);
+    if ((int) $known->fetchColumn() === 0) {
+        return 'We do not recognise that email address. Use the one you applied with — '
+            . 'or apply first, and we will email you as soon as the application is in.';
     }
+
+    $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+    db()->prepare(
+        'INSERT INTO applicant_otps (email, code_hash, expires_at, ip_address)
+         VALUES (?, ?, (NOW() + INTERVAL ? MINUTE), ?)'
+    )->execute([$email, password_hash($code, PASSWORD_DEFAULT), OTP_TTL_MINUTES, $ip]);
+
+    send_otp_email($email, $code);
 
     return '';
 }

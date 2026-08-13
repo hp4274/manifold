@@ -378,3 +378,101 @@ function send_otp_email(string $to, string $code): bool
 
     return send_mail($to, 'Your Manifold sign-in code: ' . $code, email_wrap('Your sign-in code', $inner), 'otp');
 }
+
+/** Human label for the "I am writing about" choice on the contact form. */
+function contact_interest_label(?string $interest): string
+{
+    $labels = [
+        'stove'        => 'Kinetic Hydrogen Cooking Stove',
+        'tuktuk'       => 'Hydrogen Conversion Kit for TukTuk',
+        'fleet'        => 'A fleet or institutional pilot',
+        'distribution' => 'Distribution or dealership',
+        'partnership'  => 'Partnership or investment',
+        'other'        => 'Something else',
+    ];
+
+    return $labels[(string) $interest] ?? '';
+}
+
+/**
+ * Sent the moment a contact enquiry is submitted: a thank you, the enquiry
+ * quoted back so the sender knows what reached us, and how to reach the office
+ * in the meantime.
+ */
+function send_contact_thanks_email(array $enquiry): bool
+{
+    $interest = contact_interest_label($enquiry['interest'] ?? null);
+
+    $rows = [
+        'Name'    => (string) $enquiry['name'],
+        'Company' => (string) ($enquiry['company'] ?? ''),
+        'Email'   => (string) $enquiry['email'],
+        'Phone'   => (string) $enquiry['phone'],
+        'About'   => $interest,
+        'City'    => (string) ($enquiry['city'] ?? ''),
+    ];
+
+    $table = '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 8px;">';
+
+    foreach ($rows as $label => $value) {
+        if (trim($value) === '') {
+            continue;
+        }
+
+        $table .= '<tr>'
+            . '<td style="padding:8px 0;font-size:15px;color:#8499ac;width:38%;">' . e($label) . '</td>'
+            . '<td style="padding:8px 0;font-size:15px;color:#0f2c4d;font-weight:600;">' . e($value) . '</td>'
+            . '</tr>';
+    }
+
+    $table .= '</table>';
+
+    $inner = '<p style="margin:0 0 14px;">Hello ' . e($enquiry['name']) . ',</p>'
+        . '<p style="margin:0 0 20px;">Thank you for writing to us. Your enquiry has reached the Ahmedabad team '
+        . 'and a person — not an autoresponder — will read it. We reply within two working days.</p>'
+        . '<p style="margin:0 0 10px;font-weight:700;color:#0f2c4d;">What you sent us</p>'
+        . $table
+        . '<p style="margin:16px 0 6px;font-weight:700;color:#0f2c4d;">Your message</p>'
+        . '<p style="margin:0 0 20px;padding:14px 18px;border-radius:12px;background:#f6f9fc;'
+        . 'border:1px solid #e3ebf2;font-size:15px;color:#0f2c4d;">'
+        . nl2br(e($enquiry['message'])) . '</p>'
+        . '<p style="margin:0 0 4px;">In the meantime you can read how the technology works and what we are building.</p>'
+        . email_button(base_url() . '/technology.html', 'See the technology')
+        . '<p style="margin:0;font-size:14px;color:#8499ac;">Need us sooner? Call +91 97251 54186, '
+        . 'or reply to this email and it lands with the same team.</p>';
+
+    return send_mail(
+        (string) $enquiry['email'],
+        'Thank you for contacting Manifold Clean Energy',
+        email_wrap('Thank you for getting in touch', $inner),
+        'contact_thanks'
+    );
+}
+
+/**
+ * Sent when someone new joins the mailing list. Re-subscribing an address that
+ * is already on the list sends nothing — see submit.php.
+ */
+function send_newsletter_welcome_email(string $to): bool
+{
+    $site = base_url();
+
+    $inner = '<p style="margin:0 0 14px;">Hello,</p>'
+        . '<p style="margin:0 0 20px;">You are on the list. From now on you will hear from us when there is '
+        . 'something worth telling: how the hydrogen stove and the TukTuk conversion kit are coming along, '
+        . 'where the pilots are running, and when either opens up in a new city.</p>'
+        . '<p style="margin:0 0 20px;">We write rarely and we never pass your address on.</p>'
+        . email_button($site . '/technology.html', 'See how it works')
+        . '<p style="margin:0 0 4px;font-size:14px;color:#8499ac;">Already thinking about a unit? '
+        . '<a href="' . e($site) . '/apply-stove.html" style="color:#0e8f96;">Apply for the stove</a> or '
+        . '<a href="' . e($site) . '/apply-tuktuk.html" style="color:#0e8f96;">for the conversion kit</a>.</p>'
+        . '<p style="margin:0;font-size:14px;color:#8499ac;">Did not sign up, or changed your mind? '
+        . 'Reply with "unsubscribe" and you are off the list.</p>';
+
+    return send_mail(
+        $to,
+        'You are on the Manifold Clean Energy list',
+        email_wrap('Thank you for subscribing', $inner),
+        'newsletter_welcome'
+    );
+}
