@@ -15,14 +15,14 @@ manifold-clean-energy/
     ├── js/
     │   └── main.js                 Menu, sticky header, scroll reveal, active link
     ├── images/                     Photography, product shots, partner logos
-    │   ├── hero-city.jpg           Hero — left panel
-    │   ├── hero-kitchen.jpg        Hero — right panel
+    │   ├── hero-city.webp           Hero — left panel
+    │   ├── hero-kitchen.webp        Hero — right panel
     │   ├── app-1..4.jpg            Application cards
     │   ├── product-stove.jpg       Kinetic Hydrogen Cooking Stove
-    │   ├── product-tuktuk.jpg      Hydrogen Conversion Kit for TukTuk
-    │   ├── about-ahmedabad.jpg     About section photo
-    │   ├── cta-left.jpg            CTA band glow (left)
-    │   ├── cta-right.jpg           CTA band glow (right)
+    │   ├── product-tuktuk.webp      Hydrogen Conversion Kit for TukTuk
+    │   ├── about-ahmedabad.webp     About section photo
+    │   ├── cta-left.webp            CTA band glow (left)
+    │   ├── cta-right.webp           CTA band glow (right)
     │   └── *.png                   Partner / supporter logos
     └── vendor/                     Third-party libraries (self-hosted)
         ├── bootstrap/              Bootstrap 5.3.3 — CSS + bundle JS

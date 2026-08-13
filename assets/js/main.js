@@ -813,7 +813,7 @@
         '<h2 class="raffle__title" id="raffleTitle">Five winners. One gram of pure gold each.</h2>' +
         '<p class="raffle__lead"></p>' +
         '<div class="raffle__clock">' +
-          '<img class="raffle__coin" src="' + siteRoot + 'assets/images/gold-coin-320.png"' +
+          '<img class="raffle__coin" src="' + siteRoot + 'assets/images/gold-coin-320.webp"' +
             ' alt="" width="160" height="160" loading="lazy" decoding="async">' +
           '<div class="raffle__clock-main">' +
             '<span class="raffle__clock-label">Next draw revealed in</span>' +

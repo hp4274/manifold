@@ -614,7 +614,7 @@ p{margin:0}
 .hero-media{
   position:absolute;
   inset:0;
-  background:url("../images/sdfgnfdsesdf.jpg") center center/cover no-repeat;
+  background:url("../images/sdfgnfdsesdf.webp") center center/cover no-repeat;
 }
 .hero-media::after{
   content:"";
@@ -2705,10 +2705,10 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 .page-hero__media{
   position:absolute;
   inset:0;
-  background:url("../images/hero-kitchen.jpg") center center/cover no-repeat;
+  background:url("../images/hero-kitchen.webp") center center/cover no-repeat;
 }
 .page-hero--tuktuk .page-hero__media{
-  background-image:url("../images/app-2.jpg");
+  background-image:url("../images/app-2.webp");
 }
 .page-hero__media::after{
   content:"";
@@ -3012,7 +3012,7 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 /* ---------- 13b. Contact page (contact.html) ---------- */
 
 .page-hero--contact .page-hero__media{
-  background-image:url("../images/hero-city.jpg");
+  background-image:url("../images/hero-city.webp");
 }
 
 /* --- contact detail cards --- */
@@ -3195,10 +3195,10 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 /* ---------- 13c. Application form (apply-*.html) ---------- */
 
 .page-hero--apply .page-hero__media{
-  background-image:url("../images/app-2.jpg");
+  background-image:url("../images/app-2.webp");
 }
 .page-hero--apply-stove .page-hero__media{
-  background-image:url("../images/hero-kitchen.jpg");
+  background-image:url("../images/hero-kitchen.webp");
 }
 .req{color:var(--accent-deep)}
 

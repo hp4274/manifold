@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <div class="login-wrap">
   <div class="login-card">
-    <img class="login-card__brand" src="<?= SITE_URL ?>/assets/images/manifold.png" alt="Manifold Clean Energy">
+    <img class="login-card__brand" src="<?= SITE_URL ?>/assets/images/manifold.webp" alt="Manifold Clean Energy">
 
     <p class="eyebrow">Admin</p>
     <h1>Sign in</h1>

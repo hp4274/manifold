@@ -37,7 +37,7 @@ declare(strict_types=1);
 <header class="site-header" id="siteHeader">
   <div class="nav-wrap">
     <a class="brand" href="../index.html" aria-label="Manifold Clean Energy home">
-      <img class="brand-logo" src="../assets/images/manifold.png" alt="Manifold Clean Energy Pvt. Ltd.">
+      <img class="brand-logo" src="../assets/images/manifold.webp" alt="Manifold Clean Energy Pvt. Ltd.">
     </a>
 
     <nav class="main-nav" id="mainNav" aria-label="Main">

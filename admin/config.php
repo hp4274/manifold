@@ -9,9 +9,9 @@
 declare(strict_types=1);
 
 const DB_HOST = '127.0.0.1';
-const DB_NAME = 'manifold';
-const DB_USER = 'root';
-const DB_PASS = '';
+const DB_NAME = 'u768511311_manifold';
+const DB_USER = 'u768511311_vsm3';
+const DB_PASS = 'Manifold2210';
 const DB_PORT = 3306;
 
 /** Absolute path where uploaded application documents are stored. */
@@ -46,25 +46,25 @@ const SITE_URL = '..';
  * SMTP_HOST and SMTP_USER are set; attempts are recorded in `email_log`.
  * Example for Gmail: smtp.gmail.com / 587 / tls / an app password.
  * ----------------------------------------------------------------------- */
-const SMTP_HOST   = 'smtp.gmail.com';
-const SMTP_PORT   = 587;         // 587 for TLS, 465 for SSL
-const SMTP_SECURE = 'tls';       // 'tls', 'ssl' or '' for none
-const SMTP_USER   = 'harshlpatel.4274@gmail.com';
-const SMTP_PASS   = 'ttkbisjsvgahpcem';   // Google app password, spaces removed
+const SMTP_HOST   = 'smtp.hostinger.com';
+const SMTP_PORT   = 465;         // 587 for TLS, 465 for SSL
+const SMTP_SECURE = 'ssl';       // 'tls', 'ssl' or '' for none
+const SMTP_USER   = 'info@manifoldcleanenergy.co.in';
+const SMTP_PASS   = 'xs3b-5eaz-daac-ijzl';   // Google app password, spaces removed
 const SMTP_TIMEOUT = 15;
 
 /* Gmail rejects a From that is not the authenticated mailbox or a verified
    alias, so send as the account and route replies to the company inbox. */
-const MAIL_FROM      = 'harshlpatel.4274@gmail.com';
+const MAIL_FROM      = 'info@manifoldcleanenergy.co.in';
 const MAIL_FROM_NAME = 'Manifold Clean Energy';
-const MAIL_REPLY_TO  = 'info@manifoldcleanenergy.com';
+const MAIL_REPLY_TO  = 'info@manifoldcleanenergy.co.in';
 
 /**
  * Where staff notifications go (a receipt has been uploaded, etc).
  * Comma-separate several. Leave blank to use the email addresses of the
  * active accounts in `admin_users` instead.
  */
-const ADMIN_NOTIFY_EMAIL = 'harshlpatel.4274@gmail.com';
+const ADMIN_NOTIFY_EMAIL = 'info@manifoldcleanenergy.co.in';
 
 /**
  * Absolute base URL of the site, used for links inside emails.
