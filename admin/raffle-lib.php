@@ -203,12 +203,15 @@ function raffle_sync(): void
  * ----------------------------------------------------------------------- */
 
 /**
- * Applicants the promotion allows: paid in full. Used for the count on the
- * page and to decide what the search may offer.
+ * Applicants the promotion allows: booking payment verified. Used for the
+ * count on the page and to decide what the search may offer. The delivery
+ * payment falls due much later and the draw does not wait for it.
  */
 function raffle_eligible_count(): int
 {
-    return (int) db()->query("SELECT COUNT(*) FROM applications WHERE status = 'complete'")->fetchColumn();
+    return (int) db()->query(
+        "SELECT COUNT(*) FROM applications WHERE booking_paid_at IS NOT NULL AND status <> 'rejected'"
+    )->fetchColumn();
 }
 
 /**
@@ -216,8 +219,9 @@ function raffle_eligible_count(): int
  * name, the reference code, or the mobile number — typed with spaces, dashes or
  * a country code, since that is how they are written down.
  *
- * Only applicants who have paid in full are ever returned; that is the rule the
- * promotion is run on. Each row says whether they already hold a place.
+ * Only applicants whose booking payment has been verified are ever returned;
+ * that is the rule the promotion is run on. Each row says whether they already
+ * hold a place.
  */
 function raffle_search(string $query, int $drawId = 0, int $limit = 12): array
 {
@@ -240,7 +244,7 @@ function raffle_search(string $query, int $drawId = 0, int $limit = 12): array
               FROM applications a
          LEFT JOIN raffle_winners w ON w.application_id = a.id
          LEFT JOIN raffle_draws d   ON d.id = w.draw_id
-             WHERE a.status = 'complete'
+             WHERE a.booking_paid_at IS NOT NULL AND a.status <> 'rejected'
                AND (a.full_name LIKE ? OR a.reference_code LIKE ? OR a.referral_code LIKE ?
                     OR REPLACE(REPLACE(a.mobile_number, ' ', ''), '-', '') LIKE ?"
              . ($tail === null ? '' : ' OR REPLACE(REPLACE(a.mobile_number, \' \', \'\'), \'-\', \'\') LIKE ?')
@@ -293,7 +297,7 @@ function raffle_add_winner(int $drawId, int $applicationId, ?int $userId = null)
         return 'That draw no longer exists.';
     }
 
-    $app = db()->prepare('SELECT id, full_name, status FROM applications WHERE id = ?');
+    $app = db()->prepare('SELECT id, full_name, status, booking_paid_at FROM applications WHERE id = ?');
     $app->execute([$applicationId]);
     $person = $app->fetch();
 
@@ -301,8 +305,8 @@ function raffle_add_winner(int $drawId, int $applicationId, ?int $userId = null)
         return 'That applicant no longer exists.';
     }
 
-    if ($person['status'] !== 'complete') {
-        return $person['full_name'] . ' has not paid in full, so cannot be entered.';
+    if (empty($person['booking_paid_at']) || $person['status'] === 'rejected') {
+        return $person['full_name'] . ' has no verified booking payment, so cannot be entered.';
     }
 
     $already = db()->prepare('SELECT COUNT(*) FROM raffle_winners WHERE draw_id = ? AND application_id = ?');

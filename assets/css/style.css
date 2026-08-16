@@ -53,6 +53,7 @@
   --t-sub-lh:1.7;
   --t-ui:15px;           /* shared control size: buttons, inputs, nav */
   --t-micro:11px;        /* shared label size: eyebrows, tags, badges */
+  --t-figure:38px;       /* numerals only: the price band and the instalment */
 
   --sec-pad:110px;       /* uniform vertical rhythm below the hero */
   --container:1463px;
@@ -334,6 +335,111 @@ p{margin:0}
 .reveal.is-visible{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){
   .reveal{opacity:1;transform:none;transition:none}
+}
+
+/* ---------- 2b. Loan offer flash ----------
+   Above the top bar on the home page: the loan is open to the first 1,00,000
+   customers and closes on 15 September 2026, so the bar states both and counts
+   the days down. main.js reveals it, hides it once the date has passed, and
+   remembers a dismissal — nothing here is shown without that check. */
+.offer-flash{
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(100deg,var(--navy-800) 0%,var(--navy-600) 58%,#0a4a52 100%);
+  color:#fff;
+}
+.offer-flash[hidden]{display:none}
+
+/* a slow sheen crossing the bar — the flash, without anything blinking */
+.offer-flash::after{
+  content:"";
+  position:absolute;
+  inset:0 auto 0 -40%;
+  width:34%;
+  background:linear-gradient(100deg,transparent 0%,rgba(127,224,200,.16) 46%,transparent 100%);
+  transform:skewX(-16deg);
+  animation:offer-sheen 7s ease-in-out 1.6s infinite;
+  pointer-events:none;
+}
+@keyframes offer-sheen{
+  0%,72%   {transform:translateX(0) skewX(-16deg)}
+  100%     {transform:translateX(420%) skewX(-16deg)}
+}
+
+.offer-flash__inner{
+  position:relative;
+  z-index:1;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  flex-wrap:wrap;
+  padding-block:11px;
+}
+.offer-flash__line{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  margin:0;
+  font-size:var(--t-ui);
+  line-height:1.5;
+  color:rgba(255,255,255,.86);
+}
+.offer-flash__line strong{color:#fff;font-weight:700}
+.offer-flash__tag{
+  padding:5px 12px;
+  border-radius:999px;
+  background:rgba(127,224,200,.16);
+  border:1px solid rgba(127,224,200,.34);
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--accent-on-dark);
+  white-space:nowrap;
+}
+.offer-flash__left{
+  font-weight:700;
+  color:var(--accent-on-dark);
+  white-space:nowrap;
+}
+.offer-flash__left[hidden]{display:none}
+.offer-flash__side{display:flex;align-items:center;gap:14px}
+.offer-flash__cta{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  font-size:var(--t-ui);
+  font-weight:700;
+  color:#fff;
+  white-space:nowrap;
+}
+.offer-flash__cta:hover{color:var(--accent-on-dark)}
+.offer-flash__cta i{transition:transform .22s ease}
+.offer-flash__cta:hover i{transform:translateX(3px)}
+.offer-flash__close{
+  display:grid;
+  place-items:center;
+  width:30px;height:30px;
+  border:1px solid rgba(255,255,255,.26);
+  border-radius:50%;
+  background:transparent;
+  color:rgba(255,255,255,.8);
+  font-size:12px;
+  cursor:pointer;
+  transition:background .2s ease,color .2s ease;
+}
+.offer-flash__close:hover{background:rgba(255,255,255,.14);color:#fff}
+
+@media (prefers-reduced-motion:reduce){
+  .offer-flash::after{animation:none;opacity:0}
+}
+
+@media (max-width:767px){
+  .offer-flash__inner{gap:10px;padding-block:10px}
+  .offer-flash__line{gap:8px}
+  .offer-flash__side{margin-left:auto}
 }
 
 /* ---------- 3. Header ---------- */
@@ -1359,7 +1465,9 @@ p{margin:0}
   --rail:calc(32px + var(--dot) / 2);   /* year height + half the node */
   display:flex;
   gap:0;
-  min-width:1480px;
+  /* ten years have to sit on one rail: the floor is what a cell needs to stay
+     readable, not a fixed canvas, so the row only scrolls on a narrow laptop */
+  min-width:1240px;
   position:relative;
 }
 /* the rail the nodes sit on */
@@ -1374,9 +1482,10 @@ p{margin:0}
 
 .timeline-item{
   flex:1 1 0;
+  min-width:0;
   position:relative;
   text-align:center;
-  padding:0 14px 4px;
+  padding:0 8px 4px;
 }
 /* hairline between the description cells */
 .timeline-item + .timeline-item::after{
@@ -1414,14 +1523,20 @@ p{margin:0}
   border-radius:50%;
   border:2px solid #75899c;
 }
+/* the rail is a dense data row, so its captions run at the 15px utility size
+   rather than the 18px body size — see .claude/theme.md */
 .timeline-item p{
-  font-size:var(--t-sub);
+  font-size:var(--t-ui);
   font-weight:400;
-  line-height:1.55;
+  line-height:1.5;
   color:var(--body);
-  max-width:17ch;
   margin-inline:auto;
   text-align:left;
+  /* only break a word that cannot fit the cell at all, and never hyphenate:
+     auto hyphenation was splitting "deliveries" across two lines */
+  overflow-wrap:break-word;
+  -webkit-hyphens:none;
+  hyphens:none;
 }
 
 /* the live milestone */
@@ -1577,6 +1692,178 @@ p{margin:0}
   border-color:rgba(127,224,200,.5);
   background:rgba(255,255,255,.12);
   color:#fff;
+}
+
+/* ---------- 9c. Delivery date ----------
+   The date the whole timeline has been running towards, beside a leaf of the
+   January 2027 calendar with the first ringed. The weekday grid is the real
+   one — 1 January 2027 falls on a Friday — so the artefact carries the fact
+   rather than decorating it. */
+.delivery{background:var(--tint)}
+.delivery__grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
+  align-items:center;
+  gap:64px;
+}
+.delivery__lead{
+  font-size:var(--t-sub);
+  font-weight:400;
+  line-height:var(--t-sub-lh);
+  color:var(--body);
+  max-width:46ch;
+  margin-bottom:26px;
+}
+
+/* the count is written by main.js, so it never shows a stale number */
+.delivery__count{
+  display:flex;
+  align-items:baseline;
+  gap:12px;
+  flex-wrap:wrap;
+  padding-top:22px;
+  margin-bottom:28px;
+  border-top:1px solid var(--line);
+}
+.delivery__count-num{
+  font-size:var(--t-figure);
+  font-weight:800;
+  line-height:1;
+  letter-spacing:-.03em;
+  color:var(--accent-ink);
+  font-variant-numeric:tabular-nums;
+}
+.delivery__count-label{
+  font-size:var(--t-ui);
+  font-weight:600;
+  letter-spacing:.02em;
+  color:var(--body);
+}
+.delivery__actions{display:flex;flex-wrap:wrap;gap:12px}
+
+/* a ghost pill for light bands — the existing one is built for the navy */
+.btn-pill--ghost-ink{
+  color:var(--ink);
+  border:1px solid rgba(15,44,77,.22);
+  background:#fff;
+}
+.btn-pill--ghost-ink:hover{
+  transform:translateY(-2px);
+  border-color:rgba(15,44,77,.4);
+  box-shadow:0 8px 20px rgba(10,45,80,.1);
+}
+
+/* --- the calendar leaf --- */
+.leaf{
+  margin:0;
+  padding:28px 30px 24px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg);
+  background:#fff;
+  box-shadow:var(--shadow-card);
+  max-width:460px;
+  margin-inline:auto;
+}
+.leaf__head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  padding-bottom:16px;
+  margin-bottom:16px;
+  border-bottom:1px solid var(--line);
+}
+.leaf__month{
+  font-size:var(--t-title);
+  font-weight:700;
+  letter-spacing:-.02em;
+  color:var(--ink);
+}
+.leaf__year{
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--accent-deep);
+}
+.leaf__grid{
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:4px;
+}
+.leaf__dow{
+  padding-bottom:8px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.12em;
+  text-align:center;
+  color:var(--ink-soft);
+}
+.leaf__day,
+.leaf__pad{
+  position:relative;
+  display:grid;
+  place-items:center;
+  aspect-ratio:1;
+  font-size:var(--t-ui);
+  font-weight:500;
+  color:var(--body);
+  font-variant-numeric:tabular-nums;
+}
+.leaf__day--mark{
+  font-size:var(--t-sub);
+  font-weight:800;
+  color:var(--ink);
+}
+.leaf__day--mark span{position:relative;z-index:1}
+.leaf__ring{
+  position:absolute;
+  inset:-2px;
+  width:calc(100% + 4px);
+  height:calc(100% + 4px);
+  overflow:visible;
+}
+.leaf__ring circle{
+  fill:rgba(23,176,166,.09);
+  stroke:var(--accent-2);
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-dasharray:120;
+  stroke-dashoffset:120;
+  transform:rotate(-96deg);
+  transform-origin:50% 50%;
+  transition:stroke-dashoffset 1s cubic-bezier(.16,.84,.36,1) .25s;
+}
+.leaf.is-visible .leaf__ring circle{stroke-dashoffset:0}
+.leaf__foot{
+  margin-top:18px;
+  padding-top:14px;
+  border-top:1px solid var(--line);
+  font-size:var(--t-ui);
+  font-weight:600;
+  color:var(--body);
+}
+
+/* the year the timeline is heading for, not one it has reached */
+.timeline-item--next .timeline-year{color:var(--accent-deep)}
+.timeline-item--next .timeline-dot{
+  border-style:dashed;
+  border-color:var(--accent-deep);
+}
+
+@media (prefers-reduced-motion:reduce){
+  .leaf__ring circle{transition:none;stroke-dashoffset:0}
+}
+
+@media (max-width:991px){
+  .delivery__grid{grid-template-columns:1fr;gap:36px}
+  .leaf{margin-inline:0}
+}
+
+@media (max-width:575px){
+  .leaf{padding:22px 20px 20px}
+  .leaf__grid{gap:2px}
+  .delivery__actions .btn-pill{flex:1 1 auto;justify-content:center}
 }
 
 /* ---------- 10. Partners ---------- */
@@ -2878,32 +3165,43 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 }
 
 /* --- specification table --- */
-.spec-table-wrap{
-  border:1px solid var(--line);
-  border-radius:var(--radius-lg);
-  overflow:hidden;
-  background:#fff;
-  box-shadow:var(--shadow-card);
+/* --- specification groups --- */
+.spec-groups{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:44px 60px;
 }
-.spec-table{width:100%;border-collapse:collapse}
-.spec-table th,
-.spec-table td{
-  padding:16px 24px;
+.spec-group__title{
   font-size:var(--t-sub);
-  line-height:1.5;
-  text-align:left;
-  vertical-align:top;
+  font-weight:700;
+  line-height:1.4;
+  color:var(--ink);
+  padding-bottom:13px;
+  border-bottom:2px solid var(--accent-2);
+}
+.spec-list{margin:0}
+.spec-row{
+  padding:15px 0;
   border-bottom:1px solid var(--line);
 }
-.spec-table tr:last-child th,
-.spec-table tr:last-child td{border-bottom:0}
-.spec-table th{
-  width:44%;
-  font-weight:700;
-  color:var(--ink);
-  background:var(--tint);
+.spec-row:last-child{border-bottom:0}
+.spec-row dt{
+  font-size:var(--t-ui);
+  font-weight:600;
+  letter-spacing:.02em;
+  line-height:1.4;
+  color:var(--muted);
+  margin-bottom:5px;
 }
-.spec-table td{font-weight:400;color:var(--body)}
+.spec-row dd{
+  margin:0;
+  font-size:var(--t-sub);
+  font-weight:600;
+  line-height:1.5;
+  color:var(--ink);
+}
+.spec-extras{margin-top:60px}
+.spec-extras .side-panel{height:100%}
 
 /* --- side panels beside the table --- */
 .side-panel{
@@ -2925,6 +3223,186 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 .side-panel--accent{
   background:linear-gradient(150deg,#f1fbf8 0%,#e8f5fb 100%);
   border-color:rgba(23,176,166,.28);
+}
+
+/* --- pricing band (product pages) --- */
+.price-band{
+  display:grid;
+  grid-template-columns:minmax(0,.92fr) minmax(0,1.6fr);
+  border-radius:22px;
+  overflow:hidden;
+  background:linear-gradient(115deg,var(--navy-700) 0%,var(--navy-600) 48%,#0a4a52 100%);
+  box-shadow:0 22px 54px rgba(6,26,40,.20);
+}
+.price-band__head{
+  padding:46px 44px 48px;
+  border-right:1px solid rgba(255,255,255,.15);
+}
+.price-band__label{
+  font-size:var(--t-micro);
+  font-weight:600;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--accent-on-dark);
+  margin:0 0 18px;
+}
+.price-band__figure{
+  font-size:var(--t-figure);
+  font-weight:800;
+  line-height:1.05;
+  letter-spacing:-.03em;
+  color:#fff;
+  margin:0 0 14px;
+}
+.price-band__note{
+  font-size:var(--t-sub);
+  font-weight:400;
+  line-height:1.6;
+  color:rgba(255,255,255,.78);
+  max-width:24ch;
+  margin:0;
+}
+.price-steps{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.price-step{
+  padding:46px 30px 48px;
+  border-left:1px solid rgba(255,255,255,.15);
+}
+.price-step:first-child{border-left:0}
+.price-step__when{
+  display:block;
+  font-size:var(--t-micro);
+  font-weight:600;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--accent-on-dark);
+}
+.price-step__value{
+  display:block;
+  font-size:var(--t-title);
+  font-weight:800;
+  line-height:1.2;
+  letter-spacing:-.02em;
+  color:#fff;
+  margin:12px 0 9px;
+}
+.price-step__text{
+  display:block;
+  font-size:var(--t-ui);
+  font-weight:400;
+  line-height:1.6;
+  color:rgba(255,255,255,.78);
+}
+
+/* --- the loan offer, as terms under the band --- */
+.price-offer{
+  margin-top:22px;
+  padding:20px 24px 18px;
+  border:1px solid rgba(23,176,166,.3);
+  border-radius:var(--radius);
+  background:linear-gradient(100deg,rgba(75,180,83,.07) 0%,rgba(23,176,166,.07) 100%);
+}
+.price-offer__title{
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--accent-ink);
+  margin-bottom:14px;
+}
+.price-offer__facts{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px 56px;
+  margin:0 0 12px;
+}
+.price-offer__fact dt{
+  font-size:var(--t-ui);
+  font-weight:600;
+  letter-spacing:.02em;
+  color:var(--muted);
+  margin-bottom:3px;
+}
+.price-offer__fact dd{
+  margin:0;
+  font-size:var(--t-sub);
+  font-weight:700;
+  line-height:1.4;
+  color:var(--ink);
+}
+.price-offer__left{color:var(--accent-ink);white-space:nowrap}
+.price-offer__left[hidden]{display:none}
+.price-offer__note{
+  font-size:var(--t-ui);
+  font-weight:400;
+  line-height:1.6;
+  color:var(--body);
+  max-width:62ch;
+  margin:0;
+}
+.price-offer__note[hidden]{display:none}
+
+@media (max-width:575px){
+  .price-offer{padding:18px 18px 16px}
+  .price-offer__facts{gap:12px 28px}
+}
+
+/* --- instalment plan and the booking call to action under the band --- */
+.price-foot{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:30px 56px;
+  margin-top:40px;
+  padding-top:36px;
+  border-top:1px solid var(--line);
+}
+.price-emi{max-width:44ch}
+.price-emi__figure{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:10px;
+  margin:0 0 12px;
+}
+.price-emi__value{
+  font-size:var(--t-figure);
+  font-weight:800;
+  line-height:1.05;
+  letter-spacing:-.03em;
+  color:var(--accent-ink);
+}
+.price-emi__unit{
+  font-size:var(--t-sub);
+  font-weight:600;
+  color:var(--ink);
+}
+.price-emi__text{
+  font-size:var(--t-sub);
+  font-weight:400;
+  line-height:1.6;
+  color:var(--body);
+  margin:0;
+}
+.price-act{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:16px;
+  max-width:36ch;
+}
+.price-legal{
+  font-size:var(--t-ui);
+  font-weight:400;
+  line-height:1.6;
+  color:var(--muted);
+  margin:0;
 }
 
 /* --- FAQ --- */
@@ -3169,6 +3647,19 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   font-family:inherit;
   color:#fff;
 }
+/* submit stays locked until the required consent boxes are ticked */
+.btn-pill:disabled,
+.btn-pill.is-locked{
+  opacity:.45;
+  cursor:not-allowed;
+  box-shadow:none;
+  transform:none;
+}
+.btn-pill:disabled:hover,
+.btn-pill.is-locked:hover{transform:none;box-shadow:none}
+.btn-pill:disabled:hover i,
+.btn-pill.is-locked:hover i{transform:none}
+
 .form-note{
   font-size:var(--t-sub);
   font-weight:400;
@@ -3739,8 +4230,10 @@ label.upload{
   text-transform:uppercase;
 }
 .portal-status--new{background:rgba(59,163,220,.14);color:#2273a3}
-.portal-status--payment_pending{background:rgba(201,138,43,.16);color:#8a5f1c}
-.portal-status--payment_review{background:rgba(23,176,166,.16);color:#0b7a74}
+.portal-status--booking_pending{background:rgba(201,138,43,.16);color:#8a5f1c}
+.portal-status--booking_review{background:rgba(23,176,166,.16);color:#0b7a74}
+.portal-status--delivery_pending{background:rgba(59,163,220,.14);color:#2273a3}
+.portal-status--delivery_review{background:rgba(23,176,166,.16);color:#0b7a74}
 .portal-status--complete{background:var(--ink);color:#fff}
 .portal-status--rejected{background:rgba(201,69,92,.12);color:#a8324a}
 
@@ -4512,7 +5005,6 @@ label.upload{
   .legal-layout{grid-template-columns:1fr;gap:26px}
   .legal-nav{position:static}
   .legal-panel{padding:30px 26px}
-  .spec-table th{width:46%}
   .side-panel{padding:26px 22px}
   .media-frame{max-width:560px;margin-inline:auto}
 
@@ -4573,8 +5065,6 @@ label.upload{
   .legal-panel{padding:24px 20px}
   .field-grid{grid-template-columns:1fr}
   .form-actions{flex-direction:column;align-items:flex-start}
-  .spec-table th,
-  .spec-table td{padding:14px 16px}
   .faq-item{padding:2px 18px}
 }
 
@@ -4586,8 +5076,6 @@ label.upload{
 /* decorative absolutes must never widen the page */
 body{overflow-x:hidden}
 
-/* long values in the spec table scroll inside their panel */
-.spec-table-wrap{overflow-x:auto}
 
 @media (max-width:767px){
   /* --- technology flow: one step per row --- */
@@ -4963,6 +5451,76 @@ body{overflow-x:hidden}
   transition:width .4s ease;
 }
 
+.portal-plan{margin-top:26px}
+.portal-plan__lead{
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--body);
+  margin-bottom:16px;
+}
+.portal-plan__lead strong{color:var(--ink)}
+
+.portal-stage{
+  padding:22px 24px 24px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:#fff;
+}
+.portal-stage + .portal-stage{margin-top:14px}
+.portal-stage--paid{border-color:rgba(75,180,83,.38);background:rgba(75,180,83,.05)}
+.portal-stage--checking{border-color:rgba(23,176,166,.4);background:rgba(23,176,166,.05)}
+.portal-stage--due{border-color:rgba(201,138,43,.42);background:rgba(201,138,43,.05)}
+.portal-stage--locked{background:var(--tint)}
+
+.portal-stage__head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:14px;
+  flex-wrap:wrap;
+  padding-bottom:14px;
+  margin-bottom:14px;
+  border-bottom:1px solid var(--line);
+}
+.portal-stage__title{
+  font-size:var(--t-sub);
+  font-weight:700;
+  line-height:1.4;
+  color:var(--ink);
+  margin:0 0 4px;
+}
+.portal-stage__amount{
+  font-size:var(--t-figure);
+  font-weight:800;
+  line-height:1.05;
+  letter-spacing:-.03em;
+  color:var(--ink);
+}
+.portal-stage--locked .portal-stage__amount{color:var(--muted)}
+.portal-stage__state{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--body);
+}
+.portal-stage--paid .portal-stage__state{color:#26743a}
+.portal-stage--checking .portal-stage__state{color:#0b7a74}
+.portal-stage--due .portal-stage__state{color:#8a5f1c}
+.portal-stage--locked .portal-stage__state{color:var(--muted)}
+.portal-stage__note{
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--body);
+  max-width:64ch;
+}
+.portal-stage__reject{margin:14px 0 0}
+.portal-stage .portal-ledger__list{margin-top:16px}
+.portal-stage .portal-pay{margin-top:18px}
+
 .portal-ledger__list{display:grid;gap:10px;margin-top:18px}
 .portal-entry{
   display:flex;
@@ -5008,3 +5566,39 @@ body{overflow-x:hidden}
   white-space:nowrap;
 }
 .portal-entry__receipt:hover{text-decoration:underline}
+
+/* ---------- 13h. Product page: specs and price, narrow ---------- */
+@media (max-width:1199px){
+  .spec-groups{grid-template-columns:repeat(2,minmax(0,1fr));gap:38px 48px}
+  .price-band{grid-template-columns:1fr}
+  .price-band__head{
+    border-right:0;
+    border-bottom:1px solid rgba(255,255,255,.15);
+    padding:38px 36px 40px;
+  }
+  .price-step{padding:34px 26px 36px}
+}
+
+@media (max-width:991px){
+  .spec-extras{margin-top:44px}
+  .price-steps{grid-template-columns:1fr}
+  .price-step{
+    border-left:0;
+    border-top:1px solid rgba(255,255,255,.15);
+    padding:26px 36px 28px;
+  }
+  .price-step:first-child{border-top:0;padding-top:30px}
+  .price-step__value{margin:8px 0 6px}
+  .price-foot{gap:28px}
+  .price-act{max-width:none}
+}
+
+@media (max-width:767px){
+  :root{--t-figure:30px}
+  .spec-groups{grid-template-columns:1fr;gap:34px}
+  .spec-extras{margin-top:36px}
+  .price-band__head{padding:32px 24px 34px}
+  .price-band__note{max-width:34ch}
+  .price-step{padding:24px 24px 26px}
+  .price-foot{margin-top:32px;padding-top:28px}
+}

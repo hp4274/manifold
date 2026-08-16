@@ -65,10 +65,15 @@ $deletedId = (int) ($_GET['deleted'] ?? 0);
 $listUrl   = 'list.php?type=' . urlencode($type) . ($status !== '' ? '&status=' . urlencode($status) : '');
 $returnUrl = $listUrl . ($page > 1 ? '&page=' . $page : '');
 
-[$attentionKey, $attentionLabel] = attention_status($type);
+[$attentionKeys, $attentionLabel] = attention_status($type);
+
+$attentionCount = array_sum(array_map(
+    static fn (string $key): int => (int) ($counts[$key] ?? 0),
+    $attentionKeys
+));
 
 $pageTitle  = $config['label'];
-$pageLead   = $counts['total'] . ' total · ' . ($counts[$attentionKey] ?? 0) . ' ' . $attentionLabel;
+$pageLead   = $counts['total'] . ' total · ' . $attentionCount . ' ' . $attentionLabel;
 $activeType = $type;
 
 require __DIR__ . '/partials/layout-top.php';

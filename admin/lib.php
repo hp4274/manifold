@@ -21,10 +21,17 @@ if (session_status() === PHP_SESSION_NONE) {
 const STATUSES = ['new', 'accepted', 'contacted', 'rejected'];
 
 /** Workflow states for product applications, in the order they happen. */
-const APPLICATION_STATUSES = ['payment_pending', 'payment_review', 'complete', 'rejected'];
+const APPLICATION_STATUSES = [
+    'booking_pending', 'booking_review', 'delivery_pending', 'delivery_review', 'complete', 'rejected',
+];
 
 /** The stages an applicant sees in the portal timeline (rejected sits outside). */
-const APPLICATION_STAGES = ['payment_pending', 'payment_review', 'complete'];
+const APPLICATION_STAGES = [
+    'booking_pending', 'booking_review', 'delivery_pending', 'delivery_review', 'complete',
+];
+
+/** The two transfers every application is made of, in the order they fall due. */
+const PAYMENT_STAGES = ['booking', 'delivery'];
 
 /** Which status list applies to a submission type. */
 function statuses_for(string $type): array
@@ -40,15 +47,19 @@ function statuses_for(string $type): array
 function status_label(string $status, string $audience = 'admin'): string
 {
     $labels = [
-        'payment_pending' => $audience === 'applicant' ? 'Payment due' : 'Payment pending',
-        'payment_review'  => $audience === 'applicant'
-            ? 'Payment submitted — verifying'
-            : 'Payment received — verify',
-        'complete'        => $audience === 'applicant' ? 'Complete' : 'Paid and complete',
-        'new'             => 'New',
-        'accepted'        => 'Accepted',
-        'contacted'       => 'Contacted',
-        'rejected'        => 'Rejected',
+        'booking_pending'  => $audience === 'applicant' ? 'Booking payment due' : 'Booking payment pending',
+        'booking_review'   => $audience === 'applicant'
+            ? 'Booking payment submitted — verifying'
+            : 'Booking receipt — verify',
+        'delivery_pending' => $audience === 'applicant' ? 'Delivery payment due' : 'Delivery payment pending',
+        'delivery_review'  => $audience === 'applicant'
+            ? 'Delivery payment submitted — verifying'
+            : 'Delivery receipt — verify',
+        'complete'         => $audience === 'applicant' ? 'Complete' : 'Both payments verified',
+        'new'              => 'New',
+        'accepted'         => 'Accepted',
+        'contacted'        => 'Contacted',
+        'rejected'         => 'Rejected',
     ];
 
     return $labels[$status] ?? ucfirst($status);
@@ -58,9 +69,11 @@ function status_label(string $status, string $audience = 'admin'): string
 function status_short(string $status): string
 {
     $short = [
-        'payment_pending' => 'payment pending',
-        'payment_review'  => 'payment received',
-        'complete'        => 'complete',
+        'booking_pending'  => 'booking due',
+        'booking_review'   => 'booking receipt',
+        'delivery_pending' => 'delivery due',
+        'delivery_review'  => 'delivery receipt',
+        'complete'         => 'complete',
     ];
 
     return $short[$status] ?? $status;
@@ -70,21 +83,56 @@ function status_short(string $status): string
 function stage_copy(string $status): array
 {
     $copy = [
-        'payment_pending' => ['Payment due',
-                              'Pay the balance below using the QR code — in one go or in instalments — '
-                              . 'and upload a receipt for each transfer.'],
-        'payment_review'  => ['Payment submitted',
-                              'We are checking your latest receipt. Nothing more is needed for that transfer.'],
-        'complete'        => ['Complete',
-                              'Payment verified. Your receipt is on its way and we will call you to schedule installation.'],
-        'rejected'        => ['Not proceeding',
-                              'This application is not moving forward. Contact us if you think that is a mistake.'],
+        'booking_pending'  => ['Booking payment due',
+                               'Pay the booking amount with the QR code below and upload the receipt. '
+                               . 'It reserves your unit and comes off the price.'],
+        'booking_review'   => ['Booking payment submitted',
+                               'We are checking your booking receipt. Nothing more is needed for now.'],
+        'delivery_pending' => ['Delivery payment due',
+                               'Your booking is confirmed. Pay the delivery amount and upload that receipt '
+                               . 'to complete the purchase.'],
+        'delivery_review'  => ['Delivery payment submitted',
+                               'We are checking your delivery receipt. Nothing more is needed for now.'],
+        'complete'         => ['Complete',
+                               'Both payments are verified. Your receipts are on their way and we will call you '
+                               . 'to arrange the handover.'],
+        'rejected'         => ['Not proceeding',
+                               'This application is not moving forward. Contact us if you think that is a mistake.'],
     ];
 
     return $copy[$status] ?? [status_label($status, 'applicant'), ''];
 }
 
 /* ---------- payments ---------- */
+
+/** Reading name for one of the two transfers. */
+function payment_stage_label(string $stage): string
+{
+    return $stage === 'delivery' ? 'Delivery payment' : 'Booking payment';
+}
+
+/**
+ * What one stage is worth on one application. The figures are frozen onto the
+ * row at submit time; the price list is only the fallback for older rows.
+ */
+function stage_amount(array $app, string $stage): float
+{
+    $plan = payment_plan((string) ($app['product'] ?? 'stove'));
+
+    if ($stage === 'delivery') {
+        $amount = (float) ($app['delivery_amount'] ?? 0);
+
+        return $amount > 0 ? $amount : (float) $plan['delivery'];
+    }
+
+    $amount = (float) ($app['booking_amount'] ?? 0);
+
+    if ($amount <= 0) {
+        $amount = (float) ($app['payment_amount'] ?? 0);
+    }
+
+    return $amount > 0 ? $amount : (float) $plan['booking'];
+}
 
 /** Every transfer on one application, oldest first. */
 function payments_for(int $applicationId): array
@@ -96,32 +144,96 @@ function payments_for(int $applicationId): array
 }
 
 /**
- * What has been paid, what is waiting to be checked and what is still owed.
- * Rejected transfers count for nothing.
+ * One stage of one application: what it costs, what has been verified against
+ * it, and where it stands.
+ *
+ *   locked    the booking payment has not been verified yet
+ *   due       nothing uploaded, or the last upload was rejected
+ *   checking  a receipt is waiting for a decision
+ *   paid      verified in full
+ */
+function payment_stage(array $app, string $stage, ?array $payments = null, ?bool $bookingPaid = null): array
+{
+    $payments = $payments ?? payments_for((int) $app['id']);
+    $rows     = array_values(array_filter(
+        $payments,
+        static fn (array $p): bool => ($p['stage'] ?? 'booking') === $stage
+    ));
+
+    $amount  = stage_amount($app, $stage);
+    $paid    = 0.0;
+    $waiting = 0.0;
+
+    foreach ($rows as $row) {
+        if ($row['status'] === 'verified') {
+            $paid += (float) $row['amount'];
+        } elseif ($row['status'] === 'pending') {
+            $waiting += (float) $row['amount'];
+        }
+    }
+
+    $settled = $paid + 0.001 >= $amount;
+
+    if ($settled) {
+        $state = 'paid';
+    } elseif ($waiting > 0) {
+        $state = 'checking';
+    } elseif ($stage === 'delivery' && !($bookingPaid ?? false)) {
+        $state = 'locked';
+    } else {
+        $state = 'due';
+    }
+
+    /* the reason on the most recent rejection, so the applicant is told why */
+    $refused = array_values(array_filter($rows, static fn (array $p): bool => $p['status'] === 'rejected'));
+    $last    = $refused ? $refused[count($refused) - 1] : null;
+
+    return [
+        'stage'         => $stage,
+        'label'         => payment_stage_label($stage),
+        'amount'        => $amount,
+        'paid'          => $paid,
+        'waiting'       => $waiting,
+        'balance'       => max($amount - $paid, 0),
+        'settled'       => $settled,
+        'state'         => $state,
+        'payments'      => $rows,
+        'reject_reason' => $last['reject_reason'] ?? null,
+    ];
+}
+
+/**
+ * Both stages plus the totals across them. `current` is the stage the
+ * applicant is being asked for, or null when there is nothing left to pay.
  */
 function payment_totals(array $app, ?array $payments = null): array
 {
     $payments = $payments ?? payments_for((int) $app['id']);
-    $due      = (float) ($app['payment_amount'] ?? PAYMENT_AMOUNT);
 
-    $paid    = 0.0;
-    $waiting = 0.0;
+    $booking  = payment_stage($app, 'booking', $payments);
+    $delivery = payment_stage($app, 'delivery', $payments, $booking['settled']);
 
-    foreach ($payments as $payment) {
-        if ($payment['status'] === 'verified') {
-            $paid += (float) $payment['amount'];
-        } elseif ($payment['status'] === 'pending') {
-            $waiting += (float) $payment['amount'];
-        }
+    $due     = $booking['amount'] + $delivery['amount'];
+    $paid    = $booking['paid'] + $delivery['paid'];
+    $waiting = $booking['waiting'] + $delivery['waiting'];
+
+    $current = null;
+
+    if (!$booking['settled']) {
+        $current = 'booking';
+    } elseif (!$delivery['settled']) {
+        $current = 'delivery';
     }
 
     return [
-        'due'      => $due,
-        'paid'     => $paid,
-        'waiting'  => $waiting,
-        'balance'  => max($due - $paid, 0),
-        'settled'  => $paid + 0.001 >= $due,
-        'percent'  => $due > 0 ? min(100, (int) round($paid / $due * 100)) : 100,
+        'due'     => $due,
+        'paid'    => $paid,
+        'waiting' => $waiting,
+        'balance' => max($due - $paid, 0),
+        'settled' => $booking['settled'] && $delivery['settled'],
+        'percent' => $due > 0 ? min(100, (int) round($paid / $due * 100)) : 100,
+        'stages'  => ['booking' => $booking, 'delivery' => $delivery],
+        'current' => $current,
     ];
 }
 
@@ -137,21 +249,24 @@ function status_from_payments(array $app, ?array $payments = null): string
 
     $payments = $payments ?? payments_for((int) $app['id']);
     $totals   = payment_totals($app, $payments);
+    $booking  = $totals['stages']['booking'];
+    $delivery = $totals['stages']['delivery'];
 
-    if ($totals['settled']) {
-        return 'complete';
+    if (!$booking['settled']) {
+        return $booking['state'] === 'checking' ? 'booking_review' : 'booking_pending';
     }
 
-    foreach ($payments as $payment) {
-        if ($payment['status'] === 'pending') {
-            return 'payment_review';
-        }
+    if (!$delivery['settled']) {
+        return $delivery['state'] === 'checking' ? 'delivery_review' : 'delivery_pending';
     }
 
-    return 'payment_pending';
+    return 'complete';
 }
 
-/** Writes the derived status back, and stamps completion the first time. */
+/**
+ * Writes the status and the payment timestamps back onto the application after
+ * a receipt is uploaded or decided. Returns the status it settled on.
+ */
 function sync_application_status(int $applicationId): string
 {
     $stmt = db()->prepare('SELECT * FROM applications WHERE id = ?');
@@ -165,23 +280,38 @@ function sync_application_status(int $applicationId): string
     $payments = payments_for($applicationId);
     $next     = status_from_payments($app, $payments);
     $totals   = payment_totals($app, $payments);
+    $now      = date('Y-m-d H:i:s');
 
     if ($next !== $app['status']) {
         db()->prepare('UPDATE applications SET status = ? WHERE id = ?')->execute([$next, $applicationId]);
         log_status_change('application', $applicationId, (string) $app['status'], $next, null);
     }
 
+    /* a stage that is no longer verified loses its timestamp, so a rejected
+       receipt puts the application back where it was */
     db()->prepare(
         'UPDATE applications
-            SET payment_verified_at = ?, completed_at = ?
+            SET booking_paid_at = ?, delivery_paid_at = ?, payment_verified_at = ?, completed_at = ?
           WHERE id = ?'
     )->execute([
-        $totals['paid'] > 0 ? ($app['payment_verified_at'] ?? date('Y-m-d H:i:s')) : null,
-        $next === 'complete' ? ($app['completed_at'] ?? date('Y-m-d H:i:s')) : null,
+        $totals['stages']['booking']['settled'] ? ($app['booking_paid_at'] ?? $now) : null,
+        $totals['stages']['delivery']['settled'] ? ($app['delivery_paid_at'] ?? $now) : null,
+        $totals['paid'] > 0 ? ($app['payment_verified_at'] ?? $now) : null,
+        $next === 'complete' ? ($app['completed_at'] ?? $now) : null,
         $applicationId,
     ]);
 
     return $next;
+}
+
+/**
+ * Has the booking payment been verified? That is the moment the referral
+ * reward is earned and the application enters the raffle — the delivery
+ * payment comes months later and nothing waits for it.
+ */
+function booking_paid(array $app): bool
+{
+    return !empty($app['booking_paid_at']);
 }
 
 /* ---------- settings ---------- */
@@ -279,9 +409,9 @@ function normalise_referral_code(?string $code): string
 }
 
 /**
- * The application a code belongs to, or null. Only an application that has
- * paid in full can refer anyone — that is the point at which the code is
- * handed out, so an unpaid one is not a valid referrer.
+ * The application a code belongs to, or null. The code is handed out once the
+ * booking payment has been verified, so an application that has not got that
+ * far is not a valid referrer.
  */
 function referrer_for_code(string $code): ?array
 {
@@ -289,8 +419,12 @@ function referrer_for_code(string $code): ?array
         return null;
     }
 
-    $stmt = db()->prepare('SELECT * FROM applications WHERE referral_code = ? AND status = ? LIMIT 1');
-    $stmt->execute([$code, 'complete']);
+    $stmt = db()->prepare(
+        'SELECT * FROM applications
+          WHERE referral_code = ? AND booking_paid_at IS NOT NULL AND status <> ?
+          LIMIT 1'
+    );
+    $stmt->execute([$code, 'rejected']);
 
     return $stmt->fetch() ?: null;
 }
@@ -307,7 +441,7 @@ function referral_link(string $code, string $product = 'stove'): string
 function referrals_for(int $applicationId): array
 {
     $stmt = db()->prepare(
-        'SELECT id, reference_code, full_name, product, status, created_at,
+        'SELECT id, reference_code, full_name, product, status, created_at, booking_paid_at,
                 referral_reward, referral_reward_status, referral_reward_sent_at
            FROM applications
           WHERE referred_by_id = ?
@@ -323,7 +457,7 @@ function referral_stats(int $applicationId): array
 {
     $stmt = db()->prepare(
         "SELECT COUNT(*) AS total,
-                SUM(status = 'complete') AS completed,
+                SUM(booking_paid_at IS NOT NULL) AS completed,
                 COALESCE(SUM(CASE WHEN referral_reward_status = 'sent'
                                   THEN referral_reward ELSE 0 END), 0) AS paid,
                 COALESCE(SUM(CASE WHEN referral_reward_status = 'pending'
@@ -343,13 +477,15 @@ function referral_stats(int $applicationId): array
 }
 
 /**
- * A reward is only worth paying once the person who used the code has paid
- * their own fee in full. Until then it sits pending and the office waits.
+ * A reward is only worth paying once the person who used the code has had
+ * their own booking payment verified. Until then it sits pending and the
+ * office waits — the delivery payment months later changes nothing.
  */
 function reward_is_payable(array $referral): bool
 {
     return $referral['referral_reward_status'] === 'pending'
-        && $referral['status'] === 'complete';
+        && !empty($referral['booking_paid_at'])
+        && $referral['status'] !== 'rejected';
 }
 
 /* ---------- blog ----------
@@ -576,16 +712,17 @@ function log_status_change(string $entity, int $id, ?string $old, string $new, ?
 }
 
 /**
- * The status that means "waiting on us" for a given form, and how to say it.
- * Applications have no `new` — a receipt sitting unverified is the queue.
+ * The statuses that mean "waiting on us" for a given form, and how to say it.
+ * Applications have no `new` — a receipt sitting unverified is the queue, and
+ * either of the two payments can be the one waiting.
  */
 function attention_status(string $type): array
 {
     if (type_config($type)['table'] === 'applications') {
-        return ['payment_review', 'waiting on payment verification'];
+        return [['booking_review', 'delivery_review'], 'waiting on payment verification'];
     }
 
-    return ['new', 'waiting to be reviewed'];
+    return [['new'], 'waiting to be reviewed'];
 }
 
 /** Counts per status for one submission type, plus the total. */
@@ -682,7 +819,8 @@ function field_groups(string $type): array
                                          'referral_reward_note' => 'Reward note'],
                 'Consent' => ['declaration_accepted' => 'Declaration accepted',
                               'testimonial_consent' => 'Testimonial consent', 'terms_accepted' => 'Terms accepted'],
-                'Tracking' => ['reference_code' => 'Reference', 'payment_amount' => 'Application fee',
+                'Tracking' => ['reference_code' => 'Reference', 'booking_amount' => 'Booking amount',
+                               'delivery_amount' => 'Delivery amount',
                                'completed_at' => 'Completed on'],
             ],
         ];

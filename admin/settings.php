@@ -206,9 +206,9 @@ require __DIR__ . '/partials/layout-top.php';
       <input id="referral_reward" name="referral_reward" type="number" step="0.01" min="0"
              value="<?= e(number_format($reward, 2, '.', '')) ?>" required>
       <span class="field-hint">
-        Earned each time somebody applies with an existing customer's code. The new applicant still pays the
-        full <?= e(money((float) PAYMENT_AMOUNT)) ?> fee — nothing is discounted. Nothing is transferred
-        automatically either: the office pays it and marks the row sent under
+        Earned once somebody who applied with an existing customer's code has their booking payment
+        verified. The new applicant pays the published price in full — nothing is discounted. Nothing is
+        transferred automatically either: the office pays it and marks the row sent under
         <a href="referrals.php">Referrals</a>. Each referral keeps the figure that applied on the day it came
         in, so changing this never rewrites a payout already owed.
       </span>

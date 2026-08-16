@@ -15,7 +15,8 @@ declare(strict_types=1);
 <?php if ($search === ''): ?>
   <p class="finder__none finder__none--idle">Start typing to find somebody.</p>
 <?php elseif (!$results): ?>
-  <p class="finder__none">Nobody paid in full matches <strong><?= e($search) ?></strong>.</p>
+  <p class="finder__none">No applicant with a verified booking payment matches
+    <strong><?= e($search) ?></strong>.</p>
 <?php else: ?>
   <ul class="finder__results">
     <?php foreach ($results as $person): ?>

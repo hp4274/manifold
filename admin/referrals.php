@@ -34,8 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$referral || $referral['referred_by_id'] === null) {
         $error = 'That referral no longer exists.';
     } elseif ($action === 'sent') {
-        if ($referral['status'] !== 'complete') {
-            $error = 'Wait until ' . $referral['full_name'] . ' has paid in full before sending the reward.';
+        if (empty($referral['booking_paid_at']) || $referral['status'] === 'rejected') {
+            $error = 'Wait until ' . $referral['full_name']
+                . ' has had their booking payment verified before sending the reward.';
         } else {
             db()->prepare(
                 "UPDATE applications
@@ -70,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 /* the referred application on the left, the person who earns on the right */
 $rows = db()->query(
     "SELECT a.id, a.reference_code, a.full_name, a.email, a.product, a.status,
-            a.created_at, a.referred_by_code, a.referral_reward,
+            a.created_at, a.booking_paid_at, a.referred_by_code, a.referral_reward,
             a.referral_reward_status, a.referral_reward_sent_at, a.referral_reward_note,
             r.id AS referrer_id, r.full_name AS referrer_name, r.email AS referrer_email,
             r.mobile_number AS referrer_mobile, r.referral_code AS referrer_code
@@ -85,7 +86,7 @@ foreach ($rows as $row) {
     if ($row['referral_reward_status'] === 'pending') {
         $totals['pending'] += (float) $row['referral_reward'];
 
-        if ($row['status'] === 'complete') {
+        if (!empty($row['booking_paid_at']) && $row['status'] !== 'rejected') {
             $totals['payable']++;
         }
     } elseif ($row['referral_reward_status'] === 'sent') {

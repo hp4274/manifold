@@ -125,20 +125,38 @@ order; the four are just labels). Counts per status are on the dashboard tiles
 and the filter row of each list. Each change is written to `status_log` with the
 admin who made it.
 
-**Applications** are payment-first, and the fee may be paid in instalments.
+**Applications** are payment-first, and every one is exactly two transfers: a
+booking amount with the application, then a delivery amount when the unit is
+handed over. The rest of the price is the applicant's own loan and never passes
+through here. Both figures live in `PAYMENT_PLAN` (`config.php`) and are frozen
+onto the application row at submit time, so a later price change never rewrites
+what an open application owes.
 
-`payment_pending → payment_review → complete`, or `rejected`.
+| Product | Booking | Delivery |
+|---|---|---|
+| Stove (KH-100) | ₹3,500 | ₹16,500 |
+| TukTuk kit (MH-3W) | ₹6,000 | ₹24,000 |
+
+`booking_pending → booking_review → delivery_pending → delivery_review →
+complete`, or `rejected`.
 
 1. The form is submitted. `submit.php` emails the applicant the reference, the
-   QR code and the ₹3,500 fee. The record lands on **payment pending**.
-2. The applicant pays — all at once, or in as many transfers as they like — and
-   uploads a receipt for each. Every upload becomes a row in `payments` and the
-   application moves to **payment received**.
-3. An admin opens **Details** and accepts or rejects each transfer separately.
-   Each accepted transfer emails its own numbered receipt (`MF-2026-00042-R1`,
-   `-R2`, …) showing the amount, the running total and the balance left.
-4. When verified payments cover the fee, the application flips to **complete**
-   on its own — nobody has to mark it.
+   QR code and the booking amount. The record lands on **booking payment
+   pending**.
+2. The applicant pays the booking amount and uploads the proof. The upload
+   becomes a row in `payments` with `stage = 'booking'` and the application
+   moves to **booking receipt — verify**.
+3. An admin opens **Details** and accepts or rejects it. Accepting emails a
+   numbered receipt (`MF-2026-00042-R1`) and moves the application to **delivery
+   payment pending**; the delivery upload only opens for the applicant at that
+   point. Rejecting puts the booking payment back to due, with the reason
+   emailed and the proof deleted.
+4. The delivery payment repeats the same two steps with `stage = 'delivery'`.
+   When both are verified the application flips to **complete** on its own.
+
+A verified booking payment — not completion — is what earns the referral reward
+and enters the applicant in the raffle; `booking_paid_at` on the application row
+is the flag both read.
 
 The application's status is always derived from its payments
 (`status_from_payments()` / `sync_application_status()` in `lib.php`), so it can

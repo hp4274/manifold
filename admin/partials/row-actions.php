@@ -22,7 +22,7 @@ $actions = ($isApplication || $isSettled) ? [] : [
 ?>
 <div class="row-actions">
   <?php /* chasing an unpaid application is a one-click job, so it lives on the row */ ?>
-  <?php if ($isApplication && $row['status'] === 'payment_pending'): ?>
+  <?php if ($isApplication && in_array($row['status'], ['booking_pending', 'delivery_pending'], true)): ?>
     <form method="post" action="payment.php"
           data-confirm="Email a payment reminder to <?= e($row['email']) ?>?">
       <?= csrf_field() ?>

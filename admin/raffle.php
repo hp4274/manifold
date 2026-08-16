@@ -189,7 +189,7 @@ require __DIR__ . '/partials/layout-top.php';
         <?= count($winners) ?> of <?= $places ?> <?= $places === 1 ? 'place' : 'places' ?> filled.
         Hold the draw however you like and record the winners below — until
         <?= e(format_datetime($nextDraw['reveal_at'])) ?> the list is yours alone, and after it the website
-        shows it. <?= (int) $eligible ?> applicants have paid in full and can be entered.
+        shows it. <?= (int) $eligible ?> applicants have a verified booking payment and can be entered.
       </p>
     </div>
   </div>
@@ -218,7 +218,8 @@ require __DIR__ . '/partials/layout-top.php';
       </form>
 
       <p class="finder__hint">
-        Only applicants who have paid in full are listed — that is who the promotion is open to.
+        Only applicants whose booking payment has been verified are listed — that is who the promotion
+        is open to.
         Part of a name is enough, and a mobile number can be typed with spaces, dashes or a country code.
       </p>
 

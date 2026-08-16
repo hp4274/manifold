@@ -190,7 +190,9 @@ function build_receipt_pdf(array $app, array $payment, array $totals): string
         ['Payment reference', (string) ($payment['reference'] ?: 'Not supplied')],
         ['Received on',       format_datetime($payment['uploaded_at'])],
         ['Verified on',       format_datetime($payment['decided_at'] ?? date('Y-m-d H:i:s'))],
-        ['Application fee',   money((float) $totals['due'])],
+        [payment_stage_label((string) ($payment['stage'] ?? 'booking')),
+                              money((float) stage_amount($app, (string) ($payment['stage'] ?? 'booking')))],
+        ['Total price payable', money((float) $totals['due'])],
         ['Paid to date',      money((float) $totals['paid'])],
         ['Balance',           $settled ? 'Nil - paid in full' : money((float) $totals['balance'])],
     ];

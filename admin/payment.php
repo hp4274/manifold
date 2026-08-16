@@ -2,12 +2,13 @@
 /**
  * Payment decisions. POST only, from the Details drawer.
  *
- * An applicant may pay the fee in instalments, so decisions are made per
- * transfer and the application's own status is recalculated afterwards.
+ * Every application is two transfers — booking and delivery — so decisions
+ * are made per transfer and the application's own status is recalculated
+ * afterwards.
  *
  *   action=accept   verify one transfer → its own receipt is emailed
  *   action=reject   that transfer is no good → applicant told why
- *   action=remind   nudge whoever still owes a balance
+ *   action=remind   nudge whoever still owes the payment that is due
  */
 
 declare(strict_types=1);
@@ -118,7 +119,12 @@ switch ($action) {
 
         if ($totals['settled']) {
             http_response_code(409);
-            exit('This application is paid in full.');
+            exit('Both payments on this application are verified.');
+        }
+
+        if ($totals['stages'][$totals['current']]['state'] === 'checking') {
+            http_response_code(409);
+            exit('There is a receipt waiting to be checked — verify or reject it first.');
         }
 
         if (send_payment_reminder_email($app, $totals)) {

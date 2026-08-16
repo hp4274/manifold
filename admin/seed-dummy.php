@@ -54,7 +54,7 @@ function dummy_people(): array
             'existing_fuel' => 'LPG', 'units_required' => 1, 'intended_usage' => 'Personal',
             'expected_daily_usage' => '3–4 hours', 'water_source' => 'Municipal Water',
             'monthly_gas_consumption' => '1 cylinder (14.2 kg)', 'monthly_electric_consumption' => '210 units',
-            'carbon_interest' => 'High', 'payment_method' => 'Full Payment',
+            'carbon_interest' => 'High', 'payment_method' => 'Installments',
             'financing_option' => '', 'bank_name' => 'Indian Bank',
             'referral_source' => 'Social Media', 'days_ago' => 46,
         ],
@@ -86,7 +86,7 @@ function dummy_people(): array
             'existing_fuel' => 'Piped Natural Gas', 'units_required' => 1, 'intended_usage' => 'Personal',
             'expected_daily_usage' => '2–3 hours', 'water_source' => 'Well Water',
             'monthly_gas_consumption' => '18 SCM piped gas', 'monthly_electric_consumption' => '185 units',
-            'carbon_interest' => 'High', 'payment_method' => 'Full Payment',
+            'carbon_interest' => 'High', 'payment_method' => 'Installments',
             'financing_option' => '', 'bank_name' => 'Federal Bank',
             'referral_source' => 'Website', 'days_ago' => 37,
         ],
@@ -134,7 +134,7 @@ function dummy_people(): array
             'existing_fuel' => 'Auto Engine', 'units_required' => 1, 'intended_usage' => 'Commercial',
             'expected_daily_usage' => '9–10 hours', 'water_source' => 'Borewell',
             'monthly_gas_consumption' => '₹5,400 of CNG', 'monthly_electric_consumption' => '140 units',
-            'carbon_interest' => 'Low', 'payment_method' => 'Full Payment',
+            'carbon_interest' => 'Low', 'payment_method' => 'Installments',
             'financing_option' => '', 'bank_name' => 'Punjab National Bank',
             'referral_source' => 'Advertisement', 'days_ago' => 24,
         ],
@@ -150,7 +150,7 @@ function dummy_people(): array
             'existing_fuel' => 'Induction', 'units_required' => 1, 'intended_usage' => 'Personal',
             'expected_daily_usage' => '1–2 hours', 'water_source' => 'Municipal Water',
             'monthly_gas_consumption' => 'None — all electric', 'monthly_electric_consumption' => '260 units',
-            'carbon_interest' => 'High', 'payment_method' => 'Full Payment',
+            'carbon_interest' => 'High', 'payment_method' => 'Installments',
             'financing_option' => '', 'bank_name' => 'ICICI Bank',
             'referral_source' => 'Social Media', 'days_ago' => 19,
         ],
@@ -182,7 +182,7 @@ function dummy_people(): array
             'existing_fuel' => 'Piped Natural Gas', 'units_required' => 3, 'intended_usage' => 'Institutional',
             'expected_daily_usage' => '6–7 hours', 'water_source' => 'Municipal Water',
             'monthly_gas_consumption' => '46 SCM piped gas', 'monthly_electric_consumption' => '780 units',
-            'carbon_interest' => 'High', 'payment_method' => 'Full Payment',
+            'carbon_interest' => 'High', 'payment_method' => 'Installments',
             'financing_option' => '', 'bank_name' => 'Canara Bank',
             'referral_source' => 'Website', 'days_ago' => 9,
         ],
@@ -198,7 +198,7 @@ function dummy_people(): array
             'existing_fuel' => 'Petrol', 'units_required' => 1, 'intended_usage' => 'Personal',
             'expected_daily_usage' => '7–8 hours', 'water_source' => 'Municipal Water',
             'monthly_gas_consumption' => '₹7,100 of petrol', 'monthly_electric_consumption' => '175 units',
-            'carbon_interest' => 'Medium', 'payment_method' => 'Full Payment',
+            'carbon_interest' => 'Medium', 'payment_method' => 'Installments',
             'financing_option' => '', 'bank_name' => 'Punjab & Sind Bank',
             'referral_source' => 'Friend / Family', 'days_ago' => 5,
         ],
@@ -345,7 +345,7 @@ function dummy_expand(array $person, int $index): array
             : ['₹5,800 of CNG', '₹7,400 of petrol', '₹11,200 of diesel', '₹19,500 of CNG across two autos'],
         'monthly_electric_consumption' => ['135 units', '180 units', '230 units', '310 units', '460 units'],
         'carbon_interest' => ['High', 'Medium', 'High', 'Low'],
-        'payment_method' => ['Full Payment', 'Full Payment', 'Installments', 'Lease-to-Own'],
+        'payment_method' => ['Installments', 'Lease-to-Own', 'Installments', 'Lease-to-Own'],
         'bank_name' => ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Bank of Baroda', 'Kotak Mahindra Bank',
                         'Union Bank of India', 'Canara Bank', 'IDFC First Bank'],
         'referral_source' => ['Social Media', 'Advertisement', 'Friend / Family', 'Distributor',
@@ -364,7 +364,6 @@ function dummy_expand(array $person, int $index): array
 
     /* only the two financed methods carry a plan */
     $person['financing_option'] = $person['financing_option'] ?? [
-        'Full Payment' => '',
         'Installments' => ['Three monthly instalments', 'Six monthly instalments', 'Nine monthly instalments'][$index % 3],
         'Lease-to-Own' => ['Twelve month lease', 'Eighteen month lease'][$index % 2],
     ][$person['payment_method']];
@@ -641,7 +640,7 @@ foreach ($people as $person) {
 
     $columns = [
         'product'                      => $person['product'],
-        'status'                       => 'payment_pending',
+        'status'                       => 'booking_pending',
         'referral_code'                => make_referral_code(),
         'full_name'                    => $person['full_name'],
         'date_of_birth'                => $person['date_of_birth'],
@@ -683,7 +682,9 @@ foreach ($people as $person) {
         'declaration_accepted'         => 1,
         'testimonial_consent'          => 1,
         'terms_accepted'               => 1,
-        'payment_amount'               => PAYMENT_AMOUNT,
+        'payment_amount'               => payment_plan($person['product'])['booking'],
+        'booking_amount'               => payment_plan($person['product'])['booking'],
+        'delivery_amount'              => payment_plan($person['product'])['delivery'],
         'admin_note'                   => 'Test record added by admin/seed-dummy.php.',
         'ip_address'                   => dummy_ip(),
         'created_at'                   => $when,
@@ -700,7 +701,9 @@ foreach ($people as $person) {
     db()->prepare('UPDATE applications SET reference_code = ? WHERE id = ?')
         ->execute([make_reference_code($id), $id]);
 
-    /* paid in full, verified the next day — the office recorded the transfer */
+    /* the booking payment, verified the next day — the office recorded the
+       transfer. The delivery payment is left for the tester to walk through in
+       the portal, which is the half of the flow worth exercising by hand. */
     $app = db()->prepare('SELECT * FROM applications WHERE id = ?');
     $app->execute([$id]);
     $row = $app->fetch();
@@ -708,11 +711,12 @@ foreach ($people as $person) {
     $paidAt = date('Y-m-d H:i:s', strtotime($when . ' +1 day'));
 
     db()->prepare(
-        'INSERT INTO payments (application_id, amount, reference, status, receipt_no, uploaded_at, decided_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO payments (application_id, stage, amount, reference, status, receipt_no, uploaded_at, decided_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     )->execute([
         $id,
-        PAYMENT_AMOUNT,
+        'booking',
+        stage_amount($row, 'booking'),
         'DUMMY-UPI-' . str_pad((string) $id, 4, '0', STR_PAD_LEFT),
         'verified',
         next_receipt_no($row),

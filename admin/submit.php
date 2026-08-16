@@ -235,7 +235,13 @@ try {
         $columns['referred_by_id']         = $referrer ? (int) $referrer['id'] : null;
         $columns['referral_reward']        = $reward;
         $columns['referral_reward_status'] = $referrer ? 'pending' : 'none';
-        $columns['payment_amount']         = (float) PAYMENT_AMOUNT;
+        /* the price list is frozen onto the row, so a later change to the
+           published price never rewrites what this application owes */
+        $plan = payment_plan($form);
+
+        $columns['booking_amount']  = (float) $plan['booking'];
+        $columns['delivery_amount'] = (float) $plan['delivery'];
+        $columns['payment_amount']  = (float) $plan['booking'];
 
         /* their own code, theirs for good */
         $columns['referral_code'] = make_referral_code();
@@ -259,10 +265,11 @@ try {
         $columns['reference_code'] = $ref;
         send_payment_email($columns);
 
-        $payable = (float) $columns['payment_amount'];
+        $payable = (float) $columns['booking_amount'];
 
-        respond(true, 'Application received. We have emailed you the payment details — pay '
-            . money($payable) . ' and upload the receipt to reserve your place.'
+        respond(true, 'Application received. We have emailed you the payment details — pay the '
+            . money($payable) . ' booking amount and upload the receipt to reserve your place. '
+            . 'The ' . money((float) $columns['delivery_amount']) . ' delivery payment follows later.'
             . ($referrer ? ' Your referral code has been recorded.' : ''));
     }
 

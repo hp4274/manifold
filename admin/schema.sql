@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
 CREATE TABLE IF NOT EXISTS `applications` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `product` enum('stove','tuktuk') NOT NULL,
-  `status` enum('payment_pending','payment_review','complete','rejected') NOT NULL DEFAULT 'payment_pending',
+  `status` enum('booking_pending','booking_review','delivery_pending','delivery_review','complete','rejected')
+      NOT NULL DEFAULT 'booking_pending',
   `reference_code` varchar(20) NOT NULL DEFAULT '',
   `referral_code` varchar(20) NOT NULL DEFAULT '',
   `referred_by_code` varchar(20) DEFAULT NULL,
@@ -105,6 +106,10 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `testimonial_consent` tinyint(1) NOT NULL DEFAULT 0,
   `terms_accepted` tinyint(1) NOT NULL DEFAULT 0,
   `payment_amount` decimal(10,2) NOT NULL DEFAULT 3500.00,
+  `booking_amount` decimal(10,2) NOT NULL DEFAULT 3500.00,
+  `delivery_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `booking_paid_at` datetime DEFAULT NULL,
+  `delivery_paid_at` datetime DEFAULT NULL,
   `payment_reference` varchar(120) DEFAULT NULL,
   `payment_proof_path` varchar(255) DEFAULT NULL,
   `payment_uploaded_at` datetime DEFAULT NULL,
@@ -127,18 +132,20 @@ CREATE TABLE IF NOT EXISTS `applications` (
   KEY `ix_app_email` (`email`),
   KEY `ix_app_referred_by` (`referred_by_id`),
   KEY `ix_app_reward_status` (`referral_reward_status`),
+  KEY `ix_app_booking_paid` (`booking_paid_at`),
   KEY `fk_app_reward_admin` (`referral_reward_by`),
   CONSTRAINT `fk_app_referrer` FOREIGN KEY (`referred_by_id`) REFERENCES `applications` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_reward_admin` FOREIGN KEY (`referral_reward_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- One row per transfer, so the fee can be paid in instalments and
--- each verified payment gets its own receipt.
+-- One row per transfer. Every application has two of them — the booking
+-- payment and the delivery payment — and each verified one gets a receipt.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `payments` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `application_id` int(10) unsigned NOT NULL,
+  `stage` enum('booking','delivery') NOT NULL DEFAULT 'booking',
   `amount` decimal(10,2) NOT NULL,
   `reference` varchar(120) DEFAULT NULL,
   `proof_path` varchar(255) DEFAULT NULL,
@@ -150,6 +157,7 @@ CREATE TABLE IF NOT EXISTS `payments` (
   `decided_by` int(10) unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `ix_pay_app` (`application_id`,`status`),
+  KEY `ix_pay_stage` (`application_id`,`stage`,`status`),
   KEY `fk_pay_admin` (`decided_by`),
   CONSTRAINT `fk_pay_admin` FOREIGN KEY (`decided_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_pay_app` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE

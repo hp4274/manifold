@@ -34,7 +34,8 @@ foreach ($applications as $application) {
         $name = (string) $application['full_name'];
     }
 
-    if ($application['status'] === 'complete' && !empty($application['referral_code'])) {
+    if (!empty($application['booking_paid_at']) && $application['status'] !== 'rejected'
+        && !empty($application['referral_code'])) {
         $canRefer = true;
     }
 }

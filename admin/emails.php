@@ -34,24 +34,29 @@ function email_button(string $url, string $label): string
 }
 
 /**
- * Sent the moment an application is submitted: what it costs, the QR code to
- * pay with, and the link to upload the receipt.
+ * Sent the moment an application is submitted: the booking amount, the QR code
+ * to pay it with, and the link to upload the receipt. The delivery payment is
+ * named here too, so nobody is surprised by it later.
  */
 function send_payment_email(array $app): bool
 {
-    $product = product_label((string) $app['product']);
-    $portal  = base_url() . '/portal/index.php';
-    $amount  = money((float) ($app['payment_amount'] ?? PAYMENT_AMOUNT));
-    $qrFile  = qr_file();
-    $hasQr   = $qrFile !== null;
+    $product  = product_label((string) $app['product']);
+    $portal   = base_url() . '/portal/index.php';
+    $amount   = money(stage_amount($app, 'booking'));
+    $delivery = money(stage_amount($app, 'delivery'));
+    $qrFile   = qr_file();
+    $hasQr    = $qrFile !== null;
 
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($app['full_name']) . ',</p>'
         . '<p style="margin:0 0 14px;">We have your application for the <strong style="color:#0f2c4d;">'
         . e($product) . '</strong>. Your reference is <strong style="color:#0f2c4d;">'
         . e($app['reference_code']) . '</strong>.</p>'
-        . '<p style="margin:0 0 20px;">To reserve your place, pay the application fee of '
+        . '<p style="margin:0 0 20px;">To reserve your place, pay the booking amount of '
         . '<strong style="color:#0f2c4d;">' . e($amount) . '</strong> and upload the receipt. '
-        . 'We check every payment by hand and confirm within two working days.</p>';
+        . 'We check every payment by hand and confirm within two working days.</p>'
+        . '<p style="margin:0 0 20px;">There are two payments in all: this booking amount now, and '
+        . '<strong style="color:#0f2c4d;">' . e($delivery) . '</strong> when your '
+        . e($product) . ' is delivered. Both come off the price and both are confirmed by our team.</p>';
 
     $referred = ($app['referral_reward_status'] ?? 'none') === 'pending';
 
@@ -59,7 +64,8 @@ function send_payment_email(array $app): bool
         $inner .= '<p style="margin:0 0 20px;padding:12px 18px;border-radius:12px;background:#eefaf4;'
             . 'border:1px solid #cdeee0;font-size:15px;color:#0f2c4d;">'
             . 'Referral code <strong>' . e((string) $app['referred_by_code']) . '</strong> recorded. '
-            . 'Your fee is unchanged — the reward goes to whoever gave you the code, once you have paid.</p>';
+            . 'What you pay is unchanged — the reward goes to whoever gave you the code, '
+            . 'once your booking payment is verified.</p>';
     } elseif (!empty($app['referred_by_code'])) {
         $inner .= '<p style="margin:0 0 20px;padding:12px 18px;border-radius:12px;background:#fff6ed;'
             . 'border:1px solid #f4ddc4;font-size:15px;color:#0f2c4d;">'
@@ -67,7 +73,8 @@ function send_payment_email(array $app): bool
             . '</strong>. Reply to this email with the correct one and we will credit the right person.</p>';
     }
 
-    $inner .= '<p style="margin:0 0 10px;font-weight:700;color:#0f2c4d;">1. Pay ' . e($amount) . '</p>';
+    $inner .= '<p style="margin:0 0 10px;font-weight:700;color:#0f2c4d;">1. Pay the booking amount, '
+        . e($amount) . '</p>';
 
     if ($hasQr) {
         $inner .= '<p style="margin:0 0 8px;text-align:center;">'
@@ -86,31 +93,33 @@ function send_payment_email(array $app): bool
 
     return send_mail(
         $app['email'],
-        'Application received — pay ' . $amount . ' to reserve your place (' . $app['reference_code'] . ')',
+        'Application received — pay the ' . $amount . ' booking amount to reserve your place ('
+            . $app['reference_code'] . ')',
         email_wrap('Application received', $inner),
         'payment',
         $hasQr ? $qrFile : null
     );
 }
 
-/** Nudge for an application that is still waiting on payment. */
+/** Nudge for an application that is still waiting on the payment now due. */
 function send_payment_reminder_email(array $app, ?array $totals = null): bool
 {
     $product = product_label((string) $app['product']);
     $portal  = base_url() . '/portal/index.php';
     $totals  = $totals ?? payment_totals($app);
-    $amount  = money((float) $totals['balance']);
+    $stage   = $totals['stages'][$totals['current'] ?? 'booking'];
+    $amount  = money((float) $stage['balance']);
     $qrFile  = qr_file();
 
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($app['full_name']) . ',</p>'
         . '<p style="margin:0 0 14px;">Your application for the <strong style="color:#0f2c4d;">' . e($product)
-        . '</strong> (' . e($app['reference_code']) . ') still has '
-        . '<strong style="color:#0f2c4d;">' . e($amount) . '</strong> outstanding'
+        . '</strong> (' . e($app['reference_code']) . ') is waiting on the '
+        . '<strong style="color:#0f2c4d;">' . e(strtolower($stage['label'])) . ' of ' . e($amount) . '</strong>'
         . ($totals['paid'] > 0
             ? ' — you have paid ' . e(money((float) $totals['paid'])) . ' of ' . e(money((float) $totals['due'])) . ' so far'
             : '')
         . '.</p>'
-        . '<p style="margin:0 0 8px;">You can pay it in one go or in instalments; upload a receipt for each transfer. '
+        . '<p style="margin:0 0 8px;">Pay the full amount in one transfer and upload the receipt in the portal. '
         . 'If you have already paid, upload the receipt and ignore this note.</p>';
 
     if ($qrFile !== null) {
@@ -124,7 +133,8 @@ function send_payment_reminder_email(array $app, ?array $totals = null): bool
 
     return send_mail(
         $app['email'],
-        'Reminder: ' . $amount . ' still due for ' . $app['reference_code'],
+        'Reminder: the ' . strtolower($stage['label']) . ' of ' . $amount . ' is due for '
+            . $app['reference_code'],
         email_wrap('A quick reminder about your payment', $inner),
         'reminder',
         $qrFile
@@ -132,22 +142,24 @@ function send_payment_reminder_email(array $app, ?array $totals = null): bool
 }
 
 /**
- * A receipt for one verified transfer. An applicant paying in instalments gets
- * one of these per payment, each with its own receipt number and the balance
- * still outstanding.
+ * A receipt for one verified transfer — one for the booking payment, one for
+ * the delivery payment, each with its own receipt number.
  */
 function send_receipt_email(array $app, array $payment, array $totals): bool
 {
-    $product = product_label((string) $app['product']);
-    $amount  = money((float) $payment['amount']);
-    $paidOn  = format_datetime($payment['decided_at'] ?? date('Y-m-d H:i:s'));
-    $settled = $totals['balance'] <= 0.001;
+    $product   = product_label((string) $app['product']);
+    $amount    = money((float) $payment['amount']);
+    $paidOn    = format_datetime($payment['decided_at'] ?? date('Y-m-d H:i:s'));
+    $settled   = $totals['balance'] <= 0.001;
+    $stageKey  = (string) ($payment['stage'] ?? 'booking');
+    $stageName = payment_stage_label($stageKey);
 
     $rows = [
         'Receipt number'    => (string) $payment['receipt_no'],
         'Application'       => (string) $app['reference_code'],
         'Applicant'         => (string) $app['full_name'],
         'Product'           => $product,
+        'Payment'           => $stageName,
         'Amount received'   => $amount,
         'Payment reference' => (string) ($payment['reference'] ?: '—'),
         'Verified on'       => $paidOn,
@@ -168,22 +180,31 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
 
     $table .= '</table>';
 
-    $lead = $settled
-        ? '<p style="margin:0 0 20px;">This payment clears the balance — your application is now paid in full '
-            . 'and accepted. Keep this email as your receipt.</p>'
-        : '<p style="margin:0 0 20px;">Thank you. We have credited this payment against your application. '
-            . '<strong style="color:#0f2c4d;">' . e(money((float) $totals['balance'])) . '</strong> is still outstanding — '
-            . 'pay it whenever you are ready and upload the next receipt.</p>';
+    if ($settled) {
+        $lead = '<p style="margin:0 0 20px;">This clears the last of it — both payments on your application '
+            . 'are verified. Keep this email as your receipt.</p>';
+    } elseif ($stageKey === 'booking') {
+        $lead = '<p style="margin:0 0 20px;">Thank you. Your booking payment is verified and your '
+            . e($product) . ' is reserved. The '
+            . '<strong style="color:#0f2c4d;">' . e(money((float) $totals['stages']['delivery']['amount']))
+            . '</strong> delivery payment falls due when the unit is ready — we will email you then, and you '
+            . 'can upload that receipt in the portal.</p>';
+    } else {
+        $lead = '<p style="margin:0 0 20px;">Thank you. We have credited this payment against your application. '
+            . '<strong style="color:#0f2c4d;">' . e(money((float) $totals['balance'])) . '</strong> is still '
+            . 'outstanding — upload the receipt once it is paid.</p>';
+    }
 
     $closing = $settled
         ? '<p style="margin:0 0 14px;">Our team will call you to agree an installation date.</p>'
         : '';
 
-    /* paid in full is when the referral code becomes worth something, so this
-       is where it is handed over */
+    /* the verified booking payment is when the referral code becomes worth
+       something, so that is where it is handed over */
+    $handOver = $stageKey === 'booking' || $settled;
     $referral = '';
 
-    if ($settled && !empty($app['referral_code'])) {
+    if ($handOver && !empty($app['referral_code'])) {
         $code   = (string) $app['referral_code'];
         $earns  = money(referral_reward());
 
@@ -193,8 +214,9 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
             . '<p style="margin:0 0 12px;font-size:22px;font-weight:700;letter-spacing:.12em;color:#0e8f96;">'
             . e($code) . '</p>'
             . '<p style="margin:0 0 12px;font-size:15px;color:#5b7186;">Every person who applies with this code '
-            . 'and pays their fee earns you <strong style="color:#0f2c4d;">' . e($earns) . '</strong>, which we '
-            . 'transfer to you once we have checked it. Send them a link with the code already filled in:</p>'
+            . 'and has their booking payment verified earns you <strong style="color:#0f2c4d;">' . e($earns)
+            . '</strong>, which we transfer to you once we have checked it. Send them a link with the code '
+            . 'already filled in:</p>'
             . '<p style="margin:0 0 6px;font-size:15px;"><a href="' . e(referral_link($code, 'stove'))
             . '" style="color:#0e8f96;">Apply for a stove &rarr;</a></p>'
             . '<p style="margin:0;font-size:15px;"><a href="' . e(referral_link($code, 'tuktuk'))
@@ -207,7 +229,10 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
         . $table
         . $referral
         . $closing
-        . email_button(base_url() . '/portal/index.php', $settled ? 'View my application' : 'Pay the balance');
+        . email_button(
+            base_url() . '/portal/index.php',
+            $settled ? 'View my application' : 'View my application and payments'
+        );
 
     /* the office keeps a copy of every receipt it issues */
     $copies = array_filter(array_map('trim', explode(',', ADMIN_NOTIFY_EMAIL)));
@@ -223,7 +248,7 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
     return send_mail(
         $app['email'],
         'Receipt ' . $payment['receipt_no'] . ' — ' . $amount . ' received'
-            . ($settled ? ' (paid in full)' : ', ' . money((float) $totals['balance']) . ' to go'),
+            . ($settled ? ' (both payments verified)' : ', ' . money((float) $totals['balance']) . ' to go'),
         email_wrap($settled ? 'Payment complete — your receipt' : 'Payment received — your receipt', $inner),
         'receipt',
         null,
@@ -266,13 +291,16 @@ function send_referral_paid_email(array $referrer, array $referral): bool
 /** Sent when an admin rejects the uploaded proof of payment. */
 function send_payment_rejected_email(array $app, string $reason = '', ?array $payment = null, ?array $totals = null): bool
 {
-    $portal = base_url() . '/portal/index.php';
-    $amount = money((float) ($payment['amount'] ?? $app['payment_amount'] ?? PAYMENT_AMOUNT));
+    $portal    = base_url() . '/portal/index.php';
+    $stageKey  = (string) ($payment['stage'] ?? 'booking');
+    $stageName = payment_stage_label($stageKey);
+    $amount    = money((float) ($payment['amount'] ?? stage_amount($app, $stageKey)));
 
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($app['full_name']) . ',</p>'
-        . '<p style="margin:0 0 14px;">We could not verify the payment receipt you uploaded for '
-        . '<strong style="color:#0f2c4d;">' . e($app['reference_code']) . '</strong>, so the application is back to '
-        . '<strong style="color:#0f2c4d;">payment pending</strong>.</p>';
+        . '<p style="margin:0 0 14px;">We could not verify the receipt you uploaded for the '
+        . '<strong style="color:#0f2c4d;">' . e(strtolower($stageName)) . '</strong> on '
+        . '<strong style="color:#0f2c4d;">' . e($app['reference_code']) . '</strong>, so that payment is '
+        . 'showing as due again.</p>';
 
     if ($reason !== '') {
         $inner .= '<p style="margin:0 0 14px;padding:14px 18px;border-radius:12px;background:#fdf2f4;color:#a8324a;">'
@@ -284,7 +312,7 @@ function send_payment_rejected_email(array $app, string $reason = '', ?array $pa
         . 'send us the bank reference and we will trace it.</p>';
 
     if ($totals !== null) {
-        $inner .= '<p style="margin:0 0 8px;">Outstanding on this application: <strong style="color:#0f2c4d;">'
+        $inner .= '<p style="margin:0 0 8px;">Still to pay on this application: <strong style="color:#0f2c4d;">'
             . e(money((float) $totals['balance'])) . '</strong>.</p>';
     }
 
@@ -320,7 +348,7 @@ function send_payment_received_admin(array $app): bool
 
     $product = product_label((string) $app['product']);
     $link    = base_url() . '/admin/list.php?type=' . rawurlencode((string) $app['product'])
-        . '&status=payment_pending#row-' . (int) $app['id'];
+        . '&status=' . rawurlencode((string) $app['status']) . '#row-' . (int) $app['id'];
 
     $rows = [
         'Reference'  => (string) $app['reference_code'],
@@ -328,6 +356,7 @@ function send_payment_received_admin(array $app): bool
         'Applicant'  => (string) $app['full_name'],
         'Email'      => (string) $app['email'],
         'Phone'      => (string) ($app['mobile_number'] ?? ''),
+        'Payment'    => status_label((string) $app['status']),
         'Payment ref' => (string) ($app['payment_reference'] ?? '—'),
     ];
 

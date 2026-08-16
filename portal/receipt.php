@@ -14,7 +14,8 @@ $email     = require_applicant();
 $paymentId = (int) ($_GET['payment'] ?? 0);
 
 $stmt = db()->prepare(
-    'SELECT p.*, a.reference_code, a.full_name, a.email, a.mobile_number, a.product, a.payment_amount, a.status AS app_status,
+    'SELECT p.*, a.reference_code, a.full_name, a.email, a.mobile_number, a.product,
+            a.payment_amount, a.booking_amount, a.delivery_amount, a.status AS app_status,
             a.referral_code, a.referred_by_code, a.referral_reward
        FROM payments p
        JOIN applications a ON a.id = p.application_id
@@ -35,7 +36,9 @@ $app = [
     'email'          => $row['email'],
     'mobile_number'  => $row['mobile_number'],
     'product'        => $row['product'],
-    'payment_amount' => $row['payment_amount'],
+    'payment_amount'  => $row['payment_amount'],
+    'booking_amount'  => $row['booking_amount'],
+    'delivery_amount' => $row['delivery_amount'],
     'referral_code'  => $row['referral_code'],
     'referred_by_code' => $row['referred_by_code'],
     'referral_reward' => $row['referral_reward'],

@@ -1031,4 +1031,133 @@
   }
   setActive();
   window.addEventListener('scroll', setActive, { passive: true });
+
+  /* ---------- Dates the pages count towards ----------
+     Two of them: 1 January 2027, when the first units ship, and 15 September
+     2026, the last day to apply for loan finance. Both are quoted in Ahmedabad
+     time, and both counts are written here rather than into the HTML so a page
+     can never serve a number that went stale on the server. */
+  var IST_OFFSET = 5.5 * 60 * 60 * 1000;
+
+  /* whole days from today to that date, negative once it has passed */
+  function daysUntil(year, month, day) {
+    var istNow   = new Date(Date.now() + IST_OFFSET);
+    var istToday = Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate());
+
+    return Math.round((Date.UTC(year, month, day) - istToday) / 86400000);
+  }
+
+  var deliveryCount = document.querySelector('[data-delivery-count]');
+
+  if (deliveryCount) {
+    var toShipping = daysUntil(2027, 0, 1);
+
+    if (toShipping > 0) {
+      var number = deliveryCount.querySelector('[data-delivery-days]');
+      var label  = deliveryCount.querySelector('.delivery__count-label');
+
+      number.textContent = toShipping.toLocaleString('en-IN');
+
+      if (label && toShipping === 1) {
+        label.textContent = 'day until the first units ship';
+      }
+
+      deliveryCount.hidden = false;
+    }
+  }
+
+  /* ---------- Loan offer: first 1,00,000 customers, closes 15 Sep 2026 ----------
+     The pricing sections carry the terms in the markup and only swap to the
+     closed wording here. The home page bar is the opposite: hidden until this
+     confirms the offer is still open and the visitor has not dismissed it. */
+  var offers = document.querySelectorAll('[data-offer]');
+
+  if (offers.length) {
+    var toClosing = daysUntil(2026, 8, 15);   /* the 15th itself still counts */
+    var isOpen    = toClosing >= 0;
+    var dismissed = false;
+
+    try {
+      dismissed = window.localStorage.getItem('manifold.loanOffer.hidden') === '2026-09-15';
+    } catch (e) {
+      /* private browsing: treat it as never dismissed */
+    }
+
+    Array.prototype.forEach.call(offers, function (offer) {
+      var left   = offer.querySelector('[data-offer-left]');
+      var open   = offer.querySelector('[data-offer-open]');
+      var closed = offer.querySelector('[data-offer-closed]');
+
+      if (isOpen && left) {
+        var prefix = left.getAttribute('data-offer-prefix') || '';
+
+        left.textContent = prefix + (toClosing === 0
+          ? 'last day'
+          : toClosing.toLocaleString('en-IN') + ' days left');
+        left.hidden = false;
+      }
+
+      if (open)   { open.hidden   = !isOpen; }
+      if (closed) { closed.hidden = isOpen; }
+
+      /* the bar is a promotion, not a term: it goes once the offer closes */
+      if (offer.classList.contains('offer-flash')) {
+        offer.hidden = !isOpen || dismissed;
+      }
+    });
+
+    var dismiss = document.querySelector('[data-offer-dismiss]');
+
+    if (dismiss) {
+      dismiss.addEventListener('click', function () {
+        var bar = dismiss.closest('.offer-flash');
+
+        if (bar) bar.hidden = true;
+
+        try {
+          window.localStorage.setItem('manifold.loanOffer.hidden', '2026-09-15');
+        } catch (e) {
+          /* nothing to remember it with — the bar is back next visit */
+        }
+      });
+    }
+  }
+
+  /* ---------- Consent gate ----------
+     Any form carrying required checkboxes (declaration, terms, contact
+     consent) keeps its submit button locked until every one of them is
+     ticked. JS-only, so the form still submits normally without scripts. */
+  function lockUntilAccepted(form) {
+    var boxes = form.querySelectorAll('input[type="checkbox"][required]');
+    if (!boxes.length) return;
+
+    var buttons = form.querySelectorAll(
+      'button[type="submit"], input[type="submit"], button:not([type])'
+    );
+    if (!buttons.length) return;
+
+    function sync() {
+      var ready = Array.prototype.every.call(boxes, function (box) {
+        return box.checked;
+      });
+
+      Array.prototype.forEach.call(buttons, function (button) {
+        button.disabled = !ready;
+        button.classList.toggle('is-locked', !ready);
+        if (ready) {
+          button.removeAttribute('title');
+        } else {
+          button.setAttribute('title', 'Accept the required terms to continue');
+        }
+      });
+    }
+
+    Array.prototype.forEach.call(boxes, function (box) {
+      box.addEventListener('change', sync);
+    });
+
+    sync();
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('form'), lockUntilAccepted);
 })();
