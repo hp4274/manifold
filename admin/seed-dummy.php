@@ -824,7 +824,7 @@ echo $subsAdded, ' added, ', $subsSkipped, " skipped.\n";
 echo "\nEligible for the raffle now: ", (int) db()->query(
     "SELECT COUNT(*) FROM applications a
   LEFT JOIN raffle_winners w ON w.application_id = a.id
-      WHERE a.status = 'complete' AND w.id IS NULL"
+      WHERE a.booking_paid_at IS NOT NULL AND a.status <> 'rejected' AND w.id IS NULL"
 )->fetchColumn(), "\n";
 echo "Waiting on the office: ", (int) db()->query(
     "SELECT COUNT(*) FROM contact_messages WHERE status = 'new'"

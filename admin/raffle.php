@@ -76,7 +76,6 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($winners < 1 || $winners > 50) {
             $error = 'A draw has between 1 and 50 winners.';
         } else {
-            save_setting('raffle_enabled', isset($_POST['enabled']) ? '1' : '0');
             save_setting('raffle_first_draw', $first);
             save_setting('raffle_cycle_days', (string) $cycle);
             save_setting('raffle_winner_count', (string) $winners);
@@ -88,6 +87,23 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'Saved. There is nothing to count down to until a first draw date is set.'
                 : 'Saved. The next reveal is ' . date('j M Y, g:i a', strtotime($first)) . '.');
         }
+    } elseif ($action === 'toggle') {
+        /* the switch is a live control, not part of the calendar form: it takes
+           effect on the spot, because a switch that needs a Save button pressed
+           somewhere else reads as broken */
+        $on = isset($_POST['enabled']);
+
+        save_setting('raffle_enabled', $on ? '1' : '0');
+        raffle_config(true);
+
+        if ($on) {
+            raffle_sync();
+        }
+
+        raffle_done($on
+            ? 'Raffle switched on. The button is back on the website.'
+            : 'Raffle switched off. The button is gone from the website and the popup stops offering it.',
+            $keep);
     } elseif ($action === 'add') {
         $problem = raffle_add_winner(
             (int) ($_POST['draw_id'] ?? 0),
@@ -262,21 +278,31 @@ require __DIR__ . '/partials/layout-top.php';
 <div class="panel panel--open" id="raffle-setup">
   <div class="panel__head">
     <h2>Raffle setup</h2>
-    <span class="eyebrow">The calendar the reveal dates come from</span>
+    <span class="eyebrow">The calendar every reveal date is worked out from</span>
   </div>
 
-  <form method="post" class="panel__body">
+  <form method="post" class="panel__switch" data-autosubmit>
     <?= csrf_field() ?>
-    <input type="hidden" name="action" value="setup">
+    <input type="hidden" name="action" value="toggle">
+    <input type="hidden" name="q" value="<?= e($search) ?>">
 
     <label class="toggle">
       <input type="checkbox" name="enabled" value="1" <?= $config['enabled'] ? 'checked' : '' ?>>
       <span class="toggle__track" aria-hidden="true"><span class="toggle__knob"></span></span>
       <span class="toggle__text">
-        Run the raffle
-        <span>Switched off, the button disappears from the website and the popup stops offering it.</span>
+        Run the raffle &mdash; <?= $config['enabled'] ? 'on' : 'off' ?>
+        <span>Applies the moment you flip it. Switched off, the button disappears from the website
+          and the popup stops offering it.</span>
       </span>
     </label>
+
+    <?php /* without JS the switch still needs something to press */ ?>
+    <button type="submit" class="btn btn--ghost panel__switch-apply">Apply</button>
+  </form>
+
+  <form method="post" class="panel__body">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="setup">
 
     <div class="field-row">
       <div class="field">
@@ -293,14 +319,21 @@ require __DIR__ . '/partials/layout-top.php';
         <label for="cycle_days">Days between draws</label>
         <input id="cycle_days" name="cycle_days" type="number" min="1" max="730"
                value="<?= (int) $config['cycle_days'] ?>" required>
-        <span class="field-hint">90 for the promotion as advertised.</span>
+        <span class="field-hint">
+          90 for the promotion as advertised. Counted from the day after a draw, so a draw on
+          22 August starts counting on the 23rd and the next one lands on 21 November.
+        </span>
       </div>
 
       <div class="field">
         <label for="winner_count">Winners per draw</label>
         <input id="winner_count" name="winner_count" type="number" min="1" max="50"
                value="<?= (int) $config['winner_count'] ?>" required>
-        <span class="field-hint">How many places there are to fill in by hand.</span>
+        <span class="field-hint">
+          How many places there are to fill in by hand. Changing it applies to the draw being
+          counted down to as well, not only to future ones &mdash; unless that draw already has
+          more winners written down, in which case it keeps the places it has.
+        </span>
       </div>
     </div>
 

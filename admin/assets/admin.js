@@ -17,6 +17,26 @@
     }
   });
 
+  /* ---------- a switch that applies itself ----------
+     A checkbox inside a form only takes effect when something is submitted,
+     which makes a toggle feel broken. Any form marked data-autosubmit posts as
+     soon as one of its controls changes; the submit button inside it stays for
+     anyone without JavaScript. */
+  document.addEventListener('change', function (e) {
+    var form = e.target.closest('form[data-autosubmit]');
+
+    if (!form) return;
+
+    var apply = form.querySelector('button[type="submit"]');
+
+    if (apply) {
+      apply.disabled = true;
+      apply.textContent = 'Saving...';
+    }
+
+    form.submit();
+  });
+
   /* ---------- detail slide-over ----------
      The record's markup is rendered once, hidden, below the table; opening a
      row copies it into the drawer so only one copy is ever interactive. */

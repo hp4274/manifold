@@ -57,6 +57,19 @@ function raffle_running(): bool
     return $config['enabled'] && $config['first_draw'] !== '';
 }
 
+/**
+ * Days from one reveal to the next.
+ *
+ * The cycle is the gap the promotion promises *between* draws, and it is
+ * counted from the day after a draw: a draw on 22 August with a 90-day cycle
+ * starts counting on the 23rd, which lands the next one on 21 November. So the
+ * step from date to date is one day more than the cycle.
+ */
+function raffle_step_days(): int
+{
+    return raffle_config()['cycle_days'] + 1;
+}
+
 /** When draw number $no is revealed. Draw 1 is the date the office set. */
 function raffle_reveal_at(int $no): ?DateTimeImmutable
 {
@@ -76,7 +89,7 @@ function raffle_reveal_at(int $no): ?DateTimeImmutable
         return $first;
     }
 
-    return $first->add(new DateInterval('P' . (($no - 1) * $config['cycle_days']) . 'D'));
+    return $first->add(new DateInterval('P' . (($no - 1) * raffle_step_days()) . 'D'));
 }
 
 /**
@@ -100,9 +113,9 @@ function raffle_next_no(): ?int
 
     /* whole cycles gone by since the first reveal */
     $elapsed = $now->getTimestamp() - $first->getTimestamp();
-    $cycle   = $config['cycle_days'] * 86400;
+    $step    = raffle_step_days() * 86400;
 
-    return min(RAFFLE_MAX_CYCLES, intdiv($elapsed, $cycle) + 2);
+    return min(RAFFLE_MAX_CYCLES, intdiv($elapsed, $step) + 2);
 }
 
 /** How much cash a winner is offered instead of the coin: [low, high]. */
@@ -182,18 +195,64 @@ function raffle_sync(): void
         }
     }
 
-    /* a reveal date the office moved leaves old rows on the wrong day. One
-       already public keeps the date it was published on. */
-    $rows = db()->query('SELECT id, draw_no, reveal_at FROM raffle_draws ORDER BY draw_no')->fetchAll();
+    /* Settings changed after a draw row was created have to reach that row, or
+       editing "winners per draw" would only ever affect draws that do not exist
+       yet. A draw that has gone public with winners in it is history and keeps
+       everything it was published with; anything else follows the settings.
+
+       The exception is a draw that already has more winners written down than
+       the new number allows: it keeps the places it has, because the people in
+       them have been told. */
+    $rows = db()->query(
+        'SELECT d.id, d.draw_no, d.reveal_at, d.winner_count, d.gold_grams, d.gold_rate,
+                (SELECT COUNT(*) FROM raffle_winners w WHERE w.draw_id = d.id) AS taken
+           FROM raffle_draws d
+          ORDER BY d.draw_no'
+    )->fetchAll();
 
     foreach ($rows as $row) {
+        /* A draw is history once its date has passed *and* it has winners in it:
+           that list is on the website and the people in it have been told, so
+           nothing may move it. A date that slipped by with nobody in it was
+           never published — the popup only ever lists draws that have winners —
+           so it keeps following the calendar. Otherwise moving a first draw
+           date that had already gone by left the countdown stuck on "now". */
+        if (strtotime((string) $row['reveal_at']) <= time() && (int) $row['taken'] > 0) {
+            continue;
+        }
+
+        $changes = [];
+        $values  = [];
+
         $should = raffle_reveal_at((int) $row['draw_no']);
 
         if ($should !== null
-            && strtotime((string) $row['reveal_at']) > time()
             && $should->format('Y-m-d H:i:s') !== date('Y-m-d H:i:s', strtotime((string) $row['reveal_at']))) {
-            db()->prepare('UPDATE raffle_draws SET reveal_at = ? WHERE id = ?')
-                ->execute([$should->format('Y-m-d H:i:s'), (int) $row['id']]);
+            $changes[] = 'reveal_at = ?';
+            $values[]  = $should->format('Y-m-d H:i:s');
+        }
+
+        $places = max($config['winner_count'], (int) $row['taken']);
+
+        if ($places !== (int) $row['winner_count']) {
+            $changes[] = 'winner_count = ?';
+            $values[]  = $places;
+        }
+
+        if (abs((float) $row['gold_grams'] - $config['gold_grams']) > 0.0001) {
+            $changes[] = 'gold_grams = ?';
+            $values[]  = $config['gold_grams'];
+        }
+
+        if (abs((float) $row['gold_rate'] - $config['gold_rate']) > 0.0001) {
+            $changes[] = 'gold_rate = ?';
+            $values[]  = $config['gold_rate'];
+        }
+
+        if ($changes) {
+            $values[] = (int) $row['id'];
+            db()->prepare('UPDATE raffle_draws SET ' . implode(', ', $changes) . ' WHERE id = ?')
+                ->execute($values);
         }
     }
 }

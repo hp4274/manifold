@@ -1400,6 +1400,21 @@ body.has-modal{overflow:hidden}
 }
 
 /* on / off, for a setting that switches a whole feature */
+/* the raffle switch sits above the calendar form, in a band of its own */
+.panel__switch{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  flex-wrap:wrap;
+  padding:20px 26px;
+  border-bottom:1px solid var(--line);
+  background:var(--tint);
+}
+.panel__switch .toggle{margin-bottom:0}
+/* JavaScript submits the form on change, so the button is the fallback only */
+.panel__switch-apply{flex:none}
+
 .toggle{
   display:flex;
   align-items:center;

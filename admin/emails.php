@@ -17,7 +17,33 @@ function email_wrap(string $heading, string $inner): string
         . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f9fc;padding:28px 12px;">'
         . '<tr><td align="center">'
         . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #e3ebf2;border-radius:18px;overflow:hidden;font-family:Figtree,Segoe UI,Helvetica,Arial,sans-serif;">'
-        . '<tr><td style="background:#061a28;padding:22px 30px;color:#ffffff;font-size:16px;font-weight:700;letter-spacing:.02em;">Manifold Clean Energy</td></tr>'
+        /* The masthead is the H2 mark as a PNG beside the name set as live text.
+           The wordmark file is WebP, which Outlook cannot decode at all and
+           which some proxies mangle — one arrived at a reader as coloured
+           static — so nothing here depends on an image the client may not
+           understand. Text also stays sharp on every screen. */
+        . '<tr><td style="padding:24px 30px 18px;background:#ffffff;">'
+        . '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+        . '<td width="52" style="padding-right:14px;vertical-align:middle;">'
+        . '<a href="' . e(SITE_PUBLIC_URL) . '" style="text-decoration:none;">'
+        . '<img src="' . e(EMAIL_LOGO_URL) . '" alt="" width="46" height="49" '
+        . 'style="display:block;border:0;outline:none;width:46px;height:49px;">'
+        . '</a></td>'
+        . '<td style="vertical-align:middle;font-family:Figtree,Segoe UI,Helvetica,Arial,sans-serif;">'
+        . '<a href="' . e(SITE_PUBLIC_URL) . '" style="text-decoration:none;">'
+        . '<span style="display:block;font-size:18px;font-weight:700;letter-spacing:.01em;color:#0f2c4d;">'
+        . 'Manifold Clean Energy</span>'
+        . '<span style="display:block;padding-top:3px;font-size:12px;font-weight:400;color:#8499ac;">'
+        . 'Hydrogen on demand. Made in India.</span>'
+        . '</a></td>'
+        . '</tr></table></td></tr>'
+        /* the brand rule from the website, in the only way email can draw it */
+        . '<tr><td style="padding:0;font-size:0;line-height:0;">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+        . '<td width="34%" height="4" style="height:4px;line-height:4px;font-size:4px;background:#4bb453;">&nbsp;</td>'
+        . '<td width="33%" height="4" style="height:4px;line-height:4px;font-size:4px;background:#2ab98d;">&nbsp;</td>'
+        . '<td width="33%" height="4" style="height:4px;line-height:4px;font-size:4px;background:#17b0a6;">&nbsp;</td>'
+        . '</tr></table></td></tr>'
         . '<tr><td style="padding:32px 30px 8px;"><h1 style="margin:0 0 16px;font-size:24px;line-height:1.35;color:#0f2c4d;">' . $heading . '</h1></td></tr>'
         . '<tr><td style="padding:0 30px 30px;font-size:16px;line-height:1.7;color:#5b7186;">' . $inner . '</td></tr>'
         . '<tr><td style="padding:20px 30px;background:#f6f9fc;border-top:1px solid #e3ebf2;font-size:13px;line-height:1.6;color:#8499ac;">'

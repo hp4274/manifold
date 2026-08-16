@@ -8,6 +8,48 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
 
+/* --------------------------------------------------------------------------
+ * Defaults for a config.php that predates the code around it.
+ *
+ * config.php is the one file kept per server, so a deploy that copies
+ * everything else leaves the site running new code against an old config. That
+ * has taken the forms down once already — an undefined constant is a fatal, and
+ * a fatal is a 500 with no explanation. Anything the code needs but a config
+ * may not carry gets a sane value here instead of bringing the page down.
+ * config.php still wins wherever it defines them.
+ * ----------------------------------------------------------------------- */
+
+if (!defined('SITE_PUBLIC_URL')) {
+    define('SITE_PUBLIC_URL', 'https://manifoldcleanenergy.co.in');
+}
+
+if (!defined('EMAIL_LOGO_URL')) {
+    define('EMAIL_LOGO_URL', SITE_PUBLIC_URL . '/assets/images/favicon.png');
+}
+
+if (!defined('ERROR_LOG_DIR')) {
+    define('ERROR_LOG_DIR', __DIR__ . '/logs');
+}
+
+if (!defined('ERROR_LOG_FILE')) {
+    define('ERROR_LOG_FILE', ERROR_LOG_DIR . '/php-error.log');
+}
+
+if (!defined('PAYMENT_PLAN')) {
+    define('PAYMENT_PLAN', [
+        'stove'  => ['booking' => 3500.0, 'delivery' => 16500.0],
+        'tuktuk' => ['booking' => 6000.0, 'delivery' => 24000.0],
+    ]);
+}
+
+if (!function_exists('payment_plan')) {
+    /** The two amounts for one product, booking first. */
+    function payment_plan(string $product): array
+    {
+        return PAYMENT_PLAN[$product] ?? PAYMENT_PLAN['stove'];
+    }
+}
+
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'httponly' => true,

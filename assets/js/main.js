@@ -879,8 +879,8 @@
       wrap.querySelector('.raffle__title').textContent =
         count + ' winners. ' + gramsSaid + ' of pure gold each.';
 
-      lead.textContent = 'Every ' + days + ' days we draw ' + count + ' winners from everybody who has '
-        + 'completed an application and paid in full. The draw is held in front of neutral, independent '
+      lead.textContent = 'Every ' + days + ' days we draw ' + count + ' winners from everybody whose '
+        + 'booking payment has been verified. The draw is held in front of neutral, independent '
         + 'witnesses so anyone can see the selection is fair.';
 
       /* the countdown, or an honest note when no date has been set yet */

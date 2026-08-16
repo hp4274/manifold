@@ -24,6 +24,24 @@ const SITE_TIMEZONE = 'Asia/Kolkata';
 
 date_default_timezone_set(SITE_TIMEZONE);
 
+/**
+ * Where PHP writes its errors.
+ *
+ * Shared hosting often hides the server log, so every warning and uncaught
+ * exception is also written here and read back from admin/error-log.php. The
+ * directory carries an .htaccess that denies web access.
+ */
+const ERROR_LOG_DIR  = __DIR__ . '/logs';
+const ERROR_LOG_FILE = ERROR_LOG_DIR . '/php-error.log';
+
+if (!is_dir(ERROR_LOG_DIR)) {
+    @mkdir(ERROR_LOG_DIR, 0775, true);
+}
+
+ini_set('log_errors', '1');
+ini_set('error_log', ERROR_LOG_FILE);
+ini_set('display_errors', '0');
+
 const UPLOAD_DIR = __DIR__ . '/uploads';
 
 /** Largest accepted upload, in bytes. */
@@ -73,6 +91,16 @@ const ADMIN_NOTIFY_EMAIL = 'info@manifoldcleanenergy.co.in';
 const PUBLIC_BASE_URL = '';
 
 /**
+ * The public site, and the mark the emails show at the top.
+ *
+ * It must be a PNG or a JPEG: the WebP wordmark does not decode in Outlook and
+ * one reader rendered it as coloured static. The company name beside it is live
+ * text in the template, not part of the image.
+ */
+const SITE_PUBLIC_URL = 'https://manifoldcleanenergy.co.in';
+const EMAIL_LOGO_URL  = 'https://manifoldcleanenergy.co.in/assets/images/favicon.png';
+
+/**
  * Payment QR code, relative to the site root. The first of these that exists
  * is used, so the image can live at the root or with the other images.
  */
@@ -98,8 +126,27 @@ function qr_file(): ?string
     return $path === '' ? null : __DIR__ . '/../' . $path;
 }
 
-/** What every application costs, and how it is written. */
+/**
+ * What every application costs, and how it is collected: a booking amount with
+ * the application, then the delivery amount when the unit is handed over. The
+ * rest of the price is the applicant's own loan and never passes through here.
+ *
+ * These figures are copied onto the application row when it is submitted, so a
+ * later price change never rewrites what an open application owes.
+ */
+const PAYMENT_PLAN = [
+    'stove'  => ['booking' => 3500.0,  'delivery' => 16500.0],
+    'tuktuk' => ['booking' => 6000.0,  'delivery' => 24000.0],
+];
+
+/** Fallback booking amount for a row that predates the two-stage plan. */
 const PAYMENT_AMOUNT   = 3500;
+
+/** The two amounts for one product, booking first. */
+function payment_plan(string $product): array
+{
+    return PAYMENT_PLAN[$product] ?? PAYMENT_PLAN['stove'];
+}
 
 /**
  * Paid to a customer each time somebody applies with their referral code. The

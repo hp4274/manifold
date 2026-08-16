@@ -2,8 +2,12 @@
 -- Manifold Clean Energy — the whole database, in one file
 --
 -- Creates the `manifold` database with empty tables, one admin account and the
--- default settings. This is the only SQL file the project keeps: there are no
--- migrations to run in order, so whatever is here is the current structure.
+-- default settings. This is the current structure, for a fresh install.
+--
+-- An existing database is brought forward by the files in admin/migrations/
+-- instead — importing this one would destroy its data. After a deploy, sign in
+-- and open admin/check-schema.php: it names anything the code needs that the
+-- database has not got yet.
 --
 --   WARNING: this DROPS the existing `manifold` database. Everything in it —
 --   applications, payments, receipts, enquiries — is destroyed. Take a backup

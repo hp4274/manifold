@@ -41,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Create the first admin — Manifold</title>
+<link rel="icon" type="image/png" href="<?= SITE_URL ?>/assets/images/favicon.png">
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="<?= SITE_URL ?>/assets/vendor/figtree/figtree.css">
 <link rel="stylesheet" href="<?= asset_url('assets/admin.css') ?>">
