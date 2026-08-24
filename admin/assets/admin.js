@@ -20,20 +20,16 @@
   /* ---------- a switch that applies itself ----------
      A checkbox inside a form only takes effect when something is submitted,
      which makes a toggle feel broken. Any form marked data-autosubmit posts as
-     soon as one of its controls changes; the submit button inside it stays for
-     anyone without JavaScript. */
+     soon as one of its controls changes. There is no button to press here — the
+     one in the markup sits inside a <noscript>, for a browser without this
+     script — so the form dims itself instead, and the page it reloads reports
+     what happened. */
   document.addEventListener('change', function (e) {
     var form = e.target.closest('form[data-autosubmit]');
 
     if (!form) return;
 
-    var apply = form.querySelector('button[type="submit"]');
-
-    if (apply) {
-      apply.disabled = true;
-      apply.textContent = 'Saving...';
-    }
-
+    form.classList.add('is-saving');
     form.submit();
   });
 

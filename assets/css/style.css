@@ -300,6 +300,16 @@ p{margin:0}
 }
 .btn-dark:hover{background:var(--navy-600);transform:translateY(-2px)}
 
+.btn-dark--outline{
+  background:transparent;
+  color:var(--navy-800);
+  border:1px solid rgba(11,31,58,.22);
+}
+.btn-dark--outline:hover{background:rgba(11,31,58,.06);color:var(--navy-800)}
+.btn-dark--outline i{font-size:14px;margin-left:6px;vertical-align:-1px}
+
+.product-card__actions{display:flex;flex-wrap:wrap;gap:12px}
+
 /* --- round icon chips ---
    The glyph is centred with flex and line-height:1. Grid + the inherited 1.7
    line-height left the icon sitting high and left inside its circle. */

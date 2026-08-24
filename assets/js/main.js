@@ -68,7 +68,7 @@
         el.classList.add('is-visible');
         io.unobserve(el);
       });
-    }, { threshold: 0.12, rootMargin: '0px 0px -60px 0px' });
+    }, { threshold: 0.02, rootMargin: '0px 0px -60px 0px' });
 
     revealItems.forEach(function (el) { io.observe(el); });
   } else {

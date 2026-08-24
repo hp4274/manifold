@@ -1412,7 +1412,8 @@ body.has-modal{overflow:hidden}
   background:var(--tint);
 }
 .panel__switch .toggle{margin-bottom:0}
-/* JavaScript submits the form on change, so the button is the fallback only */
+/* the switch posts itself; while it does, it stops taking clicks and fades */
+.panel__switch.is-saving{opacity:.6;pointer-events:none}
 .panel__switch-apply{flex:none}
 
 .toggle{

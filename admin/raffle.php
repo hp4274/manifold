@@ -296,8 +296,8 @@ require __DIR__ . '/partials/layout-top.php';
       </span>
     </label>
 
-    <?php /* without JS the switch still needs something to press */ ?>
-    <button type="submit" class="btn btn--ghost panel__switch-apply">Apply</button>
+    <?php /* the switch posts itself; this is only for a browser with JS off */ ?>
+    <noscript><button type="submit" class="btn btn--ghost panel__switch-apply">Apply</button></noscript>
   </form>
 
   <form method="post" class="panel__body">

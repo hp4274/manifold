@@ -134,7 +134,7 @@ what an open application owes.
 
 | Product | Booking | Delivery |
 |---|---|---|
-| Stove (KH-100) | ₹3,500 | ₹16,500 |
+| Stove (OM-2) | ₹3,500 | ₹16,500 |
 | TukTuk kit (MH-3W) | ₹6,000 | ₹24,000 |
 
 `booking_pending → booking_review → delivery_pending → delivery_review →
