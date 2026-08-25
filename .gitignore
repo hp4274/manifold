@@ -35,6 +35,8 @@ admin/uploads/payments/*
 !admin/uploads/payments/.htaccess
 !admin/uploads/payments/index.html
 !admin/uploads/payments/.gitkeep
-
+graphify-out
+.playwright
+.playwright-mcp
 # Logs & Temporary files
 *.log

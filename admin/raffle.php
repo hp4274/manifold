@@ -225,7 +225,7 @@ require __DIR__ . '/partials/layout-top.php';
           <i class="bi bi-search" aria-hidden="true"></i>
           <input type="search" name="q" value="<?= e($search) ?>" autocomplete="off"
                  aria-controls="raffleResults"
-                 placeholder="Harsh Patel &nbsp;·&nbsp; MF-2026-00031 &nbsp;·&nbsp; 9773444404">
+                 placeholder="Harsh Patel &nbsp;·&nbsp; MF-00000031 &nbsp;·&nbsp; 9773444404">
           <span class="finder__spinner" aria-hidden="true"></span>
         </label>
         <button type="submit" class="btn btn--primary finder__submit">Search</button>

@@ -46,6 +46,42 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
+-- Dealers sell on our behalf and earn a flat commission per unit. They are not
+-- applicants, so they live in their own table. Their code rides the same
+-- `?ref=` link as the customer referral programme — the prefix keeps them
+-- apart: MF…… is a customer's code, MD…… is a dealer's.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `dealers` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `dealer_code` varchar(20) NOT NULL,
+  `full_name` varchar(160) NOT NULL,
+  `company` varchar(160) DEFAULT NULL,
+  `email` varchar(190) DEFAULT NULL,
+  `mobile_number` varchar(30) DEFAULT NULL,
+  `alt_mobile_number` varchar(30) DEFAULT NULL,
+  `address` varchar(255) DEFAULT NULL,
+  `city` varchar(120) DEFAULT NULL,
+  `state` varchar(120) DEFAULT NULL,
+  `pin_code` varchar(20) DEFAULT NULL,
+  `pan_number` varchar(20) DEFAULT NULL,
+  `gst_number` varchar(30) DEFAULT NULL,
+  `bank_name` varchar(120) DEFAULT NULL,
+  `bank_account` varchar(60) DEFAULT NULL,
+  `bank_ifsc` varchar(20) DEFAULT NULL,
+  `upi_id` varchar(120) DEFAULT NULL,
+  `note` text DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_by` int(10) unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_dealer_code` (`dealer_code`),
+  KEY `ix_dealer_active` (`is_active`),
+  KEY `fk_dealer_admin` (`created_by`),
+  CONSTRAINT `fk_dealer_admin` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
 -- Both apply forms. Column names match the `name` attributes on
 -- apply-stove.html / apply-tuktuk.html.
 -- --------------------------------------------------------------------------
@@ -58,6 +94,8 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `referral_code` varchar(20) NOT NULL DEFAULT '',
   `referred_by_code` varchar(20) DEFAULT NULL,
   `referred_by_id` int(10) unsigned DEFAULT NULL,
+  `dealer_id` int(10) unsigned DEFAULT NULL,
+  `dealer_commission` decimal(10,2) NOT NULL DEFAULT 0.00,
   `referral_reward` decimal(10,2) NOT NULL DEFAULT 0.00,
   `referral_reward_status` enum('none','pending','sent','cancelled') NOT NULL DEFAULT 'none',
   `referral_reward_sent_at` datetime DEFAULT NULL,
@@ -135,10 +173,12 @@ CREATE TABLE IF NOT EXISTS `applications` (
   KEY `ix_app_created` (`created_at`),
   KEY `ix_app_email` (`email`),
   KEY `ix_app_referred_by` (`referred_by_id`),
+  KEY `ix_app_dealer` (`dealer_id`),
   KEY `ix_app_reward_status` (`referral_reward_status`),
   KEY `ix_app_booking_paid` (`booking_paid_at`),
   KEY `fk_app_reward_admin` (`referral_reward_by`),
   CONSTRAINT `fk_app_referrer` FOREIGN KEY (`referred_by_id`) REFERENCES `applications` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_app_dealer` FOREIGN KEY (`dealer_id`) REFERENCES `dealers` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_reward_admin` FOREIGN KEY (`referral_reward_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -354,6 +394,26 @@ CREATE TABLE IF NOT EXISTS `raffle_winners` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
+-- One row per transfer the office makes to a dealer. Nothing here points at a
+-- particular application: the amount is free-form and settles against the
+-- running total, so paying for 5 of 10 delivered units leaves the other 5
+-- standing without ticking individual applications off.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `dealer_payouts` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `dealer_id` int(10) unsigned NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `paid_by` int(10) unsigned DEFAULT NULL,
+  `paid_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `ix_payout_dealer` (`dealer_id`),
+  KEY `fk_payout_admin` (`paid_by`),
+  CONSTRAINT `fk_payout_dealer` FOREIGN KEY (`dealer_id`) REFERENCES `dealers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payout_admin` FOREIGN KEY (`paid_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
 -- Values the admin can change from the dashboard without editing config.php.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `settings` (
@@ -369,6 +429,7 @@ CREATE TABLE IF NOT EXISTS `settings` (
 -- prize figures below are changed here or straight in the `settings` table.
 INSERT INTO `settings` (`name`, `value`) VALUES
   ('referral_reward',           '500'),
+  ('dealer_commission',         '500'),
   ('raffle_enabled',            '1'),
   ('raffle_first_draw',         ''),
   ('raffle_cycle_days',         '90'),

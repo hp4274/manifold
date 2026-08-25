@@ -50,7 +50,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['action'] ?? 'reward');
     $id     = (int) ($_POST['id'] ?? 0);
 
-    if ($action === 'reward') {
+    if ($action === 'commission') {
+        $commission = str_replace(',', '', trim((string) ($_POST['dealer_commission'] ?? '')));
+
+        if (!is_numeric($commission) || (float) $commission < 0) {
+            $error = 'The dealer commission has to be a number, zero or more.';
+        } else {
+            save_setting('dealer_commission', number_format((float) $commission, 2, '.', ''));
+            settings_done('Saved. A sale made from now on earns its dealer '
+                . money(dealer_commission()) . '.');
+        }
+    } elseif ($action === 'reward') {
         $reward = str_replace(',', '', trim((string) ($_POST['referral_reward'] ?? '')));
 
         if (!is_numeric($reward) || (float) $reward < 0) {
@@ -132,7 +142,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$reward = referral_reward();
+$reward     = referral_reward();
+$commission = dealer_commission();
 
 if (($_GET['admin'] ?? '') !== '') {
     $stmt = db()->prepare('SELECT * FROM admin_users WHERE id = ?');
@@ -217,6 +228,33 @@ require __DIR__ . '/partials/layout-top.php';
     <button type="submit" class="btn btn--primary">Save</button>
   </form>
 </div>
+
+<div class="panel">
+  <div class="panel__head">
+    <h2>Dealer commission</h2>
+    <span class="eyebrow">Applies to new sales only</span>
+  </div>
+
+  <form method="post" class="panel__body">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="commission">
+
+    <div class="field">
+      <label for="dealer_commission">Commission paid per unit sold</label>
+      <input id="dealer_commission" name="dealer_commission" type="number" step="0.01" min="0"
+             value="<?= e(number_format($commission, 2, '.', '')) ?>" required>
+      <span class="field-hint">
+        Earned once a customer who applied through a dealer's link has their booking payment verified.
+        Nothing is transferred automatically: the office pays it and records the transfer on the dealer's
+        page under <a href="dealers.php">Dealers</a>. Each sale keeps the figure that applied on the day it
+        came in, so changing this never rewrites commission already owed.
+      </span>
+    </div>
+
+    <button type="submit" class="btn btn--primary">Save</button>
+  </form>
+</div>
+
 <div class="panel">
   <div class="panel__head">
     <div class="panel__head-text">

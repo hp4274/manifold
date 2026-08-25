@@ -367,7 +367,7 @@ function build_receipt_pdf(array $app, array $payment, array $totals = []): stri
     /* ---------- the record ---------- */
     $rows = [
         ['Receipt number', (string) $payment['receipt_no'],
-         'Application',    (string) $app['reference_code']],
+         'Booking number', (string) $app['reference_code']],
 
         ['Product',        $app['product'] === 'stove'
                              ? 'Kinetic Hydrogen Cooking Stove'

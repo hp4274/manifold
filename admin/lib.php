@@ -42,6 +42,10 @@ if (!defined('PAYMENT_PLAN')) {
     ]);
 }
 
+if (!defined('DEALER_COMMISSION_DEFAULT')) {
+    define('DEALER_COMMISSION_DEFAULT', 500);
+}
+
 if (!function_exists('payment_plan')) {
     /** The two amounts for one product, booking first. */
     function payment_plan(string $product): array
@@ -530,6 +534,155 @@ function reward_is_payable(array $referral): bool
         && $referral['status'] !== 'rejected';
 }
 
+/* ---------- dealers ----------
+   A dealer sells on our behalf. They are not an applicant, so they live in
+   their own table, but their code travels in the same ?ref= link the customer
+   referral programme uses. The prefix is what keeps the two apart:
+
+     MF……  an existing customer's referral code
+     MD……  a dealer's code
+
+   Nothing a dealer earns is tied to a particular application. Commission is
+   summed across their sales, payouts are summed against it, and what is left
+   is what the office still owes — so paying for 5 of 10 units delivered leaves
+   the other 5 standing without anyone ticking rows off. */
+
+/** What a dealer earns per unit sold. Editable under Settings. */
+function dealer_commission(): float
+{
+    return max(0.0, (float) setting('dealer_commission', (string) DEALER_COMMISSION_DEFAULT));
+}
+
+/** Same alphabet as a referral code, so neither can be misread down a phone line. */
+function make_dealer_code(): string
+{
+    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $check    = db()->prepare('SELECT 1 FROM dealers WHERE dealer_code = ?');
+
+    for ($attempt = 0; $attempt < 20; $attempt++) {
+        $code = 'MD';
+
+        for ($i = 0; $i < 6; $i++) {
+            $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+        }
+
+        $check->execute([$code]);
+
+        if (!$check->fetchColumn()) {
+            return $code;
+        }
+    }
+
+    throw new RuntimeException('Could not allocate a dealer code.');
+}
+
+/** The dealer a quoted code belongs to, or null. A switched-off dealer is not one. */
+function dealer_for_code(string $code): ?array
+{
+    if ($code === '') {
+        return null;
+    }
+
+    $stmt = db()->prepare('SELECT * FROM dealers WHERE dealer_code = ? AND is_active = 1 LIMIT 1');
+    $stmt->execute([$code]);
+
+    return $stmt->fetch() ?: null;
+}
+
+/** One dealer by id, or null. */
+function dealer_by_id(int $id): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM dealers WHERE id = ?');
+    $stmt->execute([$id]);
+
+    return $stmt->fetch() ?: null;
+}
+
+/** Everyone who applied with one dealer's code, newest first. */
+function dealer_clients(int $dealerId): array
+{
+    $stmt = db()->prepare(
+        'SELECT id, reference_code, full_name, email, mobile_number, product, status,
+                created_at, booking_paid_at, delivery_paid_at, completed_at, dealer_commission
+           FROM applications
+          WHERE dealer_id = ?
+          ORDER BY created_at DESC'
+    );
+    $stmt->execute([$dealerId]);
+
+    return $stmt->fetchAll();
+}
+
+/** Every transfer made to one dealer, newest first. */
+function dealer_payouts(int $dealerId): array
+{
+    $stmt = db()->prepare(
+        'SELECT p.*, u.name AS paid_by_name
+           FROM dealer_payouts p
+           LEFT JOIN admin_users u ON u.id = p.paid_by
+          WHERE p.dealer_id = ?
+          ORDER BY p.paid_at DESC, p.id DESC'
+    );
+    $stmt->execute([$dealerId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * What one dealer has sold, earned, been paid and is still owed.
+ *
+ * Commission is only counted once the customer's booking payment has been
+ * verified — the same bar a referral reward has to clear. A sale that was
+ * rejected, or has not paid yet, is in `sales` but not in `earned`.
+ */
+function dealer_totals(int $dealerId): array
+{
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) AS sales,
+                COALESCE(SUM(booking_paid_at IS NOT NULL AND status <> 'rejected'), 0) AS confirmed,
+                COALESCE(SUM(CASE WHEN booking_paid_at IS NOT NULL AND status <> 'rejected'
+                                  THEN dealer_commission ELSE 0 END), 0) AS earned
+           FROM applications
+          WHERE dealer_id = ?"
+    );
+    $stmt->execute([$dealerId]);
+    $row = $stmt->fetch() ?: [];
+
+    $paidStmt = db()->prepare('SELECT COALESCE(SUM(amount), 0) FROM dealer_payouts WHERE dealer_id = ?');
+    $paidStmt->execute([$dealerId]);
+
+    $earned = (float) ($row['earned'] ?? 0);
+    $paid   = (float) $paidStmt->fetchColumn();
+
+    return [
+        'sales'     => (int) ($row['sales'] ?? 0),
+        'confirmed' => (int) ($row['confirmed'] ?? 0),
+        'earned'    => $earned,
+        'paid'      => $paid,
+        /* an overpayment reads as nothing owed rather than a negative figure */
+        'remaining' => max(0.0, $earned - $paid),
+    ];
+}
+
+/** The reading view of one dealer, in the same shape field_groups() returns. */
+function dealer_field_groups(): array
+{
+    return [
+        'Dealer' => [
+            'Who they are' => ['full_name' => 'Full name', 'company' => 'Company',
+                               'email' => 'Email', 'mobile_number' => 'Mobile',
+                               'alt_mobile_number' => 'Alternative mobile'],
+            'Address' => ['address' => 'Address', 'city' => 'City', 'state' => 'State',
+                          'pin_code' => 'Pin code'],
+            'Tax' => ['pan_number' => 'PAN', 'gst_number' => 'GST'],
+            'Where the money goes' => ['bank_name' => 'Bank', 'bank_account' => 'Account number',
+                                       'bank_ifsc' => 'IFSC', 'upi_id' => 'UPI ID'],
+            'Tracking' => ['dealer_code' => 'Dealer code', 'note' => 'Note',
+                           'created_at' => 'Added on'],
+        ],
+    ];
+}
+
 /* ---------- blog ----------
    Four states. `scheduled` is `published` with a date in the future: the post
    goes live on its own when that moment passes, so nobody has to come back and
@@ -623,7 +776,7 @@ function blog_read_minutes(string $body): int
     return max(1, (int) round(str_word_count(strip_tags($body)) / 200));
 }
 
-/** MF-2026-00042-R2 — the receipt number for one verified transfer. */
+/** MF-00000042-R2 — the receipt number for one verified transfer. */
 function next_receipt_no(array $app): string
 {
     $stmt = db()->prepare('SELECT COUNT(*) FROM payments WHERE application_id = ? AND status = ?');
@@ -632,10 +785,16 @@ function next_receipt_no(array $app): string
     return $app['reference_code'] . '-R' . ((int) $stmt->fetchColumn() + 1);
 }
 
-/** MF-2026-00042 style reference, unique per application. */
+/**
+ * MF-00000042 style booking number, unique per application.
+ *
+ * Two letters, then the application's own id padded to eight digits. The year
+ * used to sit in the middle; it was dropped so every booking number is the same
+ * length and reads back over the phone without explanation.
+ */
 function make_reference_code(int $id): string
 {
-    return 'MF-' . date('Y') . '-' . str_pad((string) $id, 5, '0', STR_PAD_LEFT);
+    return 'MF-' . str_pad((string) $id, 8, '0', STR_PAD_LEFT);
 }
 
 /** The four submission types shown in the sidebar. */
@@ -853,6 +1012,7 @@ function field_groups(string $type): array
                 'Payment preference' => ['payment_method' => 'Preferred method',
                                          'financing_option' => 'Financing option', 'bank_name' => 'Bank'],
                 'Referral' => ['referral_source' => 'Heard about us via', 'referral_other' => 'Referral (other)'],
+                'Dealer' => ['dealer_commission' => 'Dealer commission'],
                 'Referral programme' => ['referral_code' => 'Their own code',
                                          'referred_by_code' => 'Code they quoted',
                                          'referral_reward' => 'Reward owed to referrer',
@@ -861,7 +1021,7 @@ function field_groups(string $type): array
                                          'referral_reward_note' => 'Reward note'],
                 'Consent' => ['declaration_accepted' => 'Declaration accepted',
                               'testimonial_consent' => 'Testimonial consent', 'terms_accepted' => 'Terms accepted'],
-                'Tracking' => ['reference_code' => 'Reference', 'booking_amount' => 'Booking amount',
+                'Tracking' => ['reference_code' => 'Booking number', 'booking_amount' => 'Booking amount',
                                'delivery_amount' => 'Delivery amount',
                                'completed_at' => 'Completed on'],
             ],
@@ -907,7 +1067,7 @@ function render_value(string $key, $value): string
             . '&amp;dir=payments" target="_blank" rel="noopener">Open receipt <i class="bi bi-box-arrow-up-right"></i></a>';
     }
 
-    if ($key === 'referral_reward') {
+    if ($key === 'referral_reward' || $key === 'dealer_commission') {
         return ((float) $value) > 0 ? e(money((float) $value)) : '—';
     }
 
@@ -916,7 +1076,7 @@ function render_value(string $key, $value): string
     }
 
     if (in_array($key, ['payment_uploaded_at', 'payment_verified_at', 'confirmed_at', 'completed_at',
-                        'referral_reward_sent_at'], true)) {
+                        'referral_reward_sent_at', 'created_at'], true)) {
         return e(format_datetime((string) $value));
     }
 

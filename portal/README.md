@@ -21,7 +21,7 @@ If that ever matters, rate-limit by IP on this form.
 
 ## What the applicant sees
 
-A card per application showing the reference (`MF-2026-00042`), the product, and
+A card per application showing the booking number (`MF-00000042`), the product, and
 a five-stage timeline:
 
 | Stage | Meaning |

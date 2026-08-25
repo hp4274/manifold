@@ -133,7 +133,7 @@ require __DIR__ . '/partials/head.php';
 
         <header class="portal-app__head">
           <div>
-            <p class="portal-app__ref"><?= e($app['reference_code']) ?></p>
+            <p class="portal-app__ref"><span>Booking number</span> <?= e($app['reference_code']) ?></p>
             <h2><?= e(product_name((string) $app['product'])) ?></h2>
             <p class="portal-app__meta">Applied <?= e(format_datetime($app['created_at'])) ?></p>
           </div>
@@ -178,7 +178,7 @@ require __DIR__ . '/partials/head.php';
             <p class="portal-plan__lead">
               <strong><?= e(money((float) $totals['paid'])) ?></strong> paid of
               <?= e(money((float) $totals['due'])) ?> — two transfers, each verified by our team.
-              Quote <strong><?= e($app['reference_code']) ?></strong> on every payment.
+              Quote booking number <strong><?= e($app['reference_code']) ?></strong> on every payment.
             </p>
 
             <?php foreach (PAYMENT_STAGES as $stageKey): ?>
@@ -276,7 +276,7 @@ require __DIR__ . '/partials/head.php';
                       <?php endif; ?>
                       <p class="portal-pay__note">
                         Transfer exactly <strong><?= e(money((float) $stage['amount'])) ?></strong>,
-                        then upload that receipt. Quote
+                        then upload that receipt. Quote booking number
                         <strong><?= e($app['reference_code']) ?></strong> on the payment.
                       </p>
                     </div>

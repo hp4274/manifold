@@ -54,22 +54,12 @@ declare(strict_types=1);
       <a href="../contact.html">Contact</a>
 
       <div class="nav-actions">
-        <a href="../contact.html" class="btn-pill btn-pill--white nav-cta-mobile">Get In touch</a>
-        <?php if (applicant()): ?>
-          <a href="logout.php" class="btn-pill btn-pill--ghost nav-login-mobile">Sign out</a>
-        <?php else: ?>
-          <a href="index.php" class="btn-pill btn-pill--ghost nav-login-mobile">Login</a>
-        <?php endif; ?>
+        <?php require __DIR__ . '/nav-account.php'; ?>
       </div>
     </nav>
 
     <div class="nav-actions nav-actions--desktop">
-      <a href="../contact.html" class="btn-pill btn-pill--white nav-cta">Get In touch</a>
-      <?php if (applicant()): ?>
-        <a href="logout.php" class="btn-pill btn-pill--ghost nav-login">Sign out</a>
-      <?php else: ?>
-        <a href="index.php" class="btn-pill btn-pill--ghost nav-login">Login</a>
-      <?php endif; ?>
+      <?php require __DIR__ . '/nav-account.php'; ?>
     </div>
 
     <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mainNav">

@@ -170,6 +170,10 @@
   if (referralField && sharedCode) {
     referralField.value = sharedCode.slice(0, 20);
     referralField.classList.add('is-prefilled');
+    /* the code came from somebody's own link — the sale belongs to them, so it
+       is shown but not editable. Typing a different one means opening the plain
+       apply page. readOnly, not disabled: a disabled field is never submitted. */
+    referralField.readOnly = true;
   }
 
   if (referralField) {

@@ -13,6 +13,8 @@ declare(strict_types=1);
         <p class="drawer__meta" id="drawerMeta"></p>
       </div>
       <div class="drawer__head-right">
+        <?php /* applications carry a booking number; enquiries and signups do not */ ?>
+        <span class="drawer__code" id="drawerCode" hidden></span>
         <span class="pill" id="drawerStatus"></span>
         <button type="button" class="drawer__close" data-drawer-close aria-label="Close details">
           <i class="bi bi-x-lg" aria-hidden="true"></i>

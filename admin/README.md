@@ -147,7 +147,7 @@ complete`, or `rejected`.
    becomes a row in `payments` with `stage = 'booking'` and the application
    moves to **booking receipt — verify**.
 3. An admin opens **Details** and accepts or rejects it. Accepting emails a
-   numbered receipt (`MF-2026-00042-R1`) and moves the application to **delivery
+   numbered receipt (`MF-00000042-R1`) and moves the application to **delivery
    payment pending**; the delivery upload only opens for the applicant at that
    point. Rejecting puts the booking payment back to due, with the reason
    emailed and the proof deleted.
@@ -286,7 +286,7 @@ One search box, three ways in:
 | Type | Matches |
 |---|---|
 | Part of a name | `patel`, `meera` |
-| A reference code | `MF-2026-00031` |
+| A reference code | `MF-00000031` |
 | A mobile number | `9773444404`, `+91 97734 44404`, `977-344-4404` |
 
 Results appear as you type — a quarter of a second of quiet and the list refreshes,

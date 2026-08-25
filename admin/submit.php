@@ -235,6 +235,15 @@ try {
         $columns['referred_by_id']         = $referrer ? (int) $referrer['id'] : null;
         $columns['referral_reward']        = $reward;
         $columns['referral_reward_status'] = $referrer ? 'pending' : 'none';
+
+        /* The same box takes a dealer's code. A code is one or the other, never
+           both — the MF/MD prefix decides — so a dealer sale books commission
+           instead of a customer reward. The rate is frozen here for the same
+           reason the reward is: raising it later must not rewrite this sale. */
+        $dealer = $referrer || $quoted === '' ? null : dealer_for_code($quoted);
+
+        $columns['dealer_id']         = $dealer ? (int) $dealer['id'] : null;
+        $columns['dealer_commission'] = $dealer ? dealer_commission() : 0.0;
         /* the price list is frozen onto the row, so a later change to the
            published price never rewrites what this application owes */
         $plan = payment_plan($form);
@@ -246,7 +255,7 @@ try {
         /* their own code, theirs for good */
         $columns['referral_code'] = make_referral_code();
 
-        /* placeholder, replaced with MF-YYYY-00000 once the row has an id */
+        /* placeholder, replaced with the MF-00000000 booking number once the row has an id */
         $columns['reference_code'] = 'tmp-' . bin2hex(random_bytes(6));
 
         $names        = array_keys($columns);
@@ -256,7 +265,7 @@ try {
         db()->prepare($sql)->execute(array_values($columns));
 
         $id  = (int) db()->lastInsertId();
-        $ref = 'MF-' . date('Y') . '-' . str_pad((string) $id, 5, '0', STR_PAD_LEFT);
+        $ref = make_reference_code($id);
 
         db()->prepare('UPDATE applications SET reference_code = ? WHERE id = ?')->execute([$ref, $id]);
 

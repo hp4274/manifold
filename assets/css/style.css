@@ -480,7 +480,9 @@ p{margin:0}
   gap:26px;
 }
 
-.brand{display:flex;align-items:center;gap:10px;color:#fff;flex-shrink:0}
+/* brand and actions take an equal share of what the links do not, so the links
+   land on the middle of the header rather than beside the buttons on the right */
+.brand{display:flex;align-items:center;gap:10px;color:#fff;flex:1 1 0;min-width:0}
 .brand-logo{height:46px;width:auto;flex-shrink:0}
 .brand-mark{width:26px;height:26px;color:var(--accent);display:block}
 .brand-mark svg{width:100%;height:100%}
@@ -496,9 +498,9 @@ p{margin:0}
 .brand--dark .brand-text em{color:var(--ink)}
 
 .main-nav{
-  margin-left:auto;
   display:flex;
   align-items:center;
+  justify-content:center;
   gap:30px;
 }
 .main-nav a{
@@ -589,7 +591,7 @@ p{margin:0}
   align-items:center;
   gap:12px;
 }
-.nav-actions--desktop{margin-left:16px}
+.nav-actions--desktop{flex:1 1 0;justify-content:flex-end}
 /* the ghost pill lives on a light bar inside the header only */
 .site-header .btn-pill--ghost{
   color:var(--nav-ink);
@@ -4219,6 +4221,8 @@ label.upload{
   color:var(--accent-deep);
   margin-bottom:6px;
 }
+/* the words "Booking number" sit back so the number itself carries the line */
+.portal-app__ref span{color:var(--muted);font-weight:600}
 .portal-app h2{
   font-size:var(--t-title);
   font-weight:700;
@@ -4901,6 +4905,7 @@ label.upload{
     left:0;right:0;
     flex-direction:column;
     align-items:flex-start;
+    justify-content:flex-start;
     gap:2px;
     margin:0;
     padding:18px 28px 26px;

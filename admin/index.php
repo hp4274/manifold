@@ -155,9 +155,11 @@ require __DIR__ . '/partials/layout-top.php';
                 ?>
               </td>
               <td class="td-actions">
+                <?php $rowRecord = $full[type_config($row['type'])['table']][(int) $row['id']] ?? []; ?>
                 <button type="button" class="row-toggle"
                         data-drawer="detail-<?= e($row['type']) ?>-<?= (int) $row['id'] ?>"
                         data-title="<?= e($row['title']) ?>"
+                        data-code="<?= e((string) ($rowRecord['reference_code'] ?? '')) ?>"
                         data-meta="<?= e($types[$row['type']]['label']) ?> · received <?= e(format_datetime($row['created_at'])) ?>"
                         data-status="<?= e($row['status']) ?>"
                         data-status-label="<?= e(status_short($row['status'])) ?>">

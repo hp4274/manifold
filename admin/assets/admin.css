@@ -254,6 +254,21 @@ ul{list-style:none;margin:0;padding:0}
 .alert--error{background:rgba(201,69,92,.1);color:var(--danger);border:1px solid rgba(201,69,92,.25)}
 .alert--ok{background:rgba(75,180,83,.12);color:#26743a;border:1px solid rgba(75,180,83,.3)}
 
+/* a confirmation has said its piece after a few seconds; JS adds this and the
+   banner takes its own margin with it so the page does not jump */
+.alert.is-going{
+  opacity:0;
+  margin-bottom:0;
+  padding-block:0;
+  max-height:0;
+  overflow:hidden;
+  border-width:0;
+  transition:opacity .3s ease,max-height .3s ease,margin .3s ease,padding .3s ease;
+}
+@media (prefers-reduced-motion:reduce){
+  .alert.is-going{transition:none}
+}
+
 /* ---------- stat tiles ---------- */
 .tiles{
   display:grid;
@@ -380,6 +395,20 @@ ul{list-style:none;margin:0;padding:0}
 
 /* six columns of real content: rows run to three lines, so cells line up at
    the top and the padding comes in to buy the columns some width */
+.data-table--dealers{min-width:1180px}
+/* the action cell holds circles, not prose: the wide cell padding is what
+   pushed this table into a sideways scroll */
+.data-table--dealers .td-actions{padding-inline:14px}
+
+/* the two copy buttons, side by side rather than stacked */
+.copy-links{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.copy-links .btn{white-space:nowrap}
+
+/* Details is not one of the three actions — it opens a panel rather than
+   changing anything, so it sits apart from them behind a hairline */
+/* the action cell carries three icons and a Details button: it needs the room
+   before the table starts scrolling sideways */
+.data-table--dealers .td-actions .row-actions{justify-content:flex-end}
 .data-table--referrals{min-width:1180px}
 .data-table--referrals td{vertical-align:top}
 .data-table--referrals td strong{line-height:1.35}
@@ -697,6 +726,19 @@ tr.is-flagged td{background:rgba(75,180,83,.09)}
 .drawer__head h2{font-size:var(--t-title);margin-bottom:4px}
 .drawer__meta{font-size:var(--t-ui);color:var(--muted)}
 .drawer__head-right{display:flex;align-items:center;gap:14px;flex:none}
+/* the booking number, sat beside the applicant's name */
+.drawer__code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.08em;
+  white-space:nowrap;
+  padding:6px 12px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#fff;
+  color:var(--ink);
+}
 .drawer__close{
   display:flex;align-items:center;justify-content:center;
   width:38px;height:38px;
@@ -1540,3 +1582,190 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
   .pager__count{flex:1 1 100%;text-align:center}
   .pager__step span{display:none}
 }
+
+/* ---------- dealer drawer ---------- */
+
+/* the shareable link, long enough that it needs its own line on a narrow screen */
+.dealer-link{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.dealer-link code{
+  font-size:var(--t-micro);
+  padding:8px 12px;
+  background:var(--tint);
+  border-radius:var(--radius-sm);
+  word-break:break-all;
+}
+
+
+/* the two buttons under a dealer's money block, inside the drawer */
+.drawer-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+
+/* how many clients, how many transfers — on the tab itself */
+.detail-tab__count{
+  display:inline-block;
+  margin-left:6px;
+  padding:1px 7px;
+  border-radius:999px;
+  background:var(--tint);
+  font-size:var(--t-micro);
+  font-weight:700;
+  color:var(--muted);
+}
+.detail-tab.is-active .detail-tab__count{background:rgba(255,255,255,.2);color:inherit}
+
+/* recording a transfer happens in the drawer, so the form lives in a panel */
+.payout-form{max-width:640px}
+.payout-form .field-hint{display:block;margin-bottom:18px}
+
+/* ---------- a long form, told the truth ----------
+   Adding a dealer needs one thing: a name. Everything else is paperwork that
+   usually arrives later, and sixteen identical full-width boxes said the
+   opposite. The first section is the form; the rest is what you have to hand. */
+.modal-x__card--wide{width:min(720px,100%)}
+
+.form-section{border-top:1px solid var(--line);padding-top:22px;margin-top:22px}
+.form-section:first-child{border-top:0;padding-top:0;margin-top:0}
+
+.form-section__head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:16px;
+}
+.form-section__title{
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--ink);
+  margin:0;
+}
+.form-section__note{font-size:12px;color:var(--muted)}
+
+/* two columns for the short fields; anything that needs the width says so */
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+.form-grid .field--wide{grid-column:1 / -1}
+
+/* the one field that has to be filled in */
+.field--primary label{font-size:var(--t-sub);font-weight:700}
+.field--primary input{padding:16px;font-size:19px}
+.field__req{color:var(--accent-deep);font-weight:700;margin-left:2px}
+
+/* the code is issued on save and never changes — shown, never editable */
+.code-preview{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 14px;
+  border:1px dashed var(--line);
+  border-radius:var(--radius-sm);
+  background:var(--tint);
+}
+.code-preview__chip{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.14em;
+  padding:6px 12px;
+  border-radius:999px;
+  background:#fff;
+  border:1px solid var(--line);
+  color:var(--ink);
+  white-space:nowrap;
+}
+.code-preview__chip--pending{color:var(--muted)}
+.code-preview__text{font-size:12px;color:var(--body);line-height:1.5}
+
+/* the button sits on its own shelf rather than trailing the last field */
+.modal-x__foot{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:12px;
+  padding:18px 24px;
+  border-top:1px solid var(--line);
+  background:var(--tint);
+  border-radius:0 0 var(--radius-lg) var(--radius-lg);
+}
+.modal-x__foot .field-hint{margin-right:auto;max-width:44ch}
+
+@media (max-width:639px){
+  .form-grid{grid-template-columns:minmax(0,1fr)}
+  .modal-x__foot{flex-direction:column;align-items:stretch}
+  .modal-x__foot .btn{width:100%;justify-content:center}
+}
+
+/* PAN, GST and IFSC are capitals; the server stores them that way, this only
+   makes typing look like what is about to be saved */
+.field-shout{text-transform:uppercase}
+.field-shout::placeholder{text-transform:none}
+
+/* ---------- header menus (dealer portal) ----------
+   Two dropdowns in the topbar, built on <details> so they work before the
+   JavaScript loads and close on Escape without any of our own code. */
+.topbar__actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+
+.menu{position:relative}
+.menu > summary{list-style:none;cursor:pointer}
+.menu > summary::-webkit-details-marker{display:none}
+.menu__caret{font-size:12px;transition:transform .2s ease}
+.menu[open] .menu__caret{transform:rotate(180deg)}
+
+.menu__list{
+  position:absolute;
+  top:calc(100% + 8px);
+  right:0;
+  z-index:60;
+  min-width:230px;
+  padding:8px;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-card);
+}
+.menu__item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  padding:10px 12px;
+  border:0;
+  border-radius:var(--radius-sm);
+  background:none;
+  font-family:inherit;
+  font-size:var(--t-ui);
+  font-weight:600;
+  color:var(--ink);
+  text-align:left;
+  cursor:pointer;
+}
+.menu__item:hover{background:var(--tint)}
+.menu__item i{font-size:15px;color:var(--muted)}
+.menu__note{
+  padding:8px 12px 4px;
+  font-size:12px;
+  line-height:1.5;
+  color:var(--muted);
+  border-top:1px solid var(--line);
+  margin-top:6px;
+}
+
+/* how far along a sale is — never how much of it is outstanding */
+.progress-bar{
+  display:block;
+  width:100%;
+  max-width:200px;
+  height:5px;
+  border-radius:999px;
+  background:var(--line);
+  overflow:hidden;
+}
+.progress-bar__fill{
+  display:block;
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+}
+
+.data-table--dealer-clients{min-width:900px}
+.data-table--dealer-payouts{min-width:640px}

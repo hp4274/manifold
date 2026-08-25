@@ -9,9 +9,9 @@
 declare(strict_types=1);
 
 const DB_HOST = '127.0.0.1';
-const DB_NAME = 'u768511311_manifold';
-const DB_USER = 'u768511311_vsm3';
-const DB_PASS = 'Manifold2210';
+const DB_NAME = 'manifold';
+const DB_USER = 'root';
+const DB_PASS = '';
 const DB_PORT = 3306;
 
 /** Absolute path where uploaded application documents are stored. */
@@ -154,6 +154,13 @@ function payment_plan(string $product): array
  * figure lives in the `settings` table and is edited from Settings.
  */
 const REFERRAL_REWARD_DEFAULT = 500;
+
+/**
+ * Paid to a dealer for every unit they sell, once the customer's booking
+ * payment has been verified. Starting value only — the live figure lives in
+ * the `settings` table and is edited from Settings.
+ */
+const DEALER_COMMISSION_DEFAULT = 500;
 const PAYMENT_CURRENCY = '₹';
 
 function money(float $amount): string
@@ -175,9 +182,11 @@ function base_url(): string
 
     $scheme = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
     $host    = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    /* /admin/... or /portal/... → the site root one level up */
+    /* /admin/..., /portal/... or /dealer/... → the site root one level up.
+       A folder missing from this list silently builds links inside itself: a
+       dealer's share link came out as /dealer/apply-tuktuk.html and 404'd. */
     $dir     = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/\\');
-    $root    = preg_replace('#/(admin|portal)$#', '', $dir);
+    $root    = preg_replace('#/(admin|portal|dealer)$#', '', $dir);
 
     return $scheme . '://' . $host . $root;
 }

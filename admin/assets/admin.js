@@ -43,6 +43,7 @@
     var drawerTitle  = document.getElementById('drawerTitle');
     var drawerMeta   = document.getElementById('drawerMeta');
     var drawerStatus = document.getElementById('drawerStatus');
+    var drawerCode   = document.getElementById('drawerCode');
     var lastTrigger  = null;
 
     function openDrawer(toggle) {
@@ -56,7 +57,16 @@
       drawerStatus.textContent = toggle.dataset.statusLabel || '';
       drawerStatus.className   = 'pill pill--' + (toggle.dataset.status || 'new');
 
+      /* only applications have one, so the chip stays out of the way otherwise */
+      var code = toggle.dataset.code || '';
+      drawerCode.textContent = code;
+      drawerCode.hidden      = code === '';
+
       drawerBody.innerHTML = source.innerHTML;
+
+      /* a trigger may ask for a tab other than the first — the pay button opens
+         the same drawer straight onto Payouts */
+      showTab(toggle.dataset.tabIndex || '0');
 
       drawer.hidden = false;
       void drawer.offsetWidth;                 /* let the transition run */
@@ -80,7 +90,9 @@
     }
 
     document.addEventListener('click', function (e) {
-      var toggle = e.target.closest('.row-toggle');
+      /* any element carrying data-drawer opens one — the Details button and the
+         pay icon are the same gesture with a different tab */
+      var toggle = e.target.closest('[data-drawer]');
 
       if (toggle) {
         openDrawer(toggle);
@@ -97,14 +109,12 @@
     });
 
     /* ---------- the drawer's own tab bar ---------- */
-    drawerBody.addEventListener('click', function (e) {
-      var tab = e.target.closest('.detail-tab');
-      if (!tab) return;
+    function showTab(wanted) {
+      var tabs = drawerBody.querySelectorAll('.detail-tab');
+      if (!tabs.length) return;
 
-      var wanted = tab.dataset.tab;
-
-      Array.prototype.forEach.call(drawerBody.querySelectorAll('.detail-tab'), function (button) {
-        var on = button === tab;
+      Array.prototype.forEach.call(tabs, function (button) {
+        var on = button.dataset.tab === wanted;
         button.classList.toggle('is-active', on);
         button.setAttribute('aria-selected', String(on));
       });
@@ -114,6 +124,18 @@
       });
 
       drawerBody.scrollTop = 0;
+    }
+
+    drawerBody.addEventListener('click', function (e) {
+      var tab = e.target.closest('.detail-tab');
+      if (tab) {
+        showTab(tab.dataset.tab);
+        return;
+      }
+
+      /* a button inside a panel can send you to another one */
+      var jump = e.target.closest('[data-tab-go]');
+      if (jump) showTab(jump.dataset.tabGo);
     });
   }
 
@@ -150,6 +172,53 @@
 
     var open = document.querySelector('.modal-x.is-open');
     if (open) closeModal(open);
+  });
+
+  /* ---------- flash messages ----------
+     A confirmation is read in a second and then only takes up room, so it
+     clears itself after five. An error stays: it is the one thing somebody
+     may need to still be there when they look back at the screen. */
+  Array.prototype.forEach.call(document.querySelectorAll('.alert--ok'), function (alert) {
+    setTimeout(function () {
+      alert.classList.add('is-going');
+      setTimeout(function () { alert.remove(); }, 300);
+    }, 5000);
+  });
+
+  /* ---------- copy to clipboard ----------
+     Anything with data-copy="text" puts that text on the clipboard and says so
+     on the button itself for a moment. execCommand is the fallback: the async
+     clipboard API is only available on https and on localhost. */
+  document.addEventListener('click', function (e) {
+    var button = e.target.closest('[data-copy]');
+    if (!button) return;
+
+    var text = button.dataset.copy;
+    var said = button.innerHTML;
+
+    /* an icon button is a 36px circle — the word "Copied" does not fit in one,
+       so it gets a tick where its icon was instead */
+    var done = function () {
+      button.innerHTML = button.classList.contains('icon-btn')
+        ? '<i class="bi bi-check-lg" aria-hidden="true"></i>'
+        : 'Copied';
+      setTimeout(function () { button.innerHTML = said; }, 1400);
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+
+    var box = document.createElement('textarea');
+    box.value = text;
+    box.setAttribute('readonly', '');
+    box.style.position = 'fixed';
+    box.style.left = '-9999px';
+    document.body.appendChild(box);
+    box.select();
+    try { document.execCommand('copy'); done(); } catch (err) { window.prompt('Copy this link', text); }
+    document.body.removeChild(box);
   });
 
   /* a dialog rendered open (editing an account) still locks the page behind it */

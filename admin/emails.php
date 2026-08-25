@@ -75,7 +75,7 @@ function send_payment_email(array $app): bool
 
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($app['full_name']) . ',</p>'
         . '<p style="margin:0 0 14px;">We have your application for the <strong style="color:#0f2c4d;">'
-        . e($product) . '</strong>. Your reference is <strong style="color:#0f2c4d;">'
+        . e($product) . '</strong>. Your booking number is <strong style="color:#0f2c4d;">'
         . e($app['reference_code']) . '</strong>.</p>'
         . '<p style="margin:0 0 20px;">To reserve your place, pay the booking amount of '
         . '<strong style="color:#0f2c4d;">' . e($amount) . '</strong> and upload the receipt. '
@@ -182,7 +182,7 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
 
     $rows = [
         'Receipt number'    => (string) $payment['receipt_no'],
-        'Application'       => (string) $app['reference_code'],
+        'Booking number'    => (string) $app['reference_code'],
         'Applicant'         => (string) $app['full_name'],
         'Product'           => $product,
         'Payment'           => $stageName,
@@ -377,13 +377,13 @@ function send_payment_received_admin(array $app): bool
         . '&status=' . rawurlencode((string) $app['status']) . '#row-' . (int) $app['id'];
 
     $rows = [
-        'Reference'  => (string) $app['reference_code'],
-        'Product'    => $product,
-        'Applicant'  => (string) $app['full_name'],
-        'Email'      => (string) $app['email'],
-        'Phone'      => (string) ($app['mobile_number'] ?? ''),
-        'Payment'    => status_label((string) $app['status']),
-        'Payment ref' => (string) ($app['payment_reference'] ?? '—'),
+        'Booking number' => (string) $app['reference_code'],
+        'Product'        => $product,
+        'Applicant'      => (string) $app['full_name'],
+        'Email'          => (string) $app['email'],
+        'Phone'          => (string) ($app['mobile_number'] ?? ''),
+        'Payment'        => status_label((string) $app['status']),
+        'Payment ref'    => (string) ($app['payment_reference'] ?? '—'),
     ];
 
     $table = '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 8px;">';

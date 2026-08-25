@@ -63,6 +63,9 @@ $pageLead   = $pageLead ?? '';
         <a href="referrals.php" class="<?= $activeType === 'referrals' ? 'is-active' : '' ?>">
           <i class="bi bi-people" aria-hidden="true"></i> Referrals
         </a>
+        <a href="dealers.php" class="<?= $activeType === 'dealers' ? 'is-active' : '' ?>">
+          <i class="bi bi-shop" aria-hidden="true"></i> Dealers
+        </a>
         <a href="raffle.php" class="<?= $activeType === 'raffle' ? 'is-active' : '' ?>">
           <i class="bi bi-ticket-perforated" aria-hidden="true"></i> Raffle
         </a>
