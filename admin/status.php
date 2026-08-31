@@ -44,10 +44,38 @@ if (!$row) {
 $oldStatus = (string) $row['status'];
 $mailFlag  = '';
 
-/* payment decisions belong to payment.php, which checks the receipt first */
+/* An application has exactly one decision that is not a payment: whether it is
+   taken on at all. Approving it is what sends the payment email and opens the
+   portal, so it happens here; everything after it is a receipt, and receipts
+   belong to payment.php, which looks at the proof first. */
 if ($config['table'] === 'applications') {
-    http_response_code(409);
-    exit('Use the payment actions in the Details drawer for applications.');
+    if ($oldStatus !== 'submitted' || !in_array($status, ['booking_pending', 'rejected'], true)) {
+        http_response_code(409);
+        exit('Use the payment actions in the Details drawer for applications.');
+    }
+
+    db()->prepare('UPDATE applications SET status = ?, confirmed_at = ? WHERE id = ?')
+        ->execute([$status, $status === 'booking_pending' ? date('Y-m-d H:i:s') : null, $id]);
+
+    log_status_change('application', $id, $oldStatus, $status, (int) $user['id']);
+
+    if ($status === 'booking_pending') {
+        /* everything the applicant needs, all at once: their booking number, the
+           amount, the QR code and the portal they upload the receipt in */
+        $row['status'] = $status;
+        $mailFlag      = send_payment_email($row) ? 'sent' : 'failed';
+    }
+
+    $return = (string) ($_POST['return'] ?? '');
+
+    if (!preg_match('/^(index|list)\.php(\?[a-z0-9=&_%-]*)?$/i', $return)) {
+        $return = 'list.php?type=' . urlencode($type);
+    }
+
+    admin_flash(['saved' => $id, 'mail' => $mailFlag]);
+
+    header('Location: ' . $return);
+    exit;
 }
 
 /* the UI hides the buttons once accepted; enforce it here too */
@@ -80,7 +108,7 @@ if (!preg_match('/^(index|list)\.php(\?[a-z0-9=&_%-]*)?$/i', $return)) {
     $return = 'list.php?type=' . urlencode($type);
 }
 
-$return .= (strpos($return, '?') === false ? '?' : '&') . 'saved=' . $id . $mailFlag . '#row-' . $id;
+admin_flash(['saved' => $id, 'mail' => $mailFlag]);
 
 header('Location: ' . $return);
 exit;

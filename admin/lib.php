@@ -42,8 +42,20 @@ if (!defined('PAYMENT_PLAN')) {
     ]);
 }
 
-if (!defined('DEALER_COMMISSION_DEFAULT')) {
-    define('DEALER_COMMISSION_DEFAULT', 500);
+if (!defined('DEALER_RATE_DEFAULT')) {
+    define('DEALER_RATE_DEFAULT', 15);
+}
+
+if (!defined('DISTRIBUTOR_OVERRIDE_RATE_DEFAULT')) {
+    define('DISTRIBUTOR_OVERRIDE_RATE_DEFAULT', 5);
+}
+
+if (!defined('DISTRIBUTOR_DIRECT_RATE_DEFAULT')) {
+    define('DISTRIBUTOR_DIRECT_RATE_DEFAULT', 15);
+}
+
+if (!defined('DEALER_LIMIT_DEFAULT')) {
+    define('DEALER_LIMIT_DEFAULT', 10);
 }
 
 if (!function_exists('payment_plan')) {
@@ -66,14 +78,22 @@ if (session_status() === PHP_SESSION_NONE) {
 /** Workflow states for contact enquiries and newsletter signups. */
 const STATUSES = ['new', 'accepted', 'contacted', 'rejected'];
 
-/** Workflow states for product applications, in the order they happen. */
+/**
+ * Workflow states for product applications, in the order they happen.
+ *
+ * An application from the website starts at 'submitted' and waits there: the
+ * office looks at it first, and approving it is what issues the payment email
+ * and opens the portal. Nothing is asked of the applicant until then, which is
+ * the point — we do not take a payment for a place we have not agreed to.
+ */
 const APPLICATION_STATUSES = [
-    'booking_pending', 'booking_review', 'delivery_pending', 'delivery_review', 'complete', 'rejected',
+    'submitted', 'booking_pending', 'booking_review', 'delivery_pending', 'delivery_review',
+    'complete', 'rejected',
 ];
 
 /** The stages an applicant sees in the portal timeline (rejected sits outside). */
 const APPLICATION_STAGES = [
-    'booking_pending', 'booking_review', 'delivery_pending', 'delivery_review', 'complete',
+    'submitted', 'booking_pending', 'booking_review', 'delivery_pending', 'delivery_review', 'complete',
 ];
 
 /** The two transfers every application is made of, in the order they fall due. */
@@ -93,6 +113,7 @@ function statuses_for(string $type): array
 function status_label(string $status, string $audience = 'admin'): string
 {
     $labels = [
+        'submitted'        => $audience === 'applicant' ? 'Application received' : 'Waiting for approval',
         'booking_pending'  => $audience === 'applicant' ? 'Booking payment due' : 'Booking payment pending',
         'booking_review'   => $audience === 'applicant'
             ? 'Booking payment submitted — verifying'
@@ -115,6 +136,7 @@ function status_label(string $status, string $audience = 'admin'): string
 function status_short(string $status): string
 {
     $short = [
+        'submitted'        => 'to approve',
         'booking_pending'  => 'booking due',
         'booking_review'   => 'booking receipt',
         'delivery_pending' => 'delivery due',
@@ -129,6 +151,9 @@ function status_short(string $status): string
 function stage_copy(string $status): array
 {
     $copy = [
+        'submitted'        => ['Application received',
+                               'We have your application and are looking at it. Nothing to pay yet — we '
+                               . 'email you the payment details as soon as it is approved.'],
         'booking_pending'  => ['Booking payment due',
                                'Pay the booking amount with the QR code below and upload the receipt. '
                                . 'It reserves your unit and comes off the price.'],
@@ -291,6 +316,13 @@ function status_from_payments(array $app, ?array $payments = null): string
 {
     if ($app['status'] === 'rejected') {
         return 'rejected';
+    }
+
+    /* An application nobody has approved yet has no payment stage to be at.
+       Without this, anything that recalculates a status would quietly approve
+       it — the decision is the office's, not a side effect. */
+    if ($app['status'] === 'submitted') {
+        return 'submitted';
     }
 
     $payments = $payments ?? payments_for((int) $app['id']);
@@ -547,20 +579,108 @@ function reward_is_payable(array $referral): bool
    is what the office still owes — so paying for 5 of 10 units delivered leaves
    the other 5 standing without anyone ticking rows off. */
 
-/** What a dealer earns per unit sold. Editable under Settings. */
-function dealer_commission(): float
+/* ---------- what a sale pays whom ----------
+   Commission is a share of what the sale is worth — the booking amount plus the
+   delivery amount already frozen on the application — and not a flat figure.
+
+     a dealer sells        dealer 15%, their distributor 5%
+     a distributor sells   distributor 15%, no dealer involved
+
+   The override follows the dealer's own distributor rather than to
+   the office. Both shares are worked out once, when the application arrives,
+   and written onto the row: changing a rate here must never rewrite what a sale
+   that has already happened was worth.
+
+   Nothing is earned until the whole application is complete — both payments
+   verified. A booking payment on its own earns nobody anything, because the
+   commission on a stove is larger than the booking payment that would fund it. */
+
+/** One rate, as a fraction. Stored in `settings` as a whole percentage. */
+function commission_rate(string $name, float $default): float
 {
-    return max(0.0, (float) setting('dealer_commission', (string) DEALER_COMMISSION_DEFAULT));
+    $percent = (float) setting($name, (string) $default);
+
+    /* a rate above 100% is a typo, not a policy */
+    return min(1.0, max(0.0, $percent / 100));
 }
 
-/** Same alphabet as a referral code, so neither can be misread down a phone line. */
-function make_dealer_code(): string
+/** What a dealer keeps of a sale they made. */
+function dealer_rate(): float
+{
+    return commission_rate('dealer_rate', DEALER_RATE_DEFAULT);
+}
+
+/** What a distributor takes of a sale one of their dealers made. */
+function distributor_override_rate(): float
+{
+    return commission_rate('distributor_override_rate', DISTRIBUTOR_OVERRIDE_RATE_DEFAULT);
+}
+
+/** What a distributor keeps of a sale they made themselves. */
+function distributor_direct_rate(): float
+{
+    return commission_rate('distributor_direct_rate', DISTRIBUTOR_DIRECT_RATE_DEFAULT);
+}
+
+/** What one application is worth, whoever ends up being paid out of it. */
+function sale_value(array $app): float
+{
+    return (float) ($app['booking_amount'] ?? 0) + (float) ($app['delivery_amount'] ?? 0);
+}
+
+/**
+ * The two shares a sale carries, given the code that was quoted.
+ *
+ * $dealer or $distributor, never both from the form: a dealer's code implies
+ * their distributor, and a distributor's own code cuts the dealer out entirely.
+ * Returns the amounts to freeze onto the application.
+ */
+function commission_split(float $saleValue, ?array $dealer, ?array $distributor): array
+{
+    if ($dealer) {
+        return [
+            'dealer'      => round($saleValue * dealer_rate(), 2),
+            /* the override follows the dealer's distributor, not the form */
+            'distributor' => $distributor ? round($saleValue * distributor_override_rate(), 2) : 0.0,
+        ];
+    }
+
+    if ($distributor) {
+        return ['dealer' => 0.0, 'distributor' => round($saleValue * distributor_direct_rate(), 2)];
+    }
+
+    return ['dealer' => 0.0, 'distributor' => 0.0];
+}
+
+/**
+ * Whether an application has earned anyone their commission yet.
+ *
+ * One definition, used by both totals functions and by every screen that says
+ * "earned" — so the dealer portal, the distributor portal and the admin can
+ * never disagree about what is owed.
+ */
+function commission_is_earned(array $app): bool
+{
+    return ($app['status'] ?? '') === 'complete';
+}
+
+/** The SQL half of commission_is_earned(), for the totals queries. */
+const COMMISSION_EARNED_SQL = "status = 'complete'";
+
+/**
+ * A code nobody can misread down a phone line: no O/0, no I/1.
+ *
+ * One generator for both kinds, so the two can never drift into different
+ * alphabets or lengths. The prefix is what tells them apart when one is quoted:
+ * MF a customer, MD a dealer, MX a distributor.
+ */
+function make_partner_code(string $prefix, string $table, string $column): string
 {
     $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    $check    = db()->prepare('SELECT 1 FROM dealers WHERE dealer_code = ?');
+    $check    = db()->prepare('SELECT 1 FROM ' . $table . ' WHERE ' . $column . ' = ?');
 
     for ($attempt = 0; $attempt < 20; $attempt++) {
-        $code = 'MD';
+        $code = $prefix;
 
         for ($i = 0; $i < 6; $i++) {
             $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
@@ -573,20 +693,273 @@ function make_dealer_code(): string
         }
     }
 
-    throw new RuntimeException('Could not allocate a dealer code.');
+    throw new RuntimeException('Could not allocate a ' . $prefix . ' code.');
 }
 
-/** The dealer a quoted code belongs to, or null. A switched-off dealer is not one. */
+function make_dealer_code(): string
+{
+    return make_partner_code('MD', 'dealers', 'dealer_code');
+}
+
+function make_distributor_code(): string
+{
+    return make_partner_code('MX', 'distributors', 'distributor_code');
+}
+
+/**
+ * The dealer a quoted code belongs to, or null.
+ *
+ * Switched off is nobody, and so is waiting for approval: a distributor can
+ * create a dealer, but until the office says that dealer is real their code
+ * books nothing. Enforced here rather than at the form, because this is the one
+ * place every route into a sale has to pass through.
+ */
 function dealer_for_code(string $code): ?array
 {
     if ($code === '') {
         return null;
     }
 
-    $stmt = db()->prepare('SELECT * FROM dealers WHERE dealer_code = ? AND is_active = 1 LIMIT 1');
+    $stmt = db()->prepare(
+        "SELECT * FROM dealers
+          WHERE dealer_code = ? AND is_active = 1 AND approval_status = 'approved' LIMIT 1"
+    );
     $stmt->execute([$code]);
 
     return $stmt->fetch() ?: null;
+}
+
+/* ---------- a distributor's own dealers ----------
+   A distributor signs dealers up, the office decides whether they are real, and
+   there is a ceiling on how many one distributor may hold. */
+
+/** How many dealers one distributor may hold. Editable under Settings. */
+function dealer_limit(): int
+{
+    return max(0, (int) setting('dealer_limit', (string) DEALER_LIMIT_DEFAULT));
+}
+
+/**
+ * How many of that allowance a distributor has used.
+ *
+ * A dealer waiting for approval counts. They were requested, and letting a
+ * distributor queue up fifty pending dealers against a limit of ten would make
+ * the limit meaningless.
+ */
+function distributor_dealer_count(int $distributorId): int
+{
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) FROM dealers
+          WHERE distributor_id = ? AND approval_status <> 'rejected'"
+    );
+    $stmt->execute([$distributorId]);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/** Whether this distributor has room for another dealer. */
+function distributor_has_room(int $distributorId): bool
+{
+    return distributor_dealer_count($distributorId) < dealer_limit();
+}
+
+/** Reading name for where a dealer has got to with the office. */
+function approval_label(string $status): string
+{
+    $labels = [
+        'pending'  => 'Waiting for approval',
+        'approved' => 'Approved',
+        'rejected' => 'Turned down',
+    ];
+
+    return $labels[$status] ?? ucfirst($status);
+}
+
+/** The dealers one distributor has asked the office to approve. */
+function dealers_awaiting_approval(?int $distributorId = null): array
+{
+    $sql = "SELECT d.*, x.full_name AS distributor_name, x.distributor_code
+              FROM dealers d
+              LEFT JOIN distributors x ON x.id = d.distributor_id
+             WHERE d.approval_status = 'pending'"
+        . ($distributorId === null ? '' : ' AND d.distributor_id = ?')
+        . ' ORDER BY d.created_at';
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute($distributorId === null ? [] : [$distributorId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Saves one uploaded file into the application upload directory and returns the
+ * name it was stored under, or null if there was nothing usable.
+ *
+ * The name is generated rather than taken from the browser, the type is read
+ * from the file itself rather than trusted from the request, and anything over
+ * the size limit or of the wrong type is dropped. Silent by design: an
+ * unreadable ID copy must not cost somebody their whole application, and the
+ * office can always ask for it again.
+ */
+function store_upload(string $field, string $dir = UPLOAD_DIR): ?string
+{
+    if (empty($_FILES[$field]) || $_FILES[$field]['error'] === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+
+    $file = $_FILES[$field];
+
+    if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > UPLOAD_MAX_BYTES) {
+        return null;
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime  = $finfo->file($file['tmp_name']);
+
+    if (!isset(UPLOAD_ALLOWED_MIME[$mime])) {
+        return null;
+    }
+
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        return null;
+    }
+
+    $name = date('Ymd-His') . '-' . bin2hex(random_bytes(6)) . '.' . UPLOAD_ALLOWED_MIME[$mime];
+
+    return move_uploaded_file($file['tmp_name'], $dir . '/' . $name) ? $name : null;
+}
+
+/* ---------- a sale a partner took themselves ----------
+   A dealer or distributor can enter a customer they sold to directly, where the
+   money went to them rather than to the company. Nothing is owed by that
+   customer here, so the application is created settled — but it is marked
+   `direct`, because a report that mixed it with a website sale would be
+   claiming money the company never received. */
+
+/**
+ * Creates one application on a partner's behalf and returns its id.
+ *
+ * $dealer or $distributor, never both — a dealer's own distributor is looked up
+ * the same way the public form does it, so the split is identical whichever
+ * route the sale came in by.
+ */
+function create_direct_sale(array $fields, string $product, ?array $dealer, ?array $distributor): int
+{
+    $plan  = payment_plan($product);
+    $sale  = (float) $plan['booking'] + (float) $plan['delivery'];
+    $split = commission_split($sale, $dealer, $distributor);
+    $now   = date('Y-m-d H:i:s');
+
+    $columns = [
+        'product'                => $product,
+        /* the customer has already paid the partner in full, so there is no
+           stage left for them to be at */
+        'status'                 => 'complete',
+        'reference_code'         => 'tmp-' . bin2hex(random_bytes(6)),
+        'referral_code'          => make_referral_code(),
+        'full_name'              => $fields['full_name'],
+        'email'                  => $fields['email'],
+        'mobile_number'          => $fields['mobile_number'],
+        'city'                   => $fields['city'],
+        'state'                  => $fields['state'],
+        /* the applications table keeps a street, not a single address line */
+        'street'                 => $fields['address'],
+        'pin_code'               => $fields['pin_code'],
+        'units_required'         => $fields['units_required'],
+        'admin_note'             => $fields['note'],
+        'id_number'              => $fields['id_number'] ?? null,
+        'id_document_path'       => $fields['id_document_path'] ?? null,
+        'residence_proof_path'   => $fields['residence_proof_path'] ?? null,
+        'booking_amount'         => (float) $plan['booking'],
+        'delivery_amount'        => (float) $plan['delivery'],
+        'payment_amount'         => (float) $plan['booking'],
+        'booking_paid_at'        => $now,
+        'delivery_paid_at'       => $now,
+        'payment_verified_at'    => $now,
+        'completed_at'           => $now,
+        'confirmed_at'           => $now,
+        'dealer_id'              => $dealer ? (int) $dealer['id'] : null,
+        'dealer_commission'      => $split['dealer'],
+        'distributor_id'         => $distributor ? (int) $distributor['id'] : null,
+        'distributor_commission' => $split['distributor'],
+        'sale_channel'           => 'direct',
+        'entered_by_dealer'      => $dealer ? (int) $dealer['id'] : null,
+        'entered_by_distributor' => $distributor && !$dealer ? (int) $distributor['id'] : null,
+        'declaration_accepted'   => $fields['declaration_accepted'] ?? 1,
+        'terms_accepted'         => $fields['terms_accepted'] ?? 1,
+        'testimonial_consent'    => $fields['testimonial_consent'] ?? 0,
+    ];
+
+    $names        = array_keys($columns);
+    $placeholders = implode(', ', array_fill(0, count($names), '?'));
+
+    db()->prepare('INSERT INTO applications (`' . implode('`, `', $names) . '`) VALUES ('
+        . $placeholders . ')')->execute(array_values($columns));
+
+    $id = (int) db()->lastInsertId();
+
+    db()->prepare('UPDATE applications SET reference_code = ? WHERE id = ?')
+        ->execute([make_reference_code($id), $id]);
+
+    return $id;
+}
+
+/**
+ * The fields a partner fills in for a direct sale, read off a POST.
+ *
+ * Returns [values, error]. Deliberately short: the office can fill the rest in
+ * later, but a sale with no name or no way to reach the customer is not a sale
+ * anybody can act on.
+ */
+function direct_sale_values(array $post): array
+{
+    $values = [
+        'full_name'      => trim((string) ($post['full_name'] ?? '')),
+        'email'          => strtolower(trim((string) ($post['email'] ?? ''))),
+        'mobile_number'  => trim((string) ($post['mobile_number'] ?? '')),
+        'city'           => trim((string) ($post['city'] ?? '')) ?: null,
+        'state'          => trim((string) ($post['state'] ?? '')) ?: null,
+        'address'        => trim((string) ($post['address'] ?? '')) ?: null,
+        'pin_code'       => trim((string) ($post['pin_code'] ?? '')) ?: null,
+        'units_required' => max(1, (int) ($post['units_required'] ?? 1)),
+        'note'           => trim((string) ($post['note'] ?? '')) ?: null,
+
+        /* the same identification the public form asks for — a sale a partner
+           took is still a customer of ours, and the office needs the same
+           paperwork on it */
+        'id_number'      => trim((string) ($post['id_number'] ?? '')) ?: null,
+
+        /* and the same two things a customer has to agree to. The partner ticks
+           them having read them to the customer, which is what the wording on
+           the form says they are doing. */
+        'declaration_accepted' => empty($post['declaration_accepted']) ? 0 : 1,
+        'terms_accepted'       => empty($post['terms_accepted']) ? 0 : 1,
+        'testimonial_consent'  => empty($post['testimonial_consent']) ? 0 : 1,
+    ];
+
+    if ($values['full_name'] === '') {
+        return [$values, 'The customer needs a name.'];
+    }
+
+    if (!filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
+        return [$values, 'Enter the customer\'s email address — it is how they reach their portal.'];
+    }
+
+    if ($values['mobile_number'] === '') {
+        return [$values, 'Enter a mobile number for the customer.'];
+    }
+
+    if (!$values['declaration_accepted'] || !$values['terms_accepted']) {
+        return [$values, 'The declaration and the terms both have to be agreed to before a sale can be recorded.'];
+    }
+
+    /* Taken only once everything else checks out: a rejected form must not
+       leave a stray file on disk, and the customer's documents would have to be
+       picked again anyway. */
+    $values['id_document_path']     = store_upload('id_document_file');
+    $values['residence_proof_path'] = store_upload('residence_proof_file');
+
+    return [$values, ''];
 }
 
 /** One dealer by id, or null. */
@@ -596,6 +969,1295 @@ function dealer_by_id(int $id): ?array
     $stmt->execute([$id]);
 
     return $stmt->fetch() ?: null;
+}
+
+/**
+ * How far along a sale is, as a partner reads it: the stage and how many of the
+ * five it is.
+ *
+ * Never how much is outstanding. A dealer and a distributor both see progress
+ * and neither sees money the customer owes, so there is one definition of what
+ * "progress" means rather than one per portal.
+ */
+function partner_progress(string $status): array
+{
+    if ($status === 'rejected') {
+        return ['label' => 'Not proceeding', 'step' => 0, 'of' => count(APPLICATION_STAGES)];
+    }
+
+    $step = array_search($status, APPLICATION_STAGES, true);
+
+    return [
+        /* The short label, not the applicant's. A pill is white-space:nowrap, so
+           "Booking payment submitted — verifying" cannot wrap and runs straight
+           over the next column. It is also what the Progress column header shows
+           when it is filtering, so the pill and the filter now say the same
+           thing about the same row. */
+        'label' => status_short($status),
+        'step'  => $step === false ? 0 : (int) $step + 1,
+        'of'    => count(APPLICATION_STAGES),
+    ];
+}
+
+/** The product's full name, as it is written to a customer. */
+function product_label(string $product): string
+{
+    return $product === 'stove' ? 'Kinetic Hydrogen Cooking Stove' : 'Hydrogen Conversion Kit for TukTuk';
+}
+
+/* ---------- stock ----------
+   A partner buys units from the tier above them before they can sell one out of
+   their own hand: a distributor buys from the office, a dealer buys from their
+   own distributor. Both pay first and upload proof, and the tier above releases
+   the stock by approving it.
+
+   Everything is held per product, because a stove and a TukTuk kit are not
+   worth the same and one number for both could not say what is in hand. Units
+   and value always move together, and value is always at cost — what these
+   units cost the partner holding them, never what they will sell for. That way
+   the two can never disagree.
+
+   Balances are summed from the ledger rather than stored. One number kept in
+   two places is one number waiting to go wrong, and a ledger answers "where did
+   that unit go" for free. */
+
+/* What one order may be at most. The second is what decimal(10,2) can hold —
+   an order past it cannot be stored, so it is refused with a sentence rather
+   than left to the database to reject with an exception. */
+const STOCK_ORDER_MAX_UNITS = 1000;
+const STOCK_ORDER_MAX_TOTAL = 90000000.0;
+
+/** What one unit costs the given tier, per product. Editable under Settings. */
+function stock_price(string $buyerType, string $product): float
+{
+    $key = 'stock_price_' . ($buyerType === 'dealer' ? 'dealer' : 'distributor') . '_'
+        . ($product === 'tuktuk' ? 'tuktuk' : 'stove');
+
+    return max(0.0, (float) setting($key, '0'));
+}
+
+/**
+ * What one partner holds, per product: units in hand and what they cost.
+ *
+ * Always returns both products, at zero when nothing has moved, so a caller
+ * never has to guess whether an empty result means none or means unknown.
+ */
+function stock_balance(string $ownerType, int $ownerId): array
+{
+    $balance = [
+        'stove'  => ['units' => 0, 'value' => 0.0],
+        'tuktuk' => ['units' => 0, 'value' => 0.0],
+    ];
+
+    $stmt = db()->prepare(
+        'SELECT product, COALESCE(SUM(units), 0) AS units, COALESCE(SUM(value), 0) AS value
+           FROM stock_ledger
+          WHERE owner_type = ? AND owner_id = ?
+          GROUP BY product'
+    );
+    $stmt->execute([$ownerType, $ownerId]);
+
+    foreach ($stmt->fetchAll() as $row) {
+        if (isset($balance[$row['product']])) {
+            $balance[$row['product']] = ['units' => (int) $row['units'], 'value' => (float) $row['value']];
+        }
+    }
+
+    $balance['units'] = $balance['stove']['units'] + $balance['tuktuk']['units'];
+    $balance['value'] = $balance['stove']['value'] + $balance['tuktuk']['value'];
+
+    return $balance;
+}
+
+/** How many of one product a partner has left. */
+function stock_units(string $ownerType, int $ownerId, string $product): int
+{
+    return stock_balance($ownerType, $ownerId)[$product]['units'] ?? 0;
+}
+
+/**
+ * What one unit of this product cost the partner holding it.
+ *
+ * The average of what they actually paid, so a price change between two orders
+ * cannot make a sale deduct more than the unit was bought for. Falls back to
+ * today's price when they hold nothing — the caller refuses that sale anyway.
+ */
+function stock_unit_cost(string $ownerType, int $ownerId, string $product): float
+{
+    $held = stock_balance($ownerType, $ownerId)[$product] ?? ['units' => 0, 'value' => 0.0];
+
+    if ($held['units'] > 0 && $held['value'] > 0) {
+        return round($held['value'] / $held['units'], 2);
+    }
+
+    return stock_price($ownerType, $product);
+}
+
+/** One movement. Units and value are signed: in is positive, out is negative. */
+function stock_move(
+    string $ownerType,
+    int $ownerId,
+    string $product,
+    int $units,
+    float $value,
+    string $reason,
+    ?int $orderId = null,
+    ?int $applicationId = null,
+    ?string $note = null
+): void {
+    db()->prepare(
+        'INSERT INTO stock_ledger
+             (owner_type, owner_id, product, units, value, reason, order_id, application_id, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )->execute([$ownerType, $ownerId, $product, $units, $value, $reason, $orderId, $applicationId, $note]);
+}
+
+/** The movements behind one partner's balance, newest first. */
+function stock_history(string $ownerType, int $ownerId, int $limit = 50): array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM stock_ledger
+          WHERE owner_type = ? AND owner_id = ?
+          ORDER BY created_at DESC, id DESC
+          LIMIT ' . max(1, $limit)
+    );
+    $stmt->execute([$ownerType, $ownerId]);
+
+    return $stmt->fetchAll();
+}
+
+/** Reading name for why stock moved. */
+function stock_reason_label(string $reason): string
+{
+    $labels = [
+        'purchase'     => 'Bought in',
+        'sale'         => 'Sold to a client',
+        'transfer_out' => 'Passed to a dealer',
+        'adjustment'   => 'Adjusted by the office',
+    ];
+
+    return $labels[$reason] ?? ucfirst($reason);
+}
+
+/** Reading name for where an order has got to. */
+function stock_status_label(string $status): string
+{
+    $labels = [
+        'pending'  => 'Waiting for approval',
+        'approved' => 'Approved',
+        'rejected' => 'Turned down',
+    ];
+
+    return $labels[$status] ?? ucfirst($status);
+}
+
+/**
+ * Raises an order for stock. The units are not theirs until it is approved.
+ *
+ * `$wanted` is how many of each product: ['stove' => 4, 'tuktuk' => 2]. One
+ * order can carry both, because the partner pays once and uploads one proof —
+ * two orders against a single payment would let the tier above approve half of
+ * it, which is not a thing anybody could act on. A product asked for in zeroes
+ * is simply left out.
+ *
+ * Returns [orderId, error]. Every price is frozen onto its line at this moment,
+ * so a change under Settings tomorrow never rewrites what was asked for today.
+ */
+function stock_order_create(
+    string $buyerType,
+    int $buyerId,
+    array $wanted,
+    ?int $sellerDistributorId,
+    array $extra = []
+): array {
+    if ($buyerType === 'dealer' && !$sellerDistributorId) {
+        return [0, 'You are not under a distributor yet, so there is nobody to order from. '
+            . 'Ask the office to assign you one.'];
+    }
+
+    $lines = [];
+    $total = 0.0;
+    $units = 0;
+
+    foreach (['stove', 'tuktuk'] as $product) {
+        $quantity = (int) ($wanted[$product] ?? 0);
+
+        if ($quantity === 0) {
+            continue;
+        }
+
+        if ($quantity < 0) {
+            return [0, 'A quantity cannot be negative.'];
+        }
+
+        $price = stock_price($buyerType, $product);
+
+        if ($price <= 0) {
+            return [0, 'No price has been set for the ' . product_label($product)
+                . ' yet. Ask the office to set one under Settings.'];
+        }
+
+        $lines[$product] = ['quantity' => $quantity, 'price' => $price,
+                            'total' => round($price * $quantity, 2)];
+        $total += $lines[$product]['total'];
+        $units += $quantity;
+    }
+
+    if (!$lines) {
+        return [0, 'Enter how many you want of at least one product.'];
+    }
+
+    /* An order nobody could mean. Without a ceiling the total overflows the
+       column it is stored in and the insert throws, which reaches the partner
+       as a blank error page rather than an answer. */
+    if ($units > STOCK_ORDER_MAX_UNITS) {
+        return [0, 'That is more than ' . STOCK_ORDER_MAX_UNITS . ' units altogether. '
+            . 'Split it into smaller orders, or ask the office to arrange it.'];
+    }
+
+    if ($total >= STOCK_ORDER_MAX_TOTAL) {
+        return [0, 'That order comes to more than ' . money(STOCK_ORDER_MAX_TOTAL)
+            . '. Split it into smaller ones.'];
+    }
+
+    $db = db();
+    $db->beginTransaction();
+
+    try {
+        $db->prepare(
+            'INSERT INTO stock_orders
+                 (buyer_type, buyer_id, seller_distributor_id, total_amount, reference, proof_path, note)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        )->execute([
+            $buyerType,
+            $buyerId,
+            $sellerDistributorId,
+            round($total, 2),
+            $extra['reference'] ?? null,
+            $extra['proof_path'] ?? null,
+            $extra['note'] ?? null,
+        ]);
+
+        $orderId = (int) $db->lastInsertId();
+
+        $item = $db->prepare(
+            'INSERT INTO stock_order_items (order_id, product, quantity, unit_price, line_total)
+             VALUES (?, ?, ?, ?, ?)'
+        );
+
+        foreach ($lines as $product => $line) {
+            $item->execute([$orderId, $product, $line['quantity'], $line['price'], $line['total']]);
+        }
+
+        $db->commit();
+    } catch (PDOException $e) {
+        $db->rollBack();
+
+        return [0, 'That order could not be saved. Try again.'];
+    }
+
+    return [$orderId, ''];
+}
+
+/** What one order is for, a line per product. */
+function stock_order_items(int $orderId): array
+{
+    $stmt = db()->prepare(
+        "SELECT * FROM stock_order_items WHERE order_id = ? ORDER BY FIELD(product, 'stove', 'tuktuk')"
+    );
+    $stmt->execute([$orderId]);
+
+    return $stmt->fetchAll();
+}
+
+/** An order's products in a line of prose: "4 stoves · 2 TukTuk kits". */
+function stock_order_summary(int $orderId): string
+{
+    $parts = [];
+
+    foreach (stock_order_items($orderId) as $item) {
+        $parts[] = (int) $item['quantity'] . ' × ' . product_label((string) $item['product']);
+    }
+
+    return $parts ? implode(' · ', $parts) : '—';
+}
+
+/** How many units an order is for altogether. */
+function stock_order_units(int $orderId): int
+{
+    $units = 0;
+
+    foreach (stock_order_items($orderId) as $item) {
+        $units += (int) $item['quantity'];
+    }
+
+    return $units;
+}
+
+/** One order by id, or null. */
+function stock_order(int $id): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM stock_orders WHERE id = ?');
+    $stmt->execute([$id]);
+
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * Releases the stock on an approved order.
+ *
+ * The buyer gains the units at what they paid. Where a distributor is the
+ * seller, the same units leave their own shelf at what *they* paid for them —
+ * their margin is the difference, and margin is not stock, so it is not counted
+ * here. A seller who does not hold the units cannot release them.
+ *
+ * Returns an error string, or '' when the stock has moved.
+ */
+function stock_order_approve(int $orderId, ?int $adminId = null): string
+{
+    $order = stock_order($orderId);
+
+    if (!$order || $order['status'] !== 'pending') {
+        return 'That order has already been decided.';
+    }
+
+    $items  = stock_order_items($orderId);
+    $seller = $order['seller_distributor_id'] === null ? null : (int) $order['seller_distributor_id'];
+
+    if (!$items) {
+        return 'That order has nothing on it.';
+    }
+
+    /* every product is checked before any of them moves: releasing the stoves
+       and then failing on the kits would leave half an order approved */
+    if ($seller !== null) {
+        foreach ($items as $item) {
+            $product = (string) $item['product'];
+            $have    = stock_units('distributor', $seller, $product);
+
+            if ($have < (int) $item['quantity']) {
+                return 'You hold ' . $have . ' ' . product_label($product) . ' and this order is for '
+                    . (int) $item['quantity'] . '. Order more from the office first.';
+            }
+        }
+    }
+
+    db()->prepare(
+        'UPDATE stock_orders SET status = ?, decided_at = NOW(), decided_by_admin = ?, reject_reason = NULL
+          WHERE id = ?'
+    )->execute(['approved', $adminId, $orderId]);
+
+    foreach ($items as $item) {
+        $product  = (string) $item['product'];
+        $quantity = (int) $item['quantity'];
+
+        stock_move(
+            (string) $order['buyer_type'],
+            (int) $order['buyer_id'],
+            $product,
+            $quantity,
+            (float) $item['line_total'],
+            'purchase',
+            $orderId
+        );
+
+        if ($seller !== null) {
+            /* off the distributor's shelf at their own cost, not at what they charged */
+            $cost = stock_unit_cost('distributor', $seller, $product);
+
+            stock_move(
+                'distributor',
+                $seller,
+                $product,
+                -$quantity,
+                -round($cost * $quantity, 2),
+                'transfer_out',
+                $orderId
+            );
+        }
+    }
+
+    return '';
+}
+
+/** Turns an order down. Nothing moves; the reason is kept for the buyer to read. */
+function stock_order_reject(int $orderId, string $reason = '', ?int $adminId = null): string
+{
+    $order = stock_order($orderId);
+
+    if (!$order || $order['status'] !== 'pending') {
+        return 'That order has already been decided.';
+    }
+
+    db()->prepare(
+        'UPDATE stock_orders SET status = ?, reject_reason = ?, decided_at = NOW(), decided_by_admin = ?
+          WHERE id = ?'
+    )->execute(['rejected', $reason !== '' ? mb_substr($reason, 0, 255) : null, $adminId, $orderId]);
+
+    return '';
+}
+
+/** One partner's own orders, newest first. */
+function stock_orders_for(string $buyerType, int $buyerId): array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM stock_orders WHERE buyer_type = ? AND buyer_id = ? ORDER BY requested_at DESC, id DESC'
+    );
+    $stmt->execute([$buyerType, $buyerId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * The orders one distributor has been asked to release, with the dealer's name.
+ * Pass null for the office's own queue: everything a distributor asked for.
+ */
+function stock_orders_to_decide(?int $sellerDistributorId): array
+{
+    if ($sellerDistributorId === null) {
+        $stmt = db()->prepare(
+            'SELECT o.*, d.full_name AS buyer_name, d.distributor_code AS buyer_code
+               FROM stock_orders o
+               JOIN distributors d ON d.id = o.buyer_id
+              WHERE o.buyer_type = ? AND o.seller_distributor_id IS NULL
+              ORDER BY FIELD(o.status, ?, ?, ?), o.requested_at DESC'
+        );
+        $stmt->execute(['distributor', 'pending', 'approved', 'rejected']);
+
+        return $stmt->fetchAll();
+    }
+
+    $stmt = db()->prepare(
+        'SELECT o.*, d.full_name AS buyer_name, d.dealer_code AS buyer_code
+           FROM stock_orders o
+           JOIN dealers d ON d.id = o.buyer_id
+          WHERE o.buyer_type = ? AND o.seller_distributor_id = ?
+          ORDER BY FIELD(o.status, ?, ?, ?), o.requested_at DESC'
+    );
+    $stmt->execute(['dealer', $sellerDistributorId, 'pending', 'approved', 'rejected']);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Takes the units a direct sale used off the seller's shelf.
+ *
+ * Called after the sale is written, because the application id belongs on the
+ * movement — this is the row that says which unit went where. Returns an error
+ * string when there is not enough stock, in which case nothing has moved.
+ */
+function stock_take_for_sale(string $ownerType, int $ownerId, string $product, int $units, int $applicationId): string
+{
+    $units = max(1, $units);
+    $have  = stock_units($ownerType, $ownerId, $product);
+
+    if ($have < $units) {
+        return 'You have ' . $have . ' ' . product_label($product) . ' in stock and this sale is for '
+            . $units . '. Order more before recording it.';
+    }
+
+    $cost = stock_unit_cost($ownerType, $ownerId, $product);
+
+    stock_move($ownerType, $ownerId, $product, -$units, -round($cost * $units, 2), 'sale', null, $applicationId);
+
+    return '';
+}
+
+/* ---------- commission vouchers ----------
+   Commission is earned when a sale completes. Getting it into a partner's bank
+   is a separate journey: the claim travels up the chain and the money comes
+   back down through R&F, the paying agent.
+
+     dealer ──▶ distributor ──▶ R&F ──▶ office
+                                          │
+     dealer and distributor ◀── paid by R&F
+
+   A voucher is that claim. What stops a sale being paid twice is not a running
+   total but the lines: a voucher names the applications it covers, and an
+   application that already has a line is never picked up again. Two people
+   raising at the same moment cannot both claim the same sale, because the line
+   table refuses the second one.
+
+   See CLIENT-FLOW.md §10 for the whole design. */
+
+/** Where a voucher has got to, in words. */
+function voucher_status_label(string $status): string
+{
+    $labels = [
+        'with_distributor' => 'With your distributor',
+        'bundled'          => 'In a bundle',
+        'with_rf'          => 'With R&F',
+        'with_admin'       => 'With the office',
+        'funded'           => 'Funded — paying',
+        'paid'             => 'Paid',
+        'rejected'         => 'Turned down',
+        'cancelled'        => 'Cancelled',
+    ];
+
+    return $labels[$status] ?? ucfirst(str_replace('_', ' ', $status));
+}
+
+/** The pill class a status wears, reusing the ones the rest of the admin uses. */
+function voucher_status_pill(string $status): string
+{
+    if ($status === 'paid') {
+        return 'accepted';
+    }
+
+    if ($status === 'rejected' || $status === 'cancelled') {
+        return 'rejected';
+    }
+
+    return $status === 'funded' ? 'delivery_pending' : 'booking_review';
+}
+
+/** A voucher still in flight is one nobody has finished with. */
+const VOUCHER_OPEN_STATUSES = ['with_distributor', 'bundled', 'with_rf', 'with_admin', 'funded'];
+
+/**
+ * The sales one partner has earned commission on and not yet claimed.
+ *
+ * Completed sales only — the same definition of earned the portals and the
+ * admin already share — minus anything already sitting on a line of *theirs*.
+ *
+ * A line belongs to a party, not just to a sale, because one sale owes two
+ * people: the dealer their commission and that dealer's distributor the
+ * override. A claim by one must not swallow the other's.
+ *
+ * A voucher that is turned down deletes its lines, which puts those sales back
+ * within reach of the next one.
+ */
+function voucher_claimable(string $partyType, int $partyId): array
+{
+    $column     = $partyType === 'distributor' ? 'distributor_id' : 'dealer_id';
+    $commission = $partyType === 'distributor' ? 'distributor_commission' : 'dealer_commission';
+
+    $stmt = db()->prepare(
+        'SELECT a.id, a.reference_code, a.full_name, a.product, a.completed_at,
+                a.' . $commission . ' AS amount
+           FROM applications a
+          WHERE a.' . $column . ' = ?
+            AND ' . COMMISSION_EARNED_SQL . '
+            AND a.' . $commission . ' > 0
+            AND NOT EXISTS (
+                  SELECT 1 FROM commission_voucher_lines l
+                   WHERE l.application_id = a.id AND l.party_type = ? AND l.party_id = ?
+                )
+          ORDER BY a.completed_at, a.id'
+    );
+    $stmt->execute([$partyId, $partyType, $partyId]);
+
+    return $stmt->fetchAll();
+}
+
+/** What those sales come to. */
+function voucher_claimable_total(string $partyType, int $partyId): float
+{
+    $total = 0.0;
+
+    foreach (voucher_claimable($partyType, $partyId) as $row) {
+        $total += (float) $row['amount'];
+    }
+
+    return round($total, 2);
+}
+
+/** Whichever voucher a partner still has in flight, or null. */
+function voucher_open_for(string $partyType, int $partyId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM commission_vouchers
+          WHERE party_type = ? AND party_id = ?
+            AND status IN (' . implode(',', array_fill(0, count(VOUCHER_OPEN_STATUSES), '?')) . ')
+          ORDER BY id DESC LIMIT 1'
+    );
+    $stmt->execute([$partyType, $partyId, ...VOUCHER_OPEN_STATUSES]);
+
+    return $stmt->fetch() ?: null;
+}
+
+/** One voucher by id. */
+function voucher(int $id): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM commission_vouchers WHERE id = ?');
+    $stmt->execute([$id]);
+
+    return $stmt->fetch() ?: null;
+}
+
+/** Records a move, so a disputed payment has a history and not just a state. */
+function voucher_event(int $voucherId, ?string $from, string $to, string $actor, ?string $note = null): void
+{
+    db()->prepare(
+        'INSERT INTO commission_voucher_events (voucher_id, from_status, to_status, actor, note)
+         VALUES (?, ?, ?, ?, ?)'
+    )->execute([$voucherId, $from, $to, $actor, $note !== '' ? $note : null]);
+}
+
+/** Everything that has happened to one voucher, oldest first. */
+function voucher_events(int $voucherId): array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM commission_voucher_events WHERE voucher_id = ? ORDER BY id'
+    );
+    $stmt->execute([$voucherId]);
+
+    return $stmt->fetchAll();
+}
+
+/** The sales one voucher is made of, with who they were for. */
+function voucher_lines(int $voucherId): array
+{
+    $stmt = db()->prepare(
+        'SELECT l.*, a.reference_code, a.full_name, a.product, a.completed_at
+           FROM commission_voucher_lines l
+           JOIN applications a ON a.id = l.application_id
+          WHERE l.voucher_id = ?
+          ORDER BY a.completed_at, a.id'
+    );
+    $stmt->execute([$voucherId]);
+
+    return $stmt->fetchAll();
+}
+
+/** The party behind a voucher: their name, code, and where to pay them. */
+function voucher_party(array $voucher): ?array
+{
+    $table = $voucher['party_type'] === 'distributor' ? 'distributors' : 'dealers';
+    $code  = $voucher['party_type'] === 'distributor' ? 'distributor_code' : 'dealer_code';
+
+    $stmt = db()->prepare(
+        'SELECT id, full_name, email, mobile_number, bank_name, bank_account, bank_ifsc, upi_id,
+                ' . $code . ' AS code
+           FROM ' . $table . ' WHERE id = ?'
+    );
+    $stmt->execute([(int) $voucher['party_id']]);
+
+    return $stmt->fetch() ?: null;
+}
+
+/** Can this voucher actually be paid — is there anywhere to send the money? */
+function voucher_has_bank(array $voucher): bool
+{
+    $party = voucher_party($voucher);
+
+    if (!$party) {
+        return false;
+    }
+
+    return !empty($party['upi_id'])
+        || (!empty($party['bank_account']) && !empty($party['bank_ifsc']));
+}
+
+/**
+ * Raises a voucher for everything a partner has earned and not claimed.
+ *
+ * Returns [voucherId, error]. The lines are written inside a transaction with
+ * the voucher, so a sale can never end up on two claims: whichever insert loses
+ * the race hits the unique line and rolls the whole thing back.
+ */
+function voucher_raise(string $partyType, int $partyId, string $actor, ?string $cycle = null): array
+{
+    if (voucher_open_for($partyType, $partyId)) {
+        return [0, 'There is already a voucher open. It has to be settled before another is raised.'];
+    }
+
+    $claimable = voucher_claimable($partyType, $partyId);
+
+    if (!$claimable) {
+        return [0, 'Nothing to claim — no completed sale is waiting to be paid.'];
+    }
+
+    $total  = 0.0;
+    $status = $partyType === 'dealer' ? 'with_distributor' : 'with_rf';
+    $cycle  = $cycle ?? date('Y-m-d');
+
+    foreach ($claimable as $row) {
+        $total += (float) $row['amount'];
+    }
+
+    $db = db();
+    $db->beginTransaction();
+
+    try {
+        $db->prepare(
+            'INSERT INTO commission_vouchers (party_type, party_id, cycle_date, status, amount, is_bundle)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$partyType, $partyId, $cycle, $status, round($total, 2),
+                    $partyType === 'distributor' ? 1 : 0]);
+
+        $voucherId = (int) $db->lastInsertId();
+
+        $line = $db->prepare(
+            'INSERT INTO commission_voucher_lines (voucher_id, party_type, party_id, application_id, amount)
+             VALUES (?, ?, ?, ?, ?)'
+        );
+
+        foreach ($claimable as $row) {
+            $line->execute([$voucherId, $partyType, $partyId, (int) $row['id'], (float) $row['amount']]);
+        }
+
+        $db->commit();
+    } catch (PDOException $e) {
+        $db->rollBack();
+
+        return [0, 'Something was claimed twice while this was being raised. Try again.'];
+    }
+
+    voucher_event($voucherId, null, $status, $actor, 'Raised for ' . money($total));
+
+    return [$voucherId, ''];
+}
+
+/** The dealer vouchers one distributor has been asked to approve. */
+function voucher_dealer_claims(int $distributorId, array $statuses = ['with_distributor']): array
+{
+    $marks = implode(',', array_fill(0, count($statuses), '?'));
+
+    $stmt = db()->prepare(
+        'SELECT v.*, d.full_name AS party_name, d.dealer_code AS party_code
+           FROM commission_vouchers v
+           JOIN dealers d ON d.id = v.party_id
+          WHERE v.party_type = ? AND d.distributor_id = ? AND v.status IN (' . $marks . ')
+          ORDER BY v.raised_at DESC, v.id DESC'
+    );
+    $stmt->execute(['dealer', $distributorId, ...$statuses]);
+
+    return $stmt->fetchAll();
+}
+
+/** Every voucher a party has ever raised, newest first. */
+function vouchers_for(string $partyType, int $partyId): array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM commission_vouchers WHERE party_type = ? AND party_id = ?
+          ORDER BY raised_at DESC, id DESC'
+    );
+    $stmt->execute([$partyType, $partyId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * A distributor approving one of their dealers' vouchers.
+ *
+ * Approved is not yet claimed money — it waits at `bundled` for the bundle that
+ * carries it to R&F, which is raised separately.
+ */
+function voucher_approve_dealer(int $voucherId, int $distributorId, string $actor): string
+{
+    $voucher = voucher($voucherId);
+
+    if (!$voucher || $voucher['status'] !== 'with_distributor') {
+        return 'That voucher has already been decided.';
+    }
+
+    $dealer = dealer_by_id((int) $voucher['party_id']);
+
+    if (!$dealer || (int) $dealer['distributor_id'] !== $distributorId) {
+        return 'That voucher is not yours to decide.';
+    }
+
+    db()->prepare('UPDATE commission_vouchers SET status = ?, decided_at = NOW() WHERE id = ?')
+        ->execute(['bundled', $voucherId]);
+
+    voucher_event($voucherId, 'with_distributor', 'bundled', $actor);
+
+    return '';
+}
+
+/**
+ * Turning one down. The lines are released with it — the sales go back to
+ * claimable, so the next voucher picks them up rather than losing them.
+ */
+function voucher_reject(int $voucherId, string $actor, string $reason = '', string $status = 'rejected'): string
+{
+    $voucher = voucher($voucherId);
+
+    if (!$voucher || in_array($voucher['status'], ['paid', 'rejected', 'cancelled'], true)) {
+        return 'That voucher has already been settled.';
+    }
+
+    db()->prepare(
+        'UPDATE commission_vouchers SET status = ?, reject_reason = ?, decided_at = NOW() WHERE id = ?'
+    )->execute([$status, $reason !== '' ? mb_substr($reason, 0, 255) : null, $voucherId]);
+
+    /* the claim is over, so the sales it named are claimable again */
+    db()->prepare('DELETE FROM commission_voucher_lines WHERE voucher_id = ?')->execute([$voucherId]);
+
+    /* a bundle taking its dealers' vouchers down with it puts them back to
+       their distributor rather than killing a claim the dealer still has */
+    if ((int) $voucher['is_bundle'] === 1) {
+        $children = db()->prepare('SELECT id FROM commission_vouchers WHERE parent_id = ?');
+        $children->execute([$voucherId]);
+
+        foreach ($children->fetchAll() as $child) {
+            db()->prepare(
+                'UPDATE commission_vouchers SET status = ?, parent_id = NULL, reject_reason = ? WHERE id = ?'
+            )->execute(['with_distributor', $reason !== '' ? mb_substr($reason, 0, 255) : null, (int) $child['id']]);
+
+            voucher_event((int) $child['id'], 'bundled', 'with_distributor', $actor,
+                'The bundle it was in came back');
+        }
+    }
+
+    voucher_event($voucherId, (string) $voucher['status'], $status, $actor, $reason);
+
+    return '';
+}
+
+/**
+ * The distributor's bundle: their own claim plus every dealer voucher they have
+ * approved, sent to R&F as one document.
+ *
+ * Returns [voucherId, error].
+ */
+function voucher_bundle(int $distributorId, string $actor, ?string $cycle = null): array
+{
+    $approved = voucher_dealer_claims($distributorId, ['bundled']);
+    $approved = array_values(array_filter(
+        $approved,
+        static fn (array $v): bool => $v['parent_id'] === null
+    ));
+
+    $own = voucher_open_for('distributor', $distributorId);
+
+    if ($own) {
+        return [0, 'You already have a bundle open. It has to be settled before another is raised.'];
+    }
+
+    $claimable = voucher_claimable('distributor', $distributorId);
+
+    if (!$approved && !$claimable) {
+        return [0, 'Nothing to send — no approved dealer voucher and nothing of your own to claim.'];
+    }
+
+    $cycle = $cycle ?? date('Y-m-d');
+    $own   = 0.0;
+
+    foreach ($claimable as $row) {
+        $own += (float) $row['amount'];
+    }
+
+    $db = db();
+    $db->beginTransaction();
+
+    try {
+        $db->prepare(
+            'INSERT INTO commission_vouchers (party_type, party_id, cycle_date, status, amount, is_bundle)
+             VALUES (?, ?, ?, ?, ?, 1)'
+        )->execute(['distributor', $distributorId, $cycle, 'with_rf', round($own, 2)]);
+
+        $bundleId = (int) $db->lastInsertId();
+
+        $line = $db->prepare(
+            'INSERT INTO commission_voucher_lines (voucher_id, party_type, party_id, application_id, amount)
+             VALUES (?, ?, ?, ?, ?)'
+        );
+
+        foreach ($claimable as $row) {
+            $line->execute([$bundleId, 'distributor', $distributorId, (int) $row['id'], (float) $row['amount']]);
+        }
+
+        foreach ($approved as $child) {
+            $db->prepare('UPDATE commission_vouchers SET parent_id = ?, status = ? WHERE id = ?')
+                ->execute([$bundleId, 'with_rf', (int) $child['id']]);
+        }
+
+        $db->commit();
+    } catch (PDOException $e) {
+        $db->rollBack();
+
+        return [0, 'Something was claimed twice while this was being raised. Try again.'];
+    }
+
+    voucher_event($bundleId, null, 'with_rf', $actor,
+        count($approved) . ' dealer voucher' . (count($approved) === 1 ? '' : 's')
+        . ' and ' . money($own) . ' of their own');
+
+    foreach ($approved as $child) {
+        voucher_event((int) $child['id'], 'bundled', 'with_rf', $actor, 'Sent to R&F in a bundle');
+    }
+
+    return [$bundleId, ''];
+}
+
+/** Everything in a bundle: the distributor's own claim and their dealers'. */
+function voucher_bundle_children(int $bundleId): array
+{
+    $stmt = db()->prepare(
+        'SELECT v.*, d.full_name AS party_name, d.dealer_code AS party_code
+           FROM commission_vouchers v
+           JOIN dealers d ON d.id = v.party_id
+          WHERE v.parent_id = ?
+          ORDER BY d.full_name'
+    );
+    $stmt->execute([$bundleId]);
+
+    return $stmt->fetchAll();
+}
+
+/** What a bundle is worth altogether: the distributor's own plus every dealer's. */
+function voucher_bundle_total(int $bundleId): float
+{
+    $bundle = voucher($bundleId);
+    $total  = $bundle ? (float) $bundle['amount'] : 0.0;
+
+    foreach (voucher_bundle_children($bundleId) as $child) {
+        $total += (float) $child['amount'];
+    }
+
+    return round($total, 2);
+}
+
+/** Bundles at one stage of the journey, newest first, with the distributor on them. */
+function voucher_bundles(array $statuses): array
+{
+    $marks = implode(',', array_fill(0, count($statuses), '?'));
+
+    $stmt = db()->prepare(
+        'SELECT v.*, x.full_name AS party_name, x.distributor_code AS party_code
+           FROM commission_vouchers v
+           JOIN distributors x ON x.id = v.party_id
+          WHERE v.is_bundle = 1 AND v.status IN (' . $marks . ')
+          ORDER BY v.raised_at DESC, v.id DESC'
+    );
+    $stmt->execute($statuses);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Moves a bundle and everything in it to one status.
+ *
+ * The children travel with the bundle because they are the same document from
+ * every point but the dealer's — one thing for R&F to pay, one thing for the
+ * office to look at.
+ */
+function voucher_move_bundle(int $bundleId, string $to, string $actor, array $from, ?string $note = null): string
+{
+    $bundle = voucher($bundleId);
+
+    if (!$bundle || (int) $bundle['is_bundle'] !== 1) {
+        return 'That is not a bundle.';
+    }
+
+    if (!in_array((string) $bundle['status'], $from, true)) {
+        return 'That bundle has already moved on.';
+    }
+
+    $stamp = $to === 'paid' ? ', paid_at = NOW()' : '';
+
+    db()->prepare('UPDATE commission_vouchers SET status = ?' . $stamp . ' WHERE id = ?')
+        ->execute([$to, $bundleId]);
+
+    voucher_event($bundleId, (string) $bundle['status'], $to, $actor, $note);
+
+    foreach (voucher_bundle_children($bundleId) as $child) {
+        db()->prepare('UPDATE commission_vouchers SET status = ?' . $stamp . ' WHERE id = ?')
+            ->execute([$to, (int) $child['id']]);
+
+        voucher_event((int) $child['id'], (string) $child['status'], $to, $actor, $note);
+    }
+
+    return '';
+}
+
+/**
+ * R&F paying a funded bundle out.
+ *
+ * Writes a payout row for the distributor and for every dealer in it, which is
+ * what makes "still owed" on the existing screens come down. The payout tables
+ * stay the record of money actually transferred — this adds to them rather than
+ * inventing a second one.
+ */
+function voucher_pay(int $bundleId, string $actor, string $reference = ''): string
+{
+    $bundle = voucher($bundleId);
+
+    if (!$bundle || (int) $bundle['is_bundle'] !== 1) {
+        return 'That is not a bundle.';
+    }
+
+    if ($bundle['status'] !== 'funded') {
+        return 'A bundle can only be paid once the office has funded it.';
+    }
+
+    $reference = mb_substr(trim($reference), 0, 120);
+    $note      = 'Voucher #' . $bundleId . ($reference !== '' ? ' · ' . $reference : '');
+
+    if ((float) $bundle['amount'] > 0) {
+        db()->prepare(
+            'INSERT INTO distributor_payouts (distributor_id, amount, note, voucher_id) VALUES (?, ?, ?, ?)'
+        )->execute([(int) $bundle['party_id'], (float) $bundle['amount'], $note, $bundleId]);
+    }
+
+    foreach (voucher_bundle_children($bundleId) as $child) {
+        if ((float) $child['amount'] <= 0) {
+            continue;
+        }
+
+        db()->prepare(
+            'INSERT INTO dealer_payouts (dealer_id, amount, note, voucher_id) VALUES (?, ?, ?, ?)'
+        )->execute([(int) $child['party_id'], (float) $child['amount'],
+                    'Voucher #' . (int) $child['id'] . ($reference !== '' ? ' · ' . $reference : ''), (int) $child['id']]);
+    }
+
+    db()->prepare('UPDATE commission_vouchers SET payment_reference = ? WHERE id = ?')
+        ->execute([$reference !== '' ? $reference : null, $bundleId]);
+
+    return voucher_move_bundle($bundleId, 'paid', $actor, ['funded'],
+        $reference !== '' ? 'Reference ' . $reference : null);
+}
+
+/**
+ * The Friday run: raise what is owed, for everybody, once per cycle.
+ *
+ * Idempotent by cycle date — running it twice on the same Friday raises
+ * nothing the second time, because everybody who could be raised for already
+ * has a voucher open. Returns a count of what it did.
+ */
+function voucher_run_cycle(?string $cycle = null, string $actor = 'the Friday run'): array
+{
+    $cycle = $cycle ?? date('Y-m-d');
+    $made  = ['dealers' => 0, 'bundles' => 0, 'skipped' => 0];
+
+    /* an approved, active dealer with something to claim */
+    $dealers = db()->query(
+        "SELECT id FROM dealers WHERE is_active = 1 AND approval_status = 'approved' ORDER BY id"
+    )->fetchAll();
+
+    foreach ($dealers as $row) {
+        [$id, $error] = voucher_raise('dealer', (int) $row['id'], $actor, $cycle);
+
+        $error === '' ? $made['dealers']++ : $made['skipped']++;
+    }
+
+    /* then every distributor bundles whatever is sitting approved, plus their own */
+    $distributors = db()->query('SELECT id FROM distributors WHERE is_active = 1 ORDER BY id')->fetchAll();
+
+    foreach ($distributors as $row) {
+        [$id, $error] = voucher_bundle((int) $row['id'], $actor, $cycle);
+
+        $error === '' ? $made['bundles']++ : $made['skipped']++;
+    }
+
+    return $made;
+}
+
+/* ---------- paging ----------
+   Every list that can grow past a screenful pages the same way: ten rows, the
+   page in ?page=, and partials/pager.php underneath. The arithmetic is here so
+   a list cannot invent its own idea of what page 3 means. */
+
+/** Rows on one page. The dashboard shows the same number at a glance. */
+const LIST_PER_PAGE = 10;
+
+/**
+ * Where one page of a list starts and ends.
+ *
+ * A page number past the end is clamped to the last page rather than showing an
+ * empty table: somebody who deletes the only row on page 4 should land on the
+ * rows that are left, not on nothing.
+ */
+function paged(int $total, $requested, int $perPage = LIST_PER_PAGE): array
+{
+    $pages  = max(1, (int) ceil($total / $perPage));
+    $page   = max(1, min($pages, (int) $requested ?: 1));
+    $offset = ($page - 1) * $perPage;
+
+    return [
+        'page'    => $page,
+        'pages'   => $pages,
+        'offset'  => $offset,
+        'perPage' => $perPage,
+        'total'   => $total,
+        'from'    => $total === 0 ? 0 : $offset + 1,
+        'to'      => min($offset + $perPage, $total),
+    ];
+}
+
+/* ---------- the partner form ----------
+   A dealer and a distributor are the same record at different levels: the same
+   sixteen fields, the same codes in capitals, the same fixed lengths. Reading
+   and checking them lives here once, so the two forms cannot drift into
+   validating the same PAN differently. */
+
+/** Everything both partner forms carry, in the order they are stored. */
+const PARTNER_FIELDS = ['full_name', 'company', 'email', 'mobile_number', 'alt_mobile_number',
+                        'address', 'city', 'state', 'pin_code', 'pan_number', 'gst_number',
+                        'bank_name', 'bank_account', 'bank_ifsc', 'upi_id', 'note'];
+
+/** The codes that are issued in capitals, and how long each one is. */
+const PARTNER_CODE_FIELDS = [
+    'pan_number' => ['label' => 'PAN',  'length' => 10],
+    'gst_number' => ['label' => 'GST',  'length' => 15],
+    'bank_ifsc'  => ['label' => 'IFSC', 'length' => 11],
+];
+
+/**
+ * One partner form, read off a POST and cleaned.
+ *
+ * Returns [values, error]. PAN, GST and IFSC are upper-cased here rather than
+ * in the browser, because a value that reaches the table has to be right even
+ * when the request did not come from our form. Blank is allowed throughout
+ * except the name — the paperwork usually arrives after the phone call — but a
+ * half-typed code is not, because it would be quoted on a transfer that bounces.
+ */
+function partner_values(array $post): array
+{
+    $values = [];
+
+    foreach (PARTNER_FIELDS as $field) {
+        $value = trim((string) ($post[$field] ?? ''));
+
+        if (isset(PARTNER_CODE_FIELDS[$field])) {
+            $value = mb_strtoupper($value);
+        }
+
+        $values[$field] = $value === '' ? null : mb_substr($value, 0, $field === 'note' ? 2000 : 190);
+    }
+
+    foreach (PARTNER_CODE_FIELDS as $field => $rule) {
+        $value = (string) ($values[$field] ?? '');
+
+        if ($value === '' || preg_match('/^[A-Z0-9]{' . $rule['length'] . '}$/', $value)) {
+            continue;
+        }
+
+        return [$values, $rule['label'] . ' has to be ' . $rule['length']
+            . ' letters and digits, with nothing in between — you gave ' . mb_strlen($value) . '.'];
+    }
+
+    if ($values['full_name'] === null) {
+        return [$values, 'A name is required.'];
+    }
+
+    if ($values['email'] !== null && !filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
+        return [$values, 'That email address does not look right.'];
+    }
+
+    return [$values, ''];
+}
+
+/* ---------- distributors ----------
+   A distributor signs dealers up and takes a share of what they sell, as well
+   as selling directly. Same shape as a dealer throughout — the code, the
+   payouts, the portal — because they are the same job at a different level, and
+   two near-identical implementations is how the two start disagreeing. */
+
+/** The distributor a quoted code belongs to, or null. Switched off is nobody. */
+function distributor_for_code(string $code): ?array
+{
+    if ($code === '') {
+        return null;
+    }
+
+    $stmt = db()->prepare('SELECT * FROM distributors WHERE distributor_code = ? AND is_active = 1 LIMIT 1');
+    $stmt->execute([$code]);
+
+    return $stmt->fetch() ?: null;
+}
+
+/** One distributor by id, or null. */
+function distributor_by_id(int $id): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM distributors WHERE id = ?');
+    $stmt->execute([$id]);
+
+    return $stmt->fetch() ?: null;
+}
+
+/** The distributor a dealer answers to, or null when the office signed them up. */
+function distributor_for_dealer(?array $dealer): ?array
+{
+    $id = (int) ($dealer['distributor_id'] ?? 0);
+
+    return $id > 0 ? distributor_by_id($id) : null;
+}
+
+/** The dealers one distributor has signed up, newest first. */
+function distributor_dealers(int $distributorId): array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM dealers WHERE distributor_id = ? ORDER BY is_active DESC, full_name'
+    );
+    $stmt->execute([$distributorId]);
+
+    return $stmt->fetchAll();
+}
+
+/** Everyone who applied with one distributor's own code or through their dealers. */
+function distributor_clients(int $distributorId): array
+{
+    $stmt = db()->prepare(
+        'SELECT a.id, a.reference_code, a.full_name, a.email, a.mobile_number, a.product, a.status,
+                a.created_at, a.booking_paid_at, a.delivery_paid_at, a.completed_at,
+                a.dealer_commission, a.distributor_commission, a.dealer_id,
+                d.full_name AS dealer_name, d.dealer_code
+           FROM applications a
+           LEFT JOIN dealers d ON d.id = a.dealer_id
+          WHERE a.distributor_id = ?
+          ORDER BY a.created_at DESC'
+    );
+    $stmt->execute([$distributorId]);
+
+    return $stmt->fetchAll();
+}
+
+/** Every transfer made to one distributor, newest first. */
+function distributor_payouts(int $distributorId): array
+{
+    $stmt = db()->prepare(
+        'SELECT p.*, u.name AS paid_by_name
+           FROM distributor_payouts p
+           LEFT JOIN admin_users u ON u.id = p.paid_by
+          WHERE p.distributor_id = ?
+          ORDER BY p.paid_at DESC, p.id DESC'
+    );
+    $stmt->execute([$distributorId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * What one dealer has earned their distributor, and what is still riding on
+ * their sales in progress.
+ *
+ * Scoped to the pair, not to the dealer: a dealer moved from one distributor to
+ * another keeps the override on their old sales with the old distributor, which
+ * is exactly what the frozen figures on those applications already say.
+ */
+function distributor_override_from_dealer(int $distributorId, int $dealerId): array
+{
+    $stmt = db()->prepare(
+        'SELECT COALESCE(SUM(CASE WHEN ' . COMMISSION_EARNED_SQL . '
+                                  THEN distributor_commission ELSE 0 END), 0) AS earned,
+                COALESCE(SUM(CASE WHEN ' . COMMISSION_EARNED_SQL . " OR status = 'rejected'
+                                  THEN 0 ELSE distributor_commission END), 0) AS pipeline
+           FROM applications
+          WHERE distributor_id = ? AND dealer_id = ?"
+    );
+    $stmt->execute([$distributorId, $dealerId]);
+    $row = $stmt->fetch() ?: [];
+
+    return [
+        'earned'   => (float) ($row['earned'] ?? 0),
+        'pipeline' => (float) ($row['pipeline'] ?? 0),
+    ];
+}
+
+/** The reading view of one distributor, in the shape field_groups() returns. */
+function distributor_field_groups(): array
+{
+    $groups = dealer_field_groups();
+    $groups['Distributor'] = $groups['Dealer'];
+    unset($groups['Dealer']);
+
+    $groups['Distributor']['Tracking'] = ['distributor_code' => 'Distributor code', 'note' => 'Note',
+                                          'created_at' => 'Added on'];
+
+    return $groups;
 }
 
 /** Everyone who applied with one dealer's code, newest first. */
@@ -637,19 +2299,40 @@ function dealer_payouts(int $dealerId): array
  */
 function dealer_totals(int $dealerId): array
 {
+    return commission_totals('dealer', $dealerId);
+}
+
+/**
+ * What one dealer or distributor has sold, earned, been paid and is still owed.
+ *
+ * The two are the same sum over different columns, so they are the same
+ * function: two definitions of "still owed" is how a portal and an admin start
+ * quoting different figures at the same person.
+ *
+ * `sales` counts everything attributed to them, `confirmed` only the complete
+ * ones — the ones that have actually earned anything.
+ */
+function commission_totals(string $who, int $id): array
+{
+    $column     = $who === 'distributor' ? 'distributor_id' : 'dealer_id';
+    $commission = $who === 'distributor' ? 'distributor_commission' : 'dealer_commission';
+    $payouts    = $who === 'distributor' ? 'distributor_payouts' : 'dealer_payouts';
+
     $stmt = db()->prepare(
-        "SELECT COUNT(*) AS sales,
-                COALESCE(SUM(booking_paid_at IS NOT NULL AND status <> 'rejected'), 0) AS confirmed,
-                COALESCE(SUM(CASE WHEN booking_paid_at IS NOT NULL AND status <> 'rejected'
-                                  THEN dealer_commission ELSE 0 END), 0) AS earned
+        'SELECT COUNT(*) AS sales,
+                COALESCE(SUM(' . COMMISSION_EARNED_SQL . '), 0) AS confirmed,
+                COALESCE(SUM(CASE WHEN ' . COMMISSION_EARNED_SQL . '
+                                  THEN ' . $commission . ' ELSE 0 END), 0) AS earned,
+                COALESCE(SUM(CASE WHEN ' . COMMISSION_EARNED_SQL . " OR status = 'rejected'
+                                  THEN 0 ELSE " . $commission . ' END), 0) AS pipeline
            FROM applications
-          WHERE dealer_id = ?"
+          WHERE ' . $column . ' = ?'
     );
-    $stmt->execute([$dealerId]);
+    $stmt->execute([$id]);
     $row = $stmt->fetch() ?: [];
 
-    $paidStmt = db()->prepare('SELECT COALESCE(SUM(amount), 0) FROM dealer_payouts WHERE dealer_id = ?');
-    $paidStmt->execute([$dealerId]);
+    $paidStmt = db()->prepare('SELECT COALESCE(SUM(amount), 0) FROM ' . $payouts . ' WHERE ' . $column . ' = ?');
+    $paidStmt->execute([$id]);
 
     $earned = (float) ($row['earned'] ?? 0);
     $paid   = (float) $paidStmt->fetchColumn();
@@ -658,10 +2341,18 @@ function dealer_totals(int $dealerId): array
         'sales'     => (int) ($row['sales'] ?? 0),
         'confirmed' => (int) ($row['confirmed'] ?? 0),
         'earned'    => $earned,
+        /* riding on sales still in progress: not owed, but worth seeing */
+        'pipeline'  => (float) ($row['pipeline'] ?? 0),
         'paid'      => $paid,
         /* an overpayment reads as nothing owed rather than a negative figure */
         'remaining' => max(0.0, $earned - $paid),
     ];
+}
+
+/** What one distributor has sold, earned, been paid and is still owed. */
+function distributor_totals(int $distributorId): array
+{
+    return commission_totals('distributor', $distributorId);
 }
 
 /** The reading view of one dealer, in the same shape field_groups() returns. */
@@ -858,6 +2549,31 @@ function e(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+/* ---------- what an action leaves behind ----------
+   An action redirects back to the list it came from, and the list has to be
+   able to say what happened. Hanging that off the query string means every
+   confirmation rewrites the address bar and stays there — reload it and the
+   same "sent" message comes back for something that happened once. The session
+   carries it instead: the URL never moves and the message is read exactly once.
+
+   Keys in use: saved (id to flag), deleted (id), mail (sent|failed) and
+   pay (receipt|rejected|reminded|mailfail). */
+
+/** Remember what to tell the next page. */
+function admin_flash(array $values): void
+{
+    $_SESSION['admin_flash'] = $values;
+}
+
+/** Read it, once — a second look at the same page says nothing. */
+function admin_flash_take(): array
+{
+    $flash = $_SESSION['admin_flash'] ?? [];
+    unset($_SESSION['admin_flash']);
+
+    return is_array($flash) ? $flash : [];
+}
+
 /* ---------- CSRF ---------- */
 
 function csrf_token(): string
@@ -891,6 +2607,13 @@ function current_user(): ?array
     return $_SESSION['admin'] ?? null;
 }
 
+/**
+ * The office's own pages.
+ *
+ * R&F signs in at the same door and is a different job entirely — they see
+ * vouchers and nothing else — so landing on an office page sends them to their
+ * own. One sign-in, two destinations.
+ */
 function require_login(): array
 {
     $user = current_user();
@@ -900,7 +2623,36 @@ function require_login(): array
         exit;
     }
 
+    if (($user['role'] ?? 'admin') === 'rf') {
+        header('Location: ' . rtrim(dirname($_SERVER['PHP_SELF']), '/\\') . '/../rf/index.php');
+        exit;
+    }
+
     return $user;
+}
+
+/** The R&F pages, the other way round. */
+function require_rf(): array
+{
+    $user = current_user();
+
+    if (!$user) {
+        header('Location: ../admin/login.php');
+        exit;
+    }
+
+    if (($user['role'] ?? 'admin') !== 'rf') {
+        header('Location: ../admin/index.php');
+        exit;
+    }
+
+    return $user;
+}
+
+/** Where a signed-in account belongs. */
+function role_landing(string $role): string
+{
+    return $role === 'rf' ? '../rf/index.php' : 'index.php';
 }
 
 function log_status_change(string $entity, int $id, ?string $old, string $new, ?int $userId): void
@@ -958,7 +2710,9 @@ function record_title(string $type, array $row): string
         return $row['email'];
     }
 
-    return $row['full_name'] ?? $row['name'] ?? ('#' . $row['id']);
+    /* the dashboard's list is a UNION of three tables, so the name arrives
+       under the alias they share — without it every row there was a '#id' */
+    return $row['full_name'] ?? $row['name'] ?? $row['title'] ?? ('#' . $row['id']);
 }
 
 /**
@@ -1058,13 +2812,16 @@ function render_value(string $key, $value): string
     }
 
     if (in_array($key, ['id_document_path', 'residence_proof_path'], true)) {
-        return '<a class="link-arrow" href="file.php?path=' . e(rawurlencode((string) $value))
-            . '" target="_blank" rel="noopener">Open file <i class="bi bi-box-arrow-up-right"></i></a>';
+        $label = $key === 'id_document_path' ? 'ID document' : 'Proof of residence';
+
+        return '<a class="link-arrow" data-viewer="' . $label . '" href="file.php?path='
+            . e(rawurlencode((string) $value)) . '">Open file <i class="bi bi-box-arrow-up-right"></i></a>';
     }
 
     if ($key === 'payment_proof_path') {
-        return '<a class="link-arrow" href="file.php?path=' . e(rawurlencode((string) $value))
-            . '&amp;dir=payments" target="_blank" rel="noopener">Open receipt <i class="bi bi-box-arrow-up-right"></i></a>';
+        return '<a class="link-arrow" data-viewer="Payment receipt" href="file.php?path='
+            . e(rawurlencode((string) $value))
+            . '&amp;dir=payments">Open receipt <i class="bi bi-box-arrow-up-right"></i></a>';
     }
 
     if ($key === 'referral_reward' || $key === 'dealer_commission') {
@@ -1090,4 +2847,14 @@ function format_datetime(?string $value): string
     }
 
     return date('j M Y, H:i', strtotime($value));
+}
+
+/** The same, without the time — for a date that never had one. */
+function format_date(?string $value): string
+{
+    if (!$value) {
+        return '—';
+    }
+
+    return date('j M Y', strtotime($value));
 }

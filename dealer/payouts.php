@@ -1,9 +1,11 @@
 <?php
 /**
- * What the office has transferred to this dealer, and what is still standing.
+ * What this dealer is owed, what they have claimed, and what has been paid.
  *
- * Reading only. A dealer cannot record, edit or remove a transfer — the office
- * does that from the admin, and this is the statement of it.
+ * A dealer cannot pay themselves. What they can do is raise a voucher: a claim
+ * for the commission they have earned and not been paid, which goes to their
+ * distributor, then to R&F, then to the office, and comes back as money. See
+ * CLIENT-FLOW.md §10.
  */
 
 declare(strict_types=1);
@@ -13,14 +15,49 @@ require_once __DIR__ . '/lib.php';
 $dealer    = require_dealer();
 $dealerId  = (int) $dealer['id'];
 $pageTitle = 'Payouts';
-$pageLead  = 'What has been transferred to you, and what has not.';
+$pageLead  = 'What you are owed, what you have claimed, and what has been paid.';
 $activeNav = 'payouts';
 
-$totals  = dealer_totals($dealerId);
-$payouts = dealer_payouts($dealerId);
+$error = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'raise') {
+    csrf_check();
+
+    [$voucherId, $error] = voucher_raise('dealer', $dealerId, $dealer['full_name']);
+
+    if ($error === '') {
+        $_SESSION['dealer_flash'] = 'Voucher raised. It is with your distributor now.';
+
+        header('Location: payouts.php');
+        exit;
+    }
+}
+
+$totals    = dealer_totals($dealerId);
+$payouts   = dealer_payouts($dealerId);
+$claimable = voucher_claimable('dealer', $dealerId);
+$openVoucher = voucher_open_for('dealer', $dealerId);
+$myVouchers  = vouchers_for('dealer', $dealerId);
+
+$claimTotal = 0.0;
+
+foreach ($claimable as $claimRow) {
+    $claimTotal += (float) $claimRow['amount'];
+}
+
+$flash = (string) ($_SESSION['dealer_flash'] ?? '');
+unset($_SESSION['dealer_flash']);
 
 require __DIR__ . '/partials/layout-top.php';
 ?>
+
+<?php if ($flash !== ''): ?>
+  <p class="alert alert--ok"><?= e($flash) ?></p>
+<?php endif; ?>
+
+<?php if ($error !== ''): ?>
+  <p class="alert alert--error"><?= e($error) ?></p>
+<?php endif; ?>
 
 <div class="tiles">
   <span class="tile">
@@ -46,6 +83,8 @@ require __DIR__ . '/partials/layout-top.php';
     </span>
   </span>
 </div>
+
+<?php $voucherKind = 'dealer'; require __DIR__ . '/../admin/partials/voucher-claim.php'; ?>
 
 <div class="panel">
   <div class="panel__head">

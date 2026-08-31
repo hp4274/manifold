@@ -4244,6 +4244,7 @@ label.upload{
   text-transform:uppercase;
 }
 .portal-status--new{background:rgba(59,163,220,.14);color:#2273a3}
+.portal-status--submitted{background:rgba(59,163,220,.14);color:#2273a3}
 .portal-status--booking_pending{background:rgba(201,138,43,.16);color:#8a5f1c}
 .portal-status--booking_review{background:rgba(23,176,166,.16);color:#0b7a74}
 .portal-status--delivery_pending{background:rgba(59,163,220,.14);color:#2273a3}
@@ -4254,7 +4255,10 @@ label.upload{
 /* --- the stage timeline --- */
 .portal-steps{
   display:grid;
-  grid-template-columns:repeat(5,minmax(0,1fr));
+  /* one column per stage, whatever the stage list holds — a fixed count here
+     is what put the sixth stage on a row of its own with the rail dangling */
+  grid-auto-flow:column;
+  grid-auto-columns:minmax(0,1fr);
   gap:0;
   margin-bottom:26px;
 }
@@ -4341,7 +4345,7 @@ label.upload{
   .portal-card{padding:30px 24px}
   .portal-app{padding:26px 22px}
   .portal-pay{grid-template-columns:1fr;padding:22px}
-  .portal-steps{grid-template-columns:1fr;gap:18px;text-align:left}
+  .portal-steps{grid-auto-flow:row;grid-auto-columns:auto;gap:18px;text-align:left}
   .portal-step{display:flex;align-items:center;gap:14px;padding:0;text-align:left}
   .portal-step::before{display:none}
   .portal-step__dot{margin:0}
@@ -5617,3 +5621,30 @@ body{overflow-x:hidden}
   .price-step{padding:24px 24px 26px}
   .price-foot{margin-top:32px;padding-top:28px}
 }
+
+/* ---------- role picker (one address, more than one thing) ---------- */
+.role-picker{display:grid;gap:12px;margin-bottom:22px}
+.role-card{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:18px 20px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:#fff;
+  color:var(--ink);
+  transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease;
+}
+.role-card:hover{border-color:var(--accent-2);transform:translateY(-1px);box-shadow:var(--shadow-card)}
+.role-card__icon{
+  flex:none;
+  width:44px;height:44px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  background:var(--tint);
+  font-size:19px;
+  color:var(--accent-deep);
+}
+.role-card__text{display:grid;gap:2px;flex:1 1 auto;min-width:0}
+.role-card__text strong{font-size:var(--t-sub);font-weight:700}
+.role-card__text span{font-size:13px;color:var(--muted);line-height:1.5}

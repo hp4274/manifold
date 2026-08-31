@@ -99,15 +99,18 @@ ul{list-style:none;margin:0;padding:0}
   align-self:flex-start;
   height:100vh;
   overflow-y:auto;
-  padding:26px 22px;
+  padding:20px 16px;
   background:var(--navy-800);
   color:#fff;
   display:flex;
   flex-direction:column;
-  gap:26px;
+  /* Twelve links, a brand and an account block have to fit a laptop window
+     without a scrollbar: every value here is what it takes to get the column
+     under 100vh on a 768px screen, which is the shortest one this is used on. */
+  gap:16px;
 }
 .sidebar__brand{display:block}
-.sidebar__brand img{height:44px;width:auto}
+.sidebar__brand img{height:38px;width:auto}
 .sidebar__label{
   font-size:var(--t-micro);
   font-weight:600;
@@ -116,12 +119,12 @@ ul{list-style:none;margin:0;padding:0}
   color:rgba(255,255,255,.45);
   padding:0 12px;
 }
-.sidebar__nav{display:grid;gap:6px}
+.sidebar__nav{display:grid;gap:3px;margin-top:6px}
 .sidebar__nav a{
   display:flex;
   align-items:center;
   gap:12px;
-  padding:12px 14px;
+  padding:9px 12px;
   border-radius:var(--radius-sm);
   font-size:var(--t-ui);
   font-weight:500;
@@ -135,9 +138,9 @@ ul{list-style:none;margin:0;padding:0}
   color:#fff;
   font-weight:700;
 }
-.sidebar__foot{margin-top:auto;display:grid;gap:10px}
+.sidebar__foot{margin-top:auto;display:grid;gap:6px}
 .sidebar__user{
-  padding:14px;
+  padding:11px 12px;
   border-radius:var(--radius-sm);
   background:rgba(255,255,255,.06);
   font-size:var(--t-ui);
@@ -203,6 +206,35 @@ ul{list-style:none;margin:0;padding:0}
   transition:border-color .2s ease,box-shadow .2s ease;
 }
 .field textarea{min-height:120px;resize:vertical}
+/* one placeholder colour, stated rather than left to the browser — the default
+   varies enough between them to read as a different shade of grey per field */
+.field input::placeholder,
+.field textarea::placeholder{color:var(--muted);opacity:1}
+
+/* --- file field ---
+   The box around it is themed by .field input above; the button inside it is
+   the browser's own, and left alone it is the one grey slab on the page. It
+   gets the ghost button's treatment, and the input's own padding comes down to
+   keep the whole field the height of a text one. */
+.field input[type="file"]{padding:7px 8px;cursor:pointer;color:var(--muted)}
+.field input[type="file"]::file-selector-button{
+  margin-right:12px;
+  padding:8px 16px;
+  font-family:inherit;
+  font-size:var(--t-sub);
+  font-weight:600;
+  color:var(--ink);
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+  transition:background .2s ease,border-color .2s ease,color .2s ease;
+}
+.field input[type="file"]::file-selector-button:hover{
+  background:var(--tint);
+  border-color:var(--accent-deep);
+  color:var(--accent-deep);
+}
 
 /* the picker button belongs to this form, whose inputs sit a little tighter
    than the public ones: 22px of line rather than 27 */
@@ -273,9 +305,14 @@ ul{list-style:none;margin:0;padding:0}
 .tiles{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  align-items:stretch;
   gap:18px;
   margin-bottom:30px;
 }
+/* the figure sits under the label and the detail under that, so a card with
+   more to say grows downward rather than pushing its own content out */
+.tile{display:flex;flex-direction:column}
+.tile .tile__stats{margin-top:auto}
 .tile{
   padding:22px 24px;
   border:1px solid var(--line);
@@ -304,12 +341,18 @@ ul{list-style:none;margin:0;padding:0}
   display:flex;
   align-items:baseline;
   gap:6px;
+  min-width:0;
   padding:0 0 0 16px;
   border-left:1px solid var(--line);
   font-size:var(--t-ui);
   line-height:1.4;
   color:var(--muted);
-  white-space:nowrap;
+  /* Wraps. These began as counts — "12 accepted" — where a break between the
+     number and its word read badly, but the partner dashboards put a whole
+     sentence in here and nowrap sent it straight out of the card. The number
+     and its label are separate children with a gap, so they still hold
+     together on a line of their own. */
+  overflow-wrap:anywhere;
 }
 /* the left column starts flush with the card, so no rule in front of it */
 .tile__stat:nth-child(odd){padding-left:0;border-left:0}
@@ -344,6 +387,8 @@ ul{list-style:none;margin:0;padding:0}
 }
 .pill::before{content:"";flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:currentColor}
 .pill--new{background:rgba(59,163,220,.14);color:#2273a3}
+/* an application waiting on the office reads as work, not as a stage */
+.pill--submitted{background:rgba(59,163,220,.14);color:#2273a3}
 .pill--pending{background:rgba(201,138,43,.16);color:var(--warn)}
 .pill--accepted,
 .pill--confirmed{background:rgba(75,180,83,.16);color:#26743a}
@@ -564,6 +609,10 @@ td strong{color:var(--ink);font-size:var(--t-sub)}
 .link-arrow:hover{text-decoration:underline}
 
 .empty{padding:60px 24px;text-align:center;color:var(--muted)}
+/* the same sentence, inside a table that keeps its headers so the filters on
+   them stay reachable with nothing listed */
+.row-empty td{padding:44px 24px;text-align:center;color:var(--muted)}
+.row-empty:hover{background:none}
 
 /* ---------- click-to-cycle column filter ---------- */
 /* Fixed layout: the columns keep their widths whatever the header label says
@@ -574,13 +623,24 @@ td strong{color:var(--ink);font-size:var(--t-sub)}
 .data-table .td-actions{white-space:nowrap;overflow:visible}
 
 /* the button fills the cell, so the cell itself carries no padding */
-.data-table th.th-filter-cell{padding:0}
+/* the button fills the cell, so the cell carries no padding of its own — this
+   is not tied to .data-table: a plain table with a filter header needs it just
+   as much, and without it the cell's padding and the button's stack up and the
+   header row comes out twice as tall */
+th.th-filter-cell{padding:0}
+/* the control is a button where it filters in the browser and a link where it
+   navigates, so both have to look like the header they replace */
+a.th-filter{text-decoration:none}
 .th-filter{
   display:flex;
   align-items:center;
-  gap:9px;
+  gap:7px;
   width:100%;
-  padding:16px 24px;
+  /* a label plus a chevron in the room a plain header takes for the label
+     alone. Six pixels narrower than a plain header either side: enough for the
+     longest label a sort can swap in, little enough that the header still reads
+     as sitting over its own column. */
+  padding:16px 18px;
   margin:0;
   border:0;
   border-radius:0;
@@ -598,10 +658,54 @@ td strong{color:var(--ink);font-size:var(--t-sub)}
   transition:color .2s ease,background .2s ease;
 }
 .th-filter:hover{background:#eef4f9;color:var(--ink-soft)}
+/* a header doing the filtering says so, rather than looking like the rest */
+.th-filter.is-filtered{color:var(--accent-deep)}
+.th-filter.is-filtered i{opacity:1}
 .th-filter:active{background:#e4ecf4}
 .th-filter i{font-size:12px;opacity:.5;flex:none;transition:transform .25s ease,opacity .2s ease}
 .th-filter:hover i{transform:translateY(1px)}
 /* long values such as "Contact enquiries" truncate rather than widen the cell */
+/* --- a header that picks from a list rather than stepping through one ---
+   Same type, same padding and same hover as .th-filter above: from the outside
+   the two are one control, and only the number of choices decides which the
+   column gets. */
+.th-picker{display:block;margin:0}
+.th-select{
+  width:100%;
+  padding:16px 38px 16px 18px;
+  margin:0;
+  border:0;
+  border-radius:0;
+  appearance:none;
+  -webkit-appearance:none;
+  background-color:transparent;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23768ba0'%3E%3Cpath d='M7.247 4.86 4.451 8.596C4.199 8.933 4.44 9.4 4.86 9.4h6.28c.42 0 .66-.467.408-.804L8.753 4.86a.5.5 0 0 0-.756 0z' transform='rotate(180 8 7.13)'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 16px center;
+  background-size:13px 13px;
+  font-family:inherit;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--muted);
+  cursor:pointer;
+  outline:none;
+  text-overflow:ellipsis;
+  transition:color .2s ease,background-color .2s ease;
+}
+.th-select:hover,
+.th-select:focus-visible{background-color:#eef4f9;color:var(--ink-soft)}
+.th-select.is-filtered{color:var(--accent-deep)}
+/* the list that drops down is read, not scanned like a header */
+.th-select option{
+  font-size:var(--t-sub);
+  font-weight:500;
+  letter-spacing:0;
+  text-transform:none;
+  color:var(--ink);
+}
+
 .th-filter__label{
   min-width:0;
   overflow:hidden;
@@ -674,7 +778,6 @@ tr.is-flagged td{background:rgba(75,180,83,.09)}
 
 .icon-btn.is-accept:hover{background:rgba(75,180,83,.14);border-color:rgba(75,180,83,.45);color:#26743a}
 .icon-btn.is-review:hover{background:rgba(201,138,43,.14);border-color:rgba(201,138,43,.45);color:var(--warn)}
-.icon-btn.is-complete:hover{background:rgba(15,44,77,.1);border-color:rgba(15,44,77,.35);color:var(--ink)}
 .icon-btn.is-contact:hover{background:rgba(23,176,166,.14);border-color:rgba(23,176,166,.45);color:#0b7a74}
 .icon-btn.is-reject:hover{background:rgba(201,69,92,.1);border-color:rgba(201,69,92,.4);color:var(--danger)}
 .icon-btn.is-delete{color:var(--muted)}
@@ -684,7 +787,6 @@ tr.is-flagged td{background:rgba(75,180,83,.09)}
 .icon-btn.is-current{cursor:default;transform:none}
 .icon-btn.is-accept.is-current{background:rgba(75,180,83,.18);border-color:rgba(75,180,83,.5);color:#26743a}
 .icon-btn.is-review.is-current{background:rgba(201,138,43,.18);border-color:rgba(201,138,43,.5);color:var(--warn)}
-.icon-btn.is-complete.is-current{background:rgba(15,44,77,.12);border-color:rgba(15,44,77,.4);color:var(--ink)}
 .icon-btn.is-contact.is-current{background:rgba(23,176,166,.18);border-color:rgba(23,176,166,.5);color:#0b7a74}
 .icon-btn.is-reject.is-current{background:rgba(201,69,92,.14);border-color:rgba(201,69,92,.45);color:var(--danger)}
 
@@ -1198,6 +1300,15 @@ a.pay-item__proof:hover{color:var(--ink-soft);text-decoration:underline}
 }
 
 /* the sidebar's own scrollbar, on the rare screen too short for it */
+/* a laptop in a small window: the column tightens rather than scrolling */
+@media (max-height:760px){
+  .sidebar{padding:14px 14px;gap:10px}
+  .sidebar__brand img{height:32px}
+  .sidebar__nav a{padding:7px 12px}
+  .sidebar__nav{margin-top:4px}
+  .sidebar__user{padding:9px 12px}
+}
+
 .sidebar{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent}
 .sidebar::-webkit-scrollbar{width:6px}
 .sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:99px}
@@ -1644,6 +1755,10 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
 
 /* two columns for the short fields; anything that needs the width says so */
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+/* Each field keeps its own height. Without this the field boxes stretch to the
+   tallest in the row, and their inputs stretch with them — so a field whose
+   neighbour carries a hint line came out taller than the one beside it. */
+.form-grid > .field{align-content:start}
 .form-grid .field--wide{grid-column:1 / -1}
 
 /* the one field that has to be filled in */
@@ -1694,6 +1809,307 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
   .modal-x__foot{flex-direction:column;align-items:stretch}
   .modal-x__foot .btn{width:100%;justify-content:center}
 }
+
+/* a paragraph of explanation inside a form section, sized to be read rather
+   than skimmed like a label */
+.form-section__copy{
+  margin:0 0 14px;
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--body);
+  max-width:70ch;
+}
+
+/* a tick the whole line is clickable for — the label is the target, so it is
+   as easy to hit on a phone as on a desk */
+.field-consent{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  margin-bottom:12px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+  background:#fff;
+  font-size:var(--t-ui);
+  line-height:1.5;
+  color:var(--body);
+  cursor:pointer;
+  transition:border-color .2s ease,background .2s ease;
+}
+.field-consent:hover{border-color:var(--accent-2);background:var(--tint)}
+.field-consent input[type="checkbox"]{
+  flex:none;
+  width:18px;height:18px;
+  margin-top:1px;
+  accent-color:var(--accent-2);
+  cursor:pointer;
+}
+.field-consent:has(input:checked){border-color:var(--accent-2);background:rgba(23,176,166,.06)}
+
+/* the terms themselves: readable, scrolled rather than endless */
+.terms-scroll{
+  max-height:190px;
+  overflow-y:auto;
+  margin-bottom:14px;
+  padding:16px 18px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+  background:var(--tint);
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--body);
+}
+.terms-scroll ul{margin:0;padding-left:18px}
+.terms-scroll li{margin-bottom:8px}
+.terms-scroll li:last-child{margin-bottom:0}
+
+/* ---------- a commission claim ----------
+   One bundle is one document: who is claiming, what it is worth, who is inside
+   it, and the decision. It is a card rather than a run of panels because the
+   page shows several at once and the eye has to know where one ends. */
+.voucher{
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:#fff;
+  overflow:hidden;
+}
+.voucher + .voucher{margin-top:18px}
+
+.voucher__head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  flex-wrap:wrap;
+  padding:18px 20px;
+  border-bottom:1px solid var(--line);
+  background:var(--tint);
+}
+.voucher__who{display:grid;gap:2px;min-width:0}
+.voucher__who h3{
+  margin:0;
+  font-size:var(--t-sub);
+  font-weight:700;
+  line-height:1.25;
+  color:var(--ink);
+}
+.voucher__who .eyebrow{display:block}
+.voucher__meta{margin:4px 0 0;font-size:var(--t-ui);color:var(--muted)}
+
+/* the amount is the thing somebody is looking for, so it reads largest and
+   sits where a total belongs */
+.voucher__sum{
+  display:grid;
+  gap:6px;
+  justify-items:end;
+  text-align:right;
+  flex:none;
+}
+.voucher__sum strong{
+  font-size:26px;
+  font-weight:700;
+  line-height:1.1;
+  font-variant-numeric:tabular-nums;
+  color:var(--ink);
+}
+
+/* the table inside sits flush: the card is already the frame */
+.voucher .table-wrap{border-radius:0}
+.voucher .data-table{min-width:0}
+.voucher .direct-sale__notice{margin:16px 20px}
+
+.voucher__actions{
+  display:flex;
+  align-items:flex-start;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:12px;
+  padding:16px 20px;
+  border-top:1px solid var(--line);
+  background:var(--tint);
+}
+.voucher__actions form{min-width:0}
+/* the reason box and its button, sized to the card rather than to a table cell */
+.voucher__actions .decide__reason{flex:1 1 320px;max-width:520px}
+.voucher__actions .field-hint{margin:0;max-width:60ch;text-align:right}
+
+@media (max-width:639px){
+  .voucher__head{padding:16px}
+  .voucher__sum{justify-items:start;text-align:left}
+  .voucher__sum strong{font-size:22px}
+  .voucher__actions{padding:14px 16px;justify-content:stretch}
+  .voucher__actions form,
+  .voucher__actions .decide__reason{flex:1 1 100%;max-width:none}
+  .voucher__actions .field-hint{text-align:left}
+}
+
+/* ---------- stock ----------
+   Counts and money, which means two things above all: figures that line up
+   column to column, and a decision that fits the cell it sits in. */
+
+/* Every stock figure is read against the one above it, so the digits have to
+   sit in the same place. Proportional numerals make a column of counts look
+   ragged and a changing total jump. */
+.stock-figure,
+.stock-order__amount,
+.data-table .td-amount{font-variant-numeric:tabular-nums}
+
+/* --- an order line per product ---
+   One order can be for both, so each product gets a row: what it is, what one
+   costs, how many, and what that comes to. A quantity of zero simply means
+   they are not ordering that one. */
+.order-lines{display:grid;gap:10px;margin-bottom:18px}
+.order-line{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  padding:14px 16px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+  background:#fff;
+  transition:border-color .2s ease,background .2s ease;
+}
+.order-line:focus-within{border-color:var(--accent-2);background:var(--tint)}
+.order-line__what{display:grid;gap:2px;min-width:0;flex:1 1 200px}
+.order-line__what label{font-size:var(--t-sub);font-weight:600;color:var(--ink);cursor:pointer}
+.order-line__price{font-size:var(--t-ui);color:var(--muted)}
+.order-line__qty{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.order-line__qty input{
+  width:96px;
+  padding:11px 12px;
+  font-family:inherit;
+  font-size:var(--t-sub);
+  font-variant-numeric:tabular-nums;
+  text-align:right;
+  color:var(--ink);
+  background:#fff;
+  border:1px solid #dfe7ee;
+  border-radius:var(--radius-sm);
+  outline:none;
+  transition:border-color .2s ease,box-shadow .2s ease;
+}
+.order-line__qty input:focus{border-color:var(--accent-2);box-shadow:0 0 0 3px rgba(23,176,166,.14)}
+.order-line__unit{font-size:var(--t-ui);color:var(--muted)}
+/* what this line comes to, in the same column across every row */
+.order-line__sum{
+  margin:0;
+  flex:0 0 130px;
+  text-align:right;
+  font-size:var(--t-sub);
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+  color:var(--ink);
+}
+
+@media (max-width:639px){
+  .order-line{align-items:flex-start}
+  .order-line__sum{flex:1 1 100%;text-align:left}
+}
+
+/* what an order is about to cost, worked out as the form is filled in */
+.stock-order__total{
+  display:grid;
+  gap:4px;
+  margin:0;
+  padding:16px 18px;
+  border:1px solid var(--line);
+  border-left:3px solid var(--accent-2);
+  border-radius:var(--radius-sm);
+  background:var(--tint);
+}
+.stock-order__total strong{
+  font-size:28px;
+  line-height:1.15;
+  font-variant-numeric:tabular-nums;
+  color:var(--ink);
+}
+.stock-order__total .field-hint{max-width:62ch}
+/* the figure is what changes as the form is filled in, so it is the one thing
+   that moves — quietly, and not at all for anybody who asked for less motion */
+.stock-order__total strong{transition:color .2s ease}
+
+/* A decision on a row: the answer first, the reason under it. The payment
+   panel's version of this is sized for a drawer and forces a 320px basis,
+   which is what pushed these tables sideways. */
+.decide{display:grid;gap:8px;min-width:0}
+.decide form{display:grid;gap:8px;min-width:0}
+.decide__reason{display:flex;gap:8px;min-width:0}
+.decide__reason input{
+  flex:1 1 auto;
+  min-width:0;
+  padding:9px 12px;
+  font-family:inherit;
+  font-size:var(--t-ui);
+  color:var(--ink);
+  background:#fff;
+  border:1px solid #dfe7ee;
+  border-radius:var(--radius-sm);
+  outline:none;
+  transition:border-color .2s ease,box-shadow .2s ease;
+}
+.decide__reason input:focus{border-color:var(--danger);box-shadow:0 0 0 3px rgba(201,69,92,.12)}
+.decide__reason .btn{flex:0 0 auto}
+.decide .btn{width:100%;justify-content:center}
+.decide__reason .btn{width:auto}
+
+/* what a settled order says instead */
+.decide__settled{display:grid;gap:6px;justify-items:start}
+
+/* stock on a shelf, per product, on the two portal dashboards */
+/* Sits between the figure and the stats rather than inside them: the stat
+   grid draws its dividers from odd/even position, and an extra child in there
+   moved every rule to the wrong side. */
+.stock-split{display:flex;flex-wrap:wrap;gap:8px;margin:-6px 0 14px}
+.stock-split__item{
+  display:inline-flex;
+  align-items:baseline;
+  gap:6px;
+  padding:4px 10px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#fff;
+  font-size:var(--t-micro);
+  color:var(--muted);
+}
+.stock-split__item b{font-size:var(--t-ui);font-variant-numeric:tabular-nums;color:var(--ink)}
+/* nothing on the shelf is a fact worth reading at a glance, not a zero to hunt for */
+.stock-split__item--empty b{color:var(--warn)}
+
+/* in and out, in the movement history */
+.stock-move{font-variant-numeric:tabular-nums;white-space:nowrap}
+.stock-move--in{color:#26743a}
+.stock-move--out{color:var(--danger)}
+
+@media (max-width:639px){
+  .stock-order__total strong{font-size:24px}
+  .decide__reason{flex-wrap:wrap}
+  .decide__reason .btn{width:100%}
+}
+
+/* ---------- a partner recording a sale they were paid for ----------
+   The dealer and distributor portals load this stylesheet and no other, so the
+   one thing this form has to say for itself is styled here rather than borrowed
+   from the website's. */
+.direct-sale__notice{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  margin:22px 0 0;
+  padding:16px 18px;
+  border:1px solid rgba(201,138,43,.32);
+  border-radius:var(--radius-sm);
+  background:rgba(201,138,43,.08);
+  font-size:var(--t-ui);
+  line-height:1.55;
+  color:var(--body);
+}
+.direct-sale__notice i{flex:none;margin-top:2px;font-size:16px;color:var(--warn)}
+.direct-sale__notice strong{display:block;margin-bottom:2px;color:var(--ink)}
+/* the button gets a line of its own rather than sitting against the notice */
+.direct-sale__foot{display:flex;justify-content:flex-end;margin-top:20px}
 
 /* PAN, GST and IFSC are capitals; the server stores them that way, this only
    makes typing look like what is about to be saved */
@@ -1769,3 +2185,143 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
 
 .data-table--dealer-clients{min-width:900px}
 .data-table--dealer-payouts{min-width:640px}
+
+/* ---------- commission rates ---------- */
+.rate-rules{
+  display:grid;
+  gap:10px;
+  padding:16px 18px;
+  margin-bottom:22px;
+  background:var(--tint);
+  border-radius:var(--radius-sm);
+}
+.rate-rule{font-size:var(--t-ui);line-height:1.6;color:var(--body);margin:0}
+.rate-rule strong{color:var(--ink)}
+
+/* the per-cent sign belongs to the field, not to the label */
+.rate-input{position:relative}
+.rate-input input{padding-right:42px}
+.rate-input__unit{
+  position:absolute;
+  right:16px;
+  top:50%;
+  transform:translateY(-50%);
+  font-size:var(--t-sub);
+  font-weight:600;
+  color:var(--muted);
+  pointer-events:none;
+}
+
+/* putting a dealer under a distributor, inside the drawer */
+.assign-form{max-width:520px}
+.assign-form .field{margin-bottom:16px}
+
+
+/* the second rank of chips: a status inside the form above it */
+.filters--sub{margin-top:-10px}
+.filters--sub a{font-size:13px;padding:7px 15px;background:var(--tint);border-color:transparent}
+.filters--sub a:hover{background:#eef3f7}
+.filters--sub a.is-active{background:var(--ink);border-color:var(--ink);color:#fff}
+
+/* a rank of chips sitting inside a panel, under its heading */
+.panel__body--filters{padding-bottom:0}
+.panel__body--filters .filters{margin-bottom:18px}
+
+/* a list waiting on its own filter: dimmed, but still readable and in place */
+[data-live-list]{transition:opacity .15s ease}
+/* a swap in flight stops taking clicks straight away; it only dims once it has
+   been long enough for somebody to wonder whether the click landed */
+[data-live-list].is-busy{pointer-events:none}
+[data-live-list].is-waiting{opacity:.55;transition:opacity .15s ease}
+
+/* a count of what is waiting, on the tab that holds it */
+.detail-block__note{float:right;font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted)}
+.detail-tab__flag{
+  display:inline-block;
+  margin-left:6px;
+  padding:1px 7px;
+  border-radius:999px;
+  background:rgba(201,138,43,.18);
+  color:#8a5f1c;
+  font-size:var(--t-micro);
+  font-weight:700;
+}
+.drawer-actions--end{justify-content:flex-end}
+/* the same table with a distributor column: one more column, one more inch */
+.data-table--dealers.has-distributor{min-width:1320px}
+
+/* ---------- looking at an uploaded file ----------
+   Sits above the drawer and the dialogs, because it is opened from inside both
+   and has to cover whichever one sent it. */
+.viewer{position:fixed;inset:0;z-index:1600;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.viewer[hidden]{display:none}
+.viewer__backdrop{position:absolute;inset:0;background:rgba(9,26,44,.72)}
+.viewer__frame{
+  position:relative;
+  z-index:1;
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  width:min(920px,100%);
+  /* a percentage would resolve against a parent with no definite height, which
+     is what let a tall receipt push its own frame off the bottom of the screen —
+     the window itself is the measure */
+  max-height:calc(100vh - 48px);
+  max-height:calc(100dvh - 48px);
+  margin:0;
+  border-radius:var(--radius);
+  background:#fff;
+  box-shadow:0 30px 80px rgba(9,26,44,.45);
+  overflow:hidden;
+}
+.viewer__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:14px 16px 14px 20px;
+  border-bottom:1px solid var(--line);
+  background:var(--tint);
+}
+.viewer__title{font-size:var(--t-sub);font-weight:700;color:var(--ink)}
+.viewer__tools{display:flex;align-items:center;gap:14px}
+.viewer__open{font-size:var(--t-ui);font-weight:600;color:var(--accent-deep)}
+.viewer__open:hover{text-decoration:underline}
+.viewer__close{
+  width:34px;height:34px;
+  display:flex;align-items:center;justify-content:center;
+  flex:none;
+  border:1px solid var(--line);
+  border-radius:50%;
+  background:#fff;
+  color:var(--muted);
+  font-size:13px;
+  cursor:pointer;
+  transition:background .2s ease,color .2s ease,border-color .2s ease;
+}
+.viewer__close:hover{background:rgba(201,69,92,.08);border-color:rgba(201,69,92,.4);color:var(--danger)}
+/* the file itself: an image is sized to fit, a PDF gets the room it needs */
+.viewer__body{min-height:0;flex:1 1 auto;overflow:auto;background:#f3f7fa;display:flex;padding:12px}
+/* the whole file, shrunk to whatever room is left under the title bar */
+.viewer__img{
+  margin:auto;
+  max-width:100%;
+  max-height:calc(100vh - 134px);
+  max-height:calc(100dvh - 134px);
+  width:auto;
+  height:auto;
+  object-fit:contain;
+  border-radius:var(--radius-sm);
+  background:#fff;
+}
+.viewer__pdf{
+  flex:1 1 auto;
+  width:100%;
+  height:calc(100vh - 134px);
+  height:calc(100dvh - 134px);
+  border:0;
+  border-radius:var(--radius-sm);
+  background:#fff;
+}
+/* the page behind does not scroll while a file is being read */
+body.has-viewer{overflow:hidden}

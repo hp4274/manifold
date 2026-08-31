@@ -156,11 +156,24 @@ function payment_plan(string $product): array
 const REFERRAL_REWARD_DEFAULT = 500;
 
 /**
- * Paid to a dealer for every unit they sell, once the customer's booking
- * payment has been verified. Starting value only — the live figure lives in
- * the `settings` table and is edited from Settings.
+ * Commission, as whole percentages of what a sale is worth.
+ *
+ *   a dealer sells        dealer 15%, their distributor 5%
+ *   a distributor sells   distributor 15%, no dealer involved
+ *
+ * Starting values only — the live figures live in the `settings` table and are
+ * edited from Settings. Nothing is earned until the sale is complete.
  */
-const DEALER_COMMISSION_DEFAULT = 500;
+const DEALER_RATE_DEFAULT                = 15;
+const DISTRIBUTOR_OVERRIDE_RATE_DEFAULT  = 5;
+const DISTRIBUTOR_DIRECT_RATE_DEFAULT    = 15;
+
+/**
+ * How many dealers one distributor may hold, counting the ones still waiting
+ * for the office to approve them. Starting value only — the live figure lives
+ * in the `settings` table and is edited from Settings.
+ */
+const DEALER_LIMIT_DEFAULT = 10;
 const PAYMENT_CURRENCY = '₹';
 
 function money(float $amount): string
@@ -182,11 +195,12 @@ function base_url(): string
 
     $scheme = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
     $host    = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    /* /admin/..., /portal/... or /dealer/... → the site root one level up.
+    /* /admin/..., /portal/..., /dealer/... or /distributor/... → the site root
+       one level up. Every folder that serves pages has to be listed here.
        A folder missing from this list silently builds links inside itself: a
        dealer's share link came out as /dealer/apply-tuktuk.html and 404'd. */
     $dir     = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/\\');
-    $root    = preg_replace('#/(admin|portal|dealer)$#', '', $dir);
+    $root    = preg_replace('#/(admin|portal|dealer|distributor)$#', '', $dir);
 
     return $scheme . '://' . $host . $root;
 }

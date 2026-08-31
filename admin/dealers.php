@@ -40,75 +40,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = (string) ($_POST['action'] ?? 'save');
     $id     = (int) ($_POST['id'] ?? 0);
+    $values = [];
 
     if ($action === 'save') {
-        /* everything except the name is optional — a dealer is often added from
-           a phone call and the paperwork follows later */
-        $fields = ['full_name', 'company', 'email', 'mobile_number', 'alt_mobile_number',
-                   'address', 'city', 'state', 'pin_code', 'pan_number', 'gst_number',
-                   'bank_name', 'bank_account', 'bank_ifsc', 'upi_id', 'note'];
+        [$values, $error] = partner_values($_POST);
 
-        /* PAN, GST and IFSC are issued in capitals and quoted that way on every
-           form the office files, so they are stored that way whatever was typed.
-           Done here rather than in the browser: a value that reaches the table
-           has to be right even when the request did not come from our form. */
-        $shout = ['pan_number', 'gst_number', 'bank_ifsc'];
+        /* every dealer answers to a distributor — there is no such thing as
+           one without, so this is checked here and not only in the form */
+        $values['distributor_id'] = (int) ($_POST['distributor_id'] ?? 0);
 
-        $values = [];
-
-        foreach ($fields as $field) {
-            $value = trim((string) ($_POST[$field] ?? ''));
-
-            if (in_array($field, $shout, true)) {
-                $value = mb_strtoupper($value);
-            }
-
-            $values[$field] = $value === '' ? null : mb_substr($value, 0, $field === 'note' ? 2000 : 190);
+        if ($error === '' && $values['distributor_id'] < 1) {
+            $error = 'Pick the distributor this dealer answers to.';
+        } elseif ($error === '' && !distributor_by_id($values['distributor_id'])) {
+            $error = 'That distributor no longer exists.';
         }
 
-        /* Each of these is a fixed-length code. Blank is fine — the paperwork
-           often arrives later — but a half-typed one is not: it would be quoted
-           on a transfer that then bounces. */
-        $lengths = [
-            'pan_number' => ['label' => 'PAN',  'length' => 10],
-            'gst_number' => ['label' => 'GST',  'length' => 15],
-            'bank_ifsc'  => ['label' => 'IFSC', 'length' => 11],
-        ];
+        if ($error === '' && $id > 0) {
+            $columns = array_keys($values);
+            $set     = implode(' = ?, ', $columns) . ' = ?';
 
-        foreach ($lengths as $field => $rule) {
-            $value = (string) ($values[$field] ?? '');
-
-            if ($value === '' || preg_match('/^[A-Z0-9]{' . $rule['length'] . '}$/', $value)) {
-                continue;
-            }
-
-            $error = $rule['label'] . ' has to be ' . $rule['length']
-                . ' letters and digits, with nothing in between — you gave '
-                . mb_strlen($value) . '.';
-            break;
-        }
-
-        if ($error !== '') {
-            $openDealerModal = true;
-        } elseif ($values['full_name'] === null) {
-            $error = 'A dealer needs a name.';
-        } elseif ($values['email'] !== null && !filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
-            $error = 'That email address does not look right.';
-        } elseif ($id > 0) {
-            $set = implode(' = ?, ', $fields) . ' = ?';
             db()->prepare('UPDATE dealers SET ' . $set . ' WHERE id = ?')
                 ->execute([...array_values($values), $id]);
 
             dealers_done('Dealer updated.');
-        } else {
+        } elseif ($error === '') {
             $values['dealer_code'] = make_dealer_code();
             $values['created_by']  = (int) $user['id'];
 
             $names        = array_keys($values);
             $placeholders = implode(', ', array_fill(0, count($names), '?'));
 
-            db()->prepare('INSERT INTO dealers (`' . implode('`, `', $names) . '`) VALUES (' . $placeholders . ')')
-                ->execute(array_values($values));
+            db()->prepare('INSERT INTO dealers (`' . implode('`, `', $names) . '`) VALUES ('
+                . $placeholders . ')')->execute(array_values($values));
 
             dealers_done($values['full_name'] . ' added, with code ' . $values['dealer_code'] . '.');
         }
@@ -171,21 +134,182 @@ if (($_GET['edit'] ?? '') !== '') {
 
 /* one query for the list, one per dealer for the money — the list is short and
    staying with dealer_totals() keeps a single definition of what is owed */
-$dealers = db()->query(
-    'SELECT * FROM dealers ORDER BY is_active DESC, full_name'
+/* Three questions the office actually asks of this list: who is still selling,
+   who has been stopped, and who is not under a distributor — that last one
+   matters because their sales earn nobody the override. */
+/* Two independent questions, so two headers rather than one row of chips:
+   the Dealer column steps through selling and stopped, the Distributor column
+   through everyone and nobody. Both are real URLs the server answers — the
+   browser only swaps the block in rather than reloading the page. */
+$show = (string) ($_GET['show'] ?? '');
+$dist = (string) ($_GET['dist'] ?? '');
+
+if (!in_array($show, ['active', 'stopped'], true)) {
+    $show = '';
+}
+
+/* every distributor, in one query: the filter steps through all of them and
+   the form's own select takes the active ones out of the same list, so a
+   distributor added today appears in both without anything here changing */
+$distributorAll = db()->query(
+    'SELECT id, full_name, distributor_code, is_active FROM distributors ORDER BY full_name'
 )->fetchAll();
 
-$totals  = ['earned' => 0.0, 'paid' => 0.0, 'remaining' => 0.0, 'sales' => 0];
+$distributorChoices = array_values(array_filter(
+    $distributorAll,
+    static fn (array $d): bool => (bool) $d['is_active']
+));
 
-foreach ($dealers as $i => $dealer) {
-    $money = dealer_totals((int) $dealer['id']);
-    $dealers[$i]['totals'] = $money;
+/* what the Distributor header steps through: everyone, each distributor by
+   name, then the dealers nobody signed up */
+$distOptions = ['' => 'Distributor'];
 
-    $totals['earned']    += $money['earned'];
-    $totals['paid']      += $money['paid'];
-    $totals['remaining'] += $money['remaining'];
-    $totals['sales']     += $money['confirmed'];
+foreach ($distributorAll as $choice) {
+    $distOptions[(string) $choice['id']] = $choice['full_name'];
 }
+
+if (!array_key_exists($dist, $distOptions)) {
+    $dist = '';
+}
+
+$where = [];
+
+if ($show !== '') {
+    $where[] = $show === 'active' ? 'd.is_active = 1' : 'd.is_active = 0';
+}
+
+if ($dist !== '') {
+    /* $dist is one of the ids just read out of the table, so it is a number */
+    $where[] = 'd.distributor_id = ' . (int) $dist;
+}
+
+$filter = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+
+/* Each header's counts ignore its own setting but respect the other one, so
+   the number on offer is the number you will actually get. */
+$distFilter = $dist === '' ? '' : 'd.distributor_id = ' . (int) $dist;
+$showFilter = $show === '' ? '' : 'd.is_active = ' . ($show === 'active' ? '1' : '0');
+
+$statusCounts = [
+    ''        => (int) db()->query('SELECT COUNT(*) FROM dealers d'
+                     . ($distFilter ? ' WHERE ' . $distFilter : ''))->fetchColumn(),
+    'active'  => (int) db()->query('SELECT COUNT(*) FROM dealers d WHERE d.is_active = 1'
+                     . ($distFilter ? ' AND ' . $distFilter : ''))->fetchColumn(),
+    'stopped' => (int) db()->query('SELECT COUNT(*) FROM dealers d WHERE d.is_active = 0'
+                     . ($distFilter ? ' AND ' . $distFilter : ''))->fetchColumn(),
+];
+
+/* one row per distributor rather than one query per distributor */
+$distCounts = array_fill_keys(array_keys($distOptions), 0);
+$distTally  = db()->query(
+    'SELECT COALESCE(d.distributor_id, 0) AS who, COUNT(*) AS n
+       FROM dealers d' . ($showFilter ? ' WHERE ' . $showFilter : '') . '
+      GROUP BY COALESCE(d.distributor_id, 0)'
+)->fetchAll();
+
+foreach ($distTally as $tally) {
+    $key = (string) $tally['who'];
+
+    if (array_key_exists($key, $distCounts)) {
+        $distCounts[$key] = (int) $tally['n'];
+    }
+
+    $distCounts[''] += (int) $tally['n'];
+}
+
+$dealerCount = $dist === '' ? $statusCounts[$show] : $distCounts[$dist];
+$paging      = paged($dealerCount, $_GET['page'] ?? 1);
+
+/* what one more click on each header lands on */
+$showLabels = ['active' => 'Selling', 'stopped' => 'Stopped'];
+$showSteps  = ['', 'active', 'stopped'];
+$showNext   = $showSteps[(array_search($show, $showSteps, true) + 1) % count($showSteps)];
+
+
+/* Two more things a header can answer: who has sold the most and who is owed
+   the most. Ordered in SQL, because the page holds ten of however many —
+   sorting the ten on screen would sort a slice and call it the list. */
+$sort = (string) ($_GET['sort'] ?? '');
+
+$soldSql = '(SELECT COUNT(*) FROM applications a
+              WHERE a.dealer_id = d.id AND a.status = \'complete\')';
+
+$owedSql = '((SELECT COALESCE(SUM(CASE WHEN a.status = \'complete\'
+                                       THEN a.dealer_commission ELSE 0 END), 0)
+                FROM applications a WHERE a.dealer_id = d.id)
+             - (SELECT COALESCE(SUM(p.amount), 0)
+                  FROM dealer_payouts p WHERE p.dealer_id = d.id))';
+
+$sorts = [
+    'sales-high' => $soldSql . ' DESC',
+    'sales-low'  => $soldSql . ' ASC',
+    'owed-high'  => $owedSql . ' DESC',
+    'owed-low'   => $owedSql . ' ASC',
+];
+
+if (!array_key_exists($sort, $sorts)) {
+    $sort = '';
+}
+
+$order = $sort === '' ? 'd.is_active DESC, d.full_name' : $sorts[$sort] . ', d.full_name';
+
+/* a header click steps high to low, then low to high, then back to the
+   ordinary order */
+$sortStep = static function (string $column) use ($sort): string {
+    $steps = ['', $column . '-high', $column . '-low'];
+    $at    = array_search($sort, $steps, true);
+
+    /* sorted by the other column: this one starts at the top of its own cycle */
+    return $at === false ? $steps[1] : $steps[($at + 1) % count($steps)];
+};
+
+$sortLabel = static function (string $column, string $default) use ($sort): string {
+    if ($sort === $column . '-high') {
+        return 'High to low';
+    }
+
+    return $sort === $column . '-low' ? 'Low to high' : $default;
+};
+
+/** The same list with one control changed — paging starts over, as it must. */
+$dealerFilterUrl = static function (string $nextShow, string $nextDist, ?string $nextSort = null) use ($sort): string {
+    $query = array_filter(
+        ['show' => $nextShow, 'dist' => $nextDist, 'sort' => $nextSort ?? $sort],
+        static fn (string $v): bool => $v !== ''
+    );
+
+    return 'dealers.php' . ($query ? '?' . http_build_query($query) : '');
+};
+
+/* the money tiles count every dealer, the table shows one page of the filter */
+$dealers = db()->query(
+    'SELECT d.*, x.full_name AS distributor_name, x.distributor_code
+       FROM dealers d
+       LEFT JOIN distributors x ON x.id = d.distributor_id' . $filter . '
+      ORDER BY ' . $order . '
+      LIMIT ' . LIST_PER_PAGE . ' OFFSET ' . $paging['offset']
+)->fetchAll();
+
+$dealerUrl = $dealerFilterUrl($show, $dist);
+
+/* the page's own rows carry their figures for the table */
+foreach ($dealers as $i => $dealer) {
+    $dealers[$i]['totals'] = dealer_totals((int) $dealer['id']);
+}
+
+/* the tiles are the whole business, not this page of it — summed in SQL so
+   paging can never quietly turn a total into a subtotal */
+$totals = db()->query(
+    'SELECT COALESCE(SUM(CASE WHEN ' . COMMISSION_EARNED_SQL . '
+                              THEN dealer_commission ELSE 0 END), 0) AS earned,
+            COALESCE(SUM(' . COMMISSION_EARNED_SQL . '), 0) AS sales
+       FROM applications WHERE dealer_id IS NOT NULL'
+)->fetch() ?: ['earned' => 0, 'sales' => 0];
+
+$totals['paid']      = (float) db()->query('SELECT COALESCE(SUM(amount), 0) FROM dealer_payouts')->fetchColumn();
+$totals['earned']    = (float) $totals['earned'];
+$totals['sales']     = (int) $totals['sales'];
+$totals['remaining'] = max(0.0, $totals['earned'] - $totals['paid']);
 
 require __DIR__ . '/partials/layout-top.php';
 ?>
@@ -210,7 +334,8 @@ require __DIR__ . '/partials/layout-top.php';
     <span class="eyebrow">Commission earned</span>
     <strong><?= e(money($totals['earned'])) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat">at <?= e(money(dealer_commission())) ?> a unit</span>
+      <span class="tile__stat">at <?= e(rtrim(rtrim(number_format(dealer_rate() * 100, 2, '.', ''), '0'), '.')) ?>%
+        of each completed sale</span>
     </span>
   </span>
   <span class="tile">
@@ -229,11 +354,16 @@ require __DIR__ . '/partials/layout-top.php';
   </span>
 </div>
 
+<?php /* Everything a filter changes, swapped as one: the table and the hidden
+         drawer markup its Details buttons open. */ ?>
+<div data-live-list data-live-quiet>
 <div class="panel">
   <div class="panel__head">
     <div class="panel__head-text">
       <h2>Dealers</h2>
-      <span class="eyebrow"><?= count($dealers) ?> in total</span>
+      <span class="eyebrow">
+        <?= (int) $paging['from'] ?>–<?= (int) $paging['to'] ?> of <?= (int) $paging['total'] ?>
+      </span>
     </div>
     <button type="button" class="btn-add" data-modal-open="dealerModal">
       <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a dealer
@@ -241,29 +371,85 @@ require __DIR__ . '/partials/layout-top.php';
   </div>
 
   <?php if (!$dealers): ?>
-    <p class="empty">No dealers yet. Add one and they get a code to share.</p>
+    <?php /* an empty filter and an empty business are different facts */ ?>
+    <p class="empty">
+      <?= $show === '' && $dist === ''
+          ? 'No dealers yet. Add one and they get a code to share.'
+          : 'No dealers match that filter. <a href="dealers.php">Show all</a>.' ?>
+    </p>
   <?php else: ?>
     <div class="table-wrap">
-      <table class="data-table data-table--dealers">
+      <table class="data-table data-table--dealers has-distributor">
         <?php /* fixed layout, so the columns need telling how to share the width.
                  Action carries three icons and the Details button, which is why
                  it takes the largest share. */ ?>
         <colgroup>
-          <col style="width:21%">
+          <col style="width:16%">
+          <col style="width:8%">
           <col style="width:12%">
           <col style="width:19%">
-          <col style="width:7%">
           <col style="width:11%">
-          <col style="width:16%">
-          <col style="width:14%">
+          <col style="width:12%">
+          <col style="width:12%">
+          <col style="width:10%">
         </colgroup>
         <thead>
           <tr>
-            <th>Dealer</th>
+            <?php /* click to step through selling and stopped, then back to all */ ?>
+            <th class="th-filter-cell">
+              <a class="th-filter<?= $show === '' ? '' : ' is-filtered' ?>"
+                 href="<?= e($dealerFilterUrl($showNext, $dist)) ?>"
+                 title="Click to filter — next: <?= e($showNext === '' ? 'all dealers' : $showLabels[$showNext]) ?>">
+                <span class="th-filter__label">
+                  <?= $show === '' ? 'Dealer' : e($showLabels[$show]) ?>
+                  <?= $show === '' ? '' : (int) $statusCounts[$show] ?>
+                </span>
+                <i class="bi bi-chevron-expand" aria-hidden="true"></i>
+              </a>
+            </th>
             <th>Code</th>
+<?php /* A list that grows with the business: stepping through twenty
+                     distributors one click at a time is not a filter, so this
+                     one is a picker. It posts as a plain GET without JS. */ ?>
+            <th class="th-filter-cell">
+              <form method="get" class="th-picker" data-live-form data-base="dealers.php">
+                <input type="hidden" name="show" value="<?= e($show) ?>">
+                <input type="hidden" name="sort" value="<?= e($sort) ?>">
+
+                <label class="visually-hidden" for="distPick">Filter by distributor</label>
+                <select id="distPick" name="dist"
+                        class="th-select<?= $dist === '' ? '' : ' is-filtered' ?>">
+                  <?php foreach ($distOptions as $optValue => $optLabel): ?>
+                    <option value="<?= e((string) $optValue) ?>"
+                            <?= (string) $optValue === $dist ? 'selected' : '' ?>>
+                      <?= e($optValue === '' ? 'All distributors' : $optLabel) ?>
+                      <?= (int) ($distCounts[$optValue] ?? 0) ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+
+                <noscript><button type="submit" class="btn btn--ghost btn--sm">Go</button></noscript>
+              </form>
+            </th>
             <th>Link</th>
-            <th>Sales</th>
-            <th>Still owed</th>
+            <?php /* click to order by how many sales each one has completed */ ?>
+            <th class="th-filter-cell">
+              <a class="th-filter<?= str_starts_with($sort, 'sales-') ? ' is-filtered' : '' ?>"
+                 href="<?= e($dealerFilterUrl($show, $dist, $sortStep('sales'))) ?>"
+                 title="Click to sort by completed sales">
+                <span class="th-filter__label"><?= e($sortLabel('sales', 'Sales')) ?></span>
+                <i class="bi bi-chevron-expand" aria-hidden="true"></i>
+              </a>
+            </th>
+            <?php /* and by what each one is still owed */ ?>
+            <th class="th-filter-cell">
+              <a class="th-filter<?= str_starts_with($sort, 'owed-') ? ' is-filtered' : '' ?>"
+                 href="<?= e($dealerFilterUrl($show, $dist, $sortStep('owed'))) ?>"
+                 title="Click to sort by what is still owed">
+                <span class="th-filter__label"><?= e($sortLabel('owed', 'Still owed')) ?></span>
+                <i class="bi bi-chevron-expand" aria-hidden="true"></i>
+              </a>
+            </th>
             <th>Action</th>
             <th></th>
           </tr>
@@ -288,6 +474,12 @@ require __DIR__ . '/partials/layout-top.php';
                 </div>
               </td>
               <td><span class="drawer__code"><?= e($dealer['dealer_code']) ?></span></td>
+              <td>
+                <div class="cell-stack">
+                  <span><?= e($dealer['distributor_name']) ?></span>
+                  <span class="cell-sub"><?= e($dealer['distributor_code']) ?></span>
+                </div>
+              </td>
               <td>
                 <div class="copy-links">
                   <?php /* the full URLs, spelled out, are a click away under Details */ ?>
@@ -360,6 +552,16 @@ require __DIR__ . '/partials/layout-top.php';
         </tbody>
       </table>
     </div>
+
+    <?php
+      $pagerPage  = $paging['page'];
+      $pagerPages = $paging['pages'];
+      $pagerTotal = $paging['total'];
+      $pagerFrom  = $paging['from'];
+      $pagerTo    = $paging['to'];
+      $pagerBase  = $dealerUrl;
+      require __DIR__ . '/partials/pager.php';
+    ?>
   <?php endif; ?>
 </div>
 
@@ -368,7 +570,9 @@ require __DIR__ . '/partials/layout-top.php';
   <?php $srcDealer = $dealer; require __DIR__ . '/partials/dealer-source.php'; ?>
 <?php endforeach; ?>
 
-<?php require __DIR__ . '/partials/drawer.php'; ?>
+</div><!-- /data-live-list -->
+
+<?php require __DIR__ . "/partials/drawer.php"; ?>
 
 <!-- the dealer form lives in a dialog, opened by the + on the list above -->
 <div class="modal-x<?= $openDealerModal ? ' is-open' : '' ?>" id="dealerModal" role="dialog" aria-modal="true"
@@ -389,151 +593,14 @@ require __DIR__ . '/partials/layout-top.php';
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="id" value="<?= $isEdit ? (int) $editing['id'] : 0 ?>">
 
-        <?php /* A dealer is usually added mid-phone-call. The name is the only
-                 thing the office has for certain, so it is the only thing this
-                 form insists on — the rest is whatever the paperwork says. */ ?>
-        <section class="form-section">
-          <div class="form-section__head">
-            <h3 class="form-section__title">Who they are</h3>
-            <span class="form-section__note">Name required · the rest can follow later</span>
-          </div>
-
-          <div class="field field--primary">
-            <label for="dealer_full_name">Full name<span class="field__req" aria-hidden="true">*</span></label>
-            <input id="dealer_full_name" name="full_name" type="text" maxlength="160" required
-                   autocomplete="off" value="<?= e($editing['full_name'] ?? '') ?>">
-          </div>
-
-          <div class="form-grid">
-            <div class="field">
-              <label for="dealer_company">Company</label>
-              <input id="dealer_company" name="company" type="text" maxlength="160"
-                     value="<?= e($editing['company'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_email">Email</label>
-              <input id="dealer_email" name="email" type="email" maxlength="190"
-                     value="<?= e($editing['email'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_mobile">Mobile</label>
-              <input id="dealer_mobile" name="mobile_number" type="text" maxlength="30"
-                     value="<?= e($editing['mobile_number'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_alt_mobile">Alternative mobile</label>
-              <input id="dealer_alt_mobile" name="alt_mobile_number" type="text" maxlength="30"
-                     value="<?= e($editing['alt_mobile_number'] ?? '') ?>">
-            </div>
-          </div>
-
-          <div class="code-preview">
-            <span class="code-preview__chip<?= $isEdit ? '' : ' code-preview__chip--pending' ?>">
-              <?= $isEdit ? e($editing['dealer_code']) : 'MD••••••' ?>
-            </span>
-            <span class="code-preview__text">
-              <?= $isEdit
-                  ? 'Their code. Issued when they were added and never changed since — every sale they have made quotes it.'
-                  : 'A code is issued when you save, and never changes afterwards. It goes in the link they share.' ?>
-            </span>
-          </div>
-        </section>
-
-        <section class="form-section">
-          <div class="form-section__head">
-            <h3 class="form-section__title">Where they are</h3>
-          </div>
-
-          <div class="form-grid">
-            <div class="field field--wide">
-              <label for="dealer_address">Address</label>
-              <input id="dealer_address" name="address" type="text" maxlength="255"
-                     value="<?= e($editing['address'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_city">City</label>
-              <input id="dealer_city" name="city" type="text" maxlength="120"
-                     value="<?= e($editing['city'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_state">State</label>
-              <input id="dealer_state" name="state" type="text" maxlength="120"
-                     value="<?= e($editing['state'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_pin">Pin code</label>
-              <input id="dealer_pin" name="pin_code" type="text" maxlength="20"
-                     value="<?= e($editing['pin_code'] ?? '') ?>">
-            </div>
-          </div>
-        </section>
-
-        <section class="form-section">
-          <div class="form-section__head">
-            <h3 class="form-section__title">Where the commission goes</h3>
-            <span class="form-section__note">Needed before the first payout</span>
-          </div>
-
-          <div class="form-grid">
-            <div class="field">
-              <label for="dealer_pan">PAN</label>
-              <input class="field-shout" id="dealer_pan" name="pan_number" type="text" maxlength="10"
-                     pattern="[A-Za-z0-9]{10}" title="10 letters and digits"
-                     placeholder="ABCDE1234F" value="<?= e($editing['pan_number'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_gst">GST</label>
-              <input class="field-shout" id="dealer_gst" name="gst_number" type="text" maxlength="15"
-                     pattern="[A-Za-z0-9]{15}" title="15 letters and digits"
-                     placeholder="24ABCDE1234F1Z5" value="<?= e($editing['gst_number'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_bank">Bank</label>
-              <input id="dealer_bank" name="bank_name" type="text" maxlength="120"
-                     value="<?= e($editing['bank_name'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_account">Account number</label>
-              <input id="dealer_account" name="bank_account" type="text" maxlength="60"
-                     value="<?= e($editing['bank_account'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_ifsc">IFSC</label>
-              <input class="field-shout" id="dealer_ifsc" name="bank_ifsc" type="text" maxlength="11"
-                     pattern="[A-Za-z0-9]{11}" title="11 letters and digits"
-                     placeholder="HDFC0001234" value="<?= e($editing['bank_ifsc'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="dealer_upi">UPI ID</label>
-              <input id="dealer_upi" name="upi_id" type="text" maxlength="120"
-                     value="<?= e($editing['upi_id'] ?? '') ?>">
-            </div>
-          </div>
-        </section>
-
-        <section class="form-section">
-          <div class="form-section__head">
-            <h3 class="form-section__title">Note</h3>
-            <span class="form-section__note">Only the office sees this</span>
-          </div>
-
-          <div class="field">
-            <label class="visually-hidden" for="dealer_note">Note</label>
-            <textarea id="dealer_note" name="note" rows="3"
-                      placeholder="Which area they cover, who introduced them, anything worth knowing on the next call."><?= e($editing['note'] ?? '') ?></textarea>
-          </div>
-        </section>
+        <?php
+          $partnerKind   = 'dealer';
+          $partnerEdit   = $editing;
+          $partnerIsEdit = $isEdit;
+          $partnerCode   = $isEdit ? (string) $editing['dealer_code'] : '';
+          $partnerExtra  = 'dealer-distributor-field.php';
+          require __DIR__ . '/partials/partner-fields.php';
+        ?>
       </div>
 
       <div class="modal-x__foot">

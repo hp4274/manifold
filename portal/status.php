@@ -173,7 +173,9 @@ require __DIR__ . '/partials/head.php';
 
         <?php $totals = payment_totals($app); ?>
 
-        <?php if ($status !== 'rejected'): ?>
+        <?php /* Nothing is owed until the office has approved it, so the QR
+                 code and the upload box stay out of the way until then. */ ?>
+        <?php if ($status !== 'rejected' && $status !== 'submitted'): ?>
           <div class="portal-plan">
             <p class="portal-plan__lead">
               <strong><?= e(money((float) $totals['paid'])) ?></strong> paid of

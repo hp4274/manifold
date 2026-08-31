@@ -42,7 +42,8 @@ function require_dealer(): array
     $dealer = dealer_user();
 
     if (!$dealer) {
-        header('Location: login.php');
+        /* one sign-in for everybody: the address decides the role */
+        header('Location: ../portal/index.php');
         exit;
     }
 
@@ -68,8 +69,8 @@ function dealer_client_view(array $client): array
         'status'            => (string) $client['status'],
         'created_at'        => (string) $client['created_at'],
         'dealer_commission' => (float) $client['dealer_commission'],
-        /* the only thing that decides whether the commission counts */
-        'earned'            => !empty($client['booking_paid_at']) && $client['status'] !== 'rejected',
+        /* one definition of earned, shared with the admin and the distributor */
+        'earned'            => commission_is_earned($client),
     ];
 }
 
@@ -77,23 +78,4 @@ function dealer_client_view(array $client): array
 function dealer_own_clients(int $dealerId): array
 {
     return array_map('dealer_client_view', dealer_clients($dealerId));
-}
-
-/**
- * How far along a sale is, as a dealer reads it: the stage, and how many of the
- * five it is. No amounts outstanding, no receipts — just progress.
- */
-function dealer_progress(string $status): array
-{
-    if ($status === 'rejected') {
-        return ['label' => 'Not proceeding', 'step' => 0, 'of' => count(APPLICATION_STAGES)];
-    }
-
-    $step = array_search($status, APPLICATION_STAGES, true);
-
-    return [
-        'label' => status_label($status, 'applicant'),
-        'step'  => $step === false ? 0 : (int) $step + 1,
-        'of'    => count(APPLICATION_STAGES),
-    ];
 }

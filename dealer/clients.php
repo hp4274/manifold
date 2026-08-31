@@ -18,11 +18,14 @@ $pageTitle = 'Clients';
 $pageLead  = 'Everyone who applied through your link.';
 $activeNav = 'clients';
 
-$clients = dealer_own_clients($dealerId);
+/* the tiles count every client, the table shows one page of them */
+$allClients = dealer_own_clients($dealerId);
+$paging     = paged(count($allClients), $_GET['page'] ?? 1);
+$clients    = array_slice($allClients, $paging['offset'], LIST_PER_PAGE);
 
-$counts = ['all' => count($clients), 'earned' => 0, 'waiting' => 0, 'rejected' => 0];
+$counts = ['all' => count($allClients), 'earned' => 0, 'waiting' => 0, 'rejected' => 0];
 
-foreach ($clients as $client) {
+foreach ($allClients as $client) {
     if ($client['status'] === 'rejected') {
         $counts['rejected']++;
     } elseif ($client['earned']) {
@@ -32,8 +35,15 @@ foreach ($clients as $client) {
     }
 }
 
+$flash = (string) ($_SESSION['dealer_flash'] ?? '');
+unset($_SESSION['dealer_flash']);
+
 require __DIR__ . '/partials/layout-top.php';
 ?>
+
+<?php if ($flash !== ''): ?>
+  <p class="alert alert--ok"><?= e($flash) ?></p>
+<?php endif; ?>
 
 <div class="tiles">
   <span class="tile">
@@ -44,17 +54,17 @@ require __DIR__ . '/partials/layout-top.php';
     </span>
   </span>
   <span class="tile">
-    <span class="eyebrow">Counting towards commission</span>
+    <span class="eyebrow">Earning you commission</span>
     <strong><?= (int) $counts['earned'] ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat">booking payment verified by the office</span>
+      <span class="tile__stat">complete, both payments verified</span>
     </span>
   </span>
   <span class="tile">
-    <span class="eyebrow">Still to pay</span>
+    <span class="eyebrow">Still in progress</span>
     <strong><?= (int) $counts['waiting'] ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat">worth a call — commission follows the payment</span>
+      <span class="tile__stat">worth a call — commission follows completion</span>
     </span>
   </span>
   <span class="tile">
@@ -70,7 +80,9 @@ require __DIR__ . '/partials/layout-top.php';
   <div class="panel__head">
     <div class="panel__head-text">
       <h2>Clients</h2>
-      <span class="eyebrow"><?= count($clients) ?> in total</span>
+      <span class="eyebrow">
+        <?= (int) $paging['from'] ?>–<?= (int) $paging['to'] ?> of <?= (int) $paging['total'] ?>
+      </span>
     </div>
   </div>
 
@@ -100,7 +112,7 @@ require __DIR__ . '/partials/layout-top.php';
         </thead>
         <tbody>
           <?php foreach ($clients as $client): ?>
-            <?php $progress = dealer_progress($client['status']); ?>
+            <?php $progress = partner_progress($client['status']); ?>
             <tr>
               <td>
                 <div class="cell-stack">
@@ -136,7 +148,7 @@ require __DIR__ . '/partials/layout-top.php';
               <td class="td-amount">
                 <strong><?= e(money($client['dealer_commission'])) ?></strong>
                 <span class="cell-sub">
-                  <?= $client['earned'] ? 'earned' : 'once their booking payment clears' ?>
+                  <?= $client['earned'] ? 'earned' : 'once the sale completes' ?>
                 </span>
               </td>
             </tr>
@@ -144,6 +156,16 @@ require __DIR__ . '/partials/layout-top.php';
         </tbody>
       </table>
     </div>
+
+    <?php
+      $pagerPage  = $paging['page'];
+      $pagerPages = $paging['pages'];
+      $pagerTotal = $paging['total'];
+      $pagerFrom  = $paging['from'];
+      $pagerTo    = $paging['to'];
+      $pagerBase  = 'clients.php';
+      require __DIR__ . '/../admin/partials/pager.php';
+    ?>
   <?php endif; ?>
 </div>
 

@@ -53,7 +53,7 @@ if (!preg_match('/^(index|list)\.php(\?[a-z0-9=&_%-]*)?$/i', $return)) {
     $return = 'list.php?type=' . urlencode($type);
 }
 
-$return .= (strpos($return, '?') === false ? '?' : '&') . 'deleted=' . $id;
+admin_flash(['deleted' => $id]);
 
 header('Location: ' . $return);
 exit;

@@ -63,8 +63,17 @@ $pageLead   = $pageLead ?? '';
         <a href="referrals.php" class="<?= $activeType === 'referrals' ? 'is-active' : '' ?>">
           <i class="bi bi-people" aria-hidden="true"></i> Referrals
         </a>
+        <a href="distributors.php" class="<?= $activeType === 'distributors' ? 'is-active' : '' ?>">
+          <i class="bi bi-diagram-3" aria-hidden="true"></i> Distributors
+        </a>
         <a href="dealers.php" class="<?= $activeType === 'dealers' ? 'is-active' : '' ?>">
           <i class="bi bi-shop" aria-hidden="true"></i> Dealers
+        </a>
+        <a href="stock.php" class="<?= $activeType === 'stock' ? 'is-active' : '' ?>">
+          <i class="bi bi-box-seam" aria-hidden="true"></i> Stock
+        </a>
+        <a href="vouchers.php" class="<?= $activeType === 'vouchers' ? 'is-active' : '' ?>">
+          <i class="bi bi-receipt-cutoff" aria-hidden="true"></i> Commission
         </a>
         <a href="raffle.php" class="<?= $activeType === 'raffle' ? 'is-active' : '' ?>">
           <i class="bi bi-ticket-perforated" aria-hidden="true"></i> Raffle

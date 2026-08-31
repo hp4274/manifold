@@ -15,6 +15,7 @@ $activeNav = $activeNav ?? '';
 $pageLead  = $pageLead ?? '';
 $navItems  = [
     'dashboard' => ['label' => 'Dashboard', 'icon' => 'bi-grid',        'href' => 'index.php'],
+    'stock'     => ['label' => 'Stock',     'icon' => 'bi-box-seam',    'href' => 'stock.php'],
     'clients'   => ['label' => 'Clients',   'icon' => 'bi-people',      'href' => 'clients.php'],
     'payouts'   => ['label' => 'Payouts',   'icon' => 'bi-cash-coin',   'href' => 'payouts.php'],
 ];
@@ -99,15 +100,22 @@ $navItems  = [
             <i class="bi bi-chevron-down menu__caret" aria-hidden="true"></i>
           </summary>
           <div class="menu__list">
+            <?php /* Two different sales, and the difference is who took the
+                     money. Recording one you were paid for is not the same as
+                     sending somebody to pay Manifold, so they are not the same
+                     button. */ ?>
+            <a class="menu__item" href="add-client.php">
+              <i class="bi bi-cash-coin" aria-hidden="true"></i> I was paid — record it
+            </a>
             <?php foreach (['stove' => 'Stove', 'tuktuk' => 'TukTuk'] as $navProduct => $navLabel): ?>
               <a class="menu__item" target="_blank" rel="noopener"
                  href="<?= e(referral_link((string) $dealer['dealer_code'], $navProduct)) ?>">
-                <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> <?= e($navLabel) ?> form
+                <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+                They pay Manifold — <?= e($navLabel) ?> form
               </a>
             <?php endforeach; ?>
             <p class="menu__note">
-              Opens the form with <?= e($dealer['dealer_code']) ?> already filled in and locked,
-              so the sale counts as yours.
+              The form opens with <?= e($dealer['dealer_code']) ?> filled in and locked, so the sale counts as yours.
             </p>
           </div>
         </details>

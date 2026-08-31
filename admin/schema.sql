@@ -46,7 +46,42 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Dealers sell on our behalf and earn a flat commission per unit. They are not
+-- Distributors sit above the dealers: they sign dealers up, take a share of
+-- what those dealers sell, and sell directly themselves. MX…… is their code,
+-- one letter pair away from a dealer's MD…… and a customer's MF……
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `distributors` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `distributor_code` varchar(20) NOT NULL,
+  `full_name` varchar(160) NOT NULL,
+  `company` varchar(160) DEFAULT NULL,
+  `email` varchar(190) DEFAULT NULL,
+  `mobile_number` varchar(30) DEFAULT NULL,
+  `alt_mobile_number` varchar(30) DEFAULT NULL,
+  `address` varchar(255) DEFAULT NULL,
+  `city` varchar(120) DEFAULT NULL,
+  `state` varchar(120) DEFAULT NULL,
+  `pin_code` varchar(20) DEFAULT NULL,
+  `pan_number` varchar(20) DEFAULT NULL,
+  `gst_number` varchar(30) DEFAULT NULL,
+  `bank_name` varchar(120) DEFAULT NULL,
+  `bank_account` varchar(60) DEFAULT NULL,
+  `bank_ifsc` varchar(20) DEFAULT NULL,
+  `upi_id` varchar(120) DEFAULT NULL,
+  `note` text DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_by` int(10) unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_distributor_code` (`distributor_code`),
+  KEY `ix_distributor_active` (`is_active`),
+  KEY `fk_distributor_admin` (`created_by`),
+  CONSTRAINT `fk_distributor_admin` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- Dealers sell on our behalf and earn a share of every sale. They are not
 -- applicants, so they live in their own table. Their code rides the same
 -- `?ref=` link as the customer referral programme — the prefix keeps them
 -- apart: MF…… is a customer's code, MD…… is a dealer's.
@@ -54,6 +89,10 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
 CREATE TABLE IF NOT EXISTS `dealers` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `dealer_code` varchar(20) NOT NULL,
+  -- every dealer answers to a distributor; there is no such thing as one
+  -- without, which is why this is NOT NULL and the key below refuses rather
+  -- than nulling it
+  `distributor_id` int(10) unsigned NOT NULL,
   `full_name` varchar(160) NOT NULL,
   `company` varchar(160) DEFAULT NULL,
   `email` varchar(190) DEFAULT NULL,
@@ -77,8 +116,10 @@ CREATE TABLE IF NOT EXISTS `dealers` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_dealer_code` (`dealer_code`),
   KEY `ix_dealer_active` (`is_active`),
+  KEY `ix_dealer_distributor` (`distributor_id`),
   KEY `fk_dealer_admin` (`created_by`),
-  CONSTRAINT `fk_dealer_admin` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+  CONSTRAINT `fk_dealer_admin` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_dealer_distributor` FOREIGN KEY (`distributor_id`) REFERENCES `distributors` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
@@ -88,14 +129,18 @@ CREATE TABLE IF NOT EXISTS `dealers` (
 CREATE TABLE IF NOT EXISTS `applications` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `product` enum('stove','tuktuk') NOT NULL,
-  `status` enum('booking_pending','booking_review','delivery_pending','delivery_review','complete','rejected')
-      NOT NULL DEFAULT 'booking_pending',
+  -- an application from the website waits on the office before it becomes a
+  -- payment: 'submitted' is that wait, and approving it is what starts the rest
+  `status` enum('submitted','booking_pending','booking_review','delivery_pending','delivery_review','complete','rejected')
+      NOT NULL DEFAULT 'submitted',
   `reference_code` varchar(20) NOT NULL DEFAULT '',
   `referral_code` varchar(20) NOT NULL DEFAULT '',
   `referred_by_code` varchar(20) DEFAULT NULL,
   `referred_by_id` int(10) unsigned DEFAULT NULL,
   `dealer_id` int(10) unsigned DEFAULT NULL,
   `dealer_commission` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `distributor_id` int(10) unsigned DEFAULT NULL,
+  `distributor_commission` decimal(10,2) NOT NULL DEFAULT 0.00,
   `referral_reward` decimal(10,2) NOT NULL DEFAULT 0.00,
   `referral_reward_status` enum('none','pending','sent','cancelled') NOT NULL DEFAULT 'none',
   `referral_reward_sent_at` datetime DEFAULT NULL,
@@ -174,11 +219,13 @@ CREATE TABLE IF NOT EXISTS `applications` (
   KEY `ix_app_email` (`email`),
   KEY `ix_app_referred_by` (`referred_by_id`),
   KEY `ix_app_dealer` (`dealer_id`),
+  KEY `ix_app_distributor` (`distributor_id`),
   KEY `ix_app_reward_status` (`referral_reward_status`),
   KEY `ix_app_booking_paid` (`booking_paid_at`),
   KEY `fk_app_reward_admin` (`referral_reward_by`),
   CONSTRAINT `fk_app_referrer` FOREIGN KEY (`referred_by_id`) REFERENCES `applications` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_dealer` FOREIGN KEY (`dealer_id`) REFERENCES `dealers` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_app_distributor` FOREIGN KEY (`distributor_id`) REFERENCES `distributors` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_reward_admin` FOREIGN KEY (`referral_reward_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -414,6 +461,24 @@ CREATE TABLE IF NOT EXISTS `dealer_payouts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
+-- Transfers made to a distributor. Same shape as dealer_payouts: free-form
+-- amounts settling against a running total.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `distributor_payouts` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `distributor_id` int(10) unsigned NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `paid_by` int(10) unsigned DEFAULT NULL,
+  `paid_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `ix_dpayout_distributor` (`distributor_id`),
+  KEY `fk_dpayout_admin` (`paid_by`),
+  CONSTRAINT `fk_dpayout_distributor` FOREIGN KEY (`distributor_id`) REFERENCES `distributors` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_dpayout_admin` FOREIGN KEY (`paid_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
 -- Values the admin can change from the dashboard without editing config.php.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `settings` (
@@ -429,7 +494,9 @@ CREATE TABLE IF NOT EXISTS `settings` (
 -- prize figures below are changed here or straight in the `settings` table.
 INSERT INTO `settings` (`name`, `value`) VALUES
   ('referral_reward',           '500'),
-  ('dealer_commission',         '500'),
+  ('dealer_rate',               '15'),
+  ('distributor_override_rate', '5'),
+  ('distributor_direct_rate',   '15'),
   ('raffle_enabled',            '1'),
   ('raffle_first_draw',         ''),
   ('raffle_cycle_days',         '90'),
@@ -445,3 +512,60 @@ INSERT INTO `settings` (`name`, `value`) VALUES
 -- --------------------------------------------------------------------------
 INSERT INTO `admin_users` (`name`, `email`, `password_hash`) VALUES
   ('admin', 'admin@manifold.com', '$2y$10$UoO.3dsFFzlN0PsyNNbAjOAJ0yITCnUYzPcyiBX6nQNPLk6WPPJC6');
+
+-- ---------------------------------------------------------------------------
+-- Stock: what a partner has bought from the tier above them, and what is left
+--
+-- A distributor buys units from the office; a dealer buys them from their own
+-- distributor. Both pay first and upload proof, and the tier above releases the
+-- stock by approving it. `stock_orders` is that request and its decision.
+--
+-- `stock_ledger` is every movement of stock afterwards, one row per event, and
+-- a balance is the sum of them. Storing the balance instead would mean two
+-- places to keep in step, and no way to answer "where did that unit go" once
+-- they disagree. Units and value move together and always at cost.
+-- ---------------------------------------------------------------------------
+CREATE TABLE `stock_orders` (
+  `id`                    int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `buyer_type`            enum('distributor','dealer') NOT NULL,
+  `buyer_id`              int(10) unsigned NOT NULL,
+  -- NULL means the office sold it: a distributor buys from nobody else
+  `seller_distributor_id` int(10) unsigned DEFAULT NULL,
+  `product`               enum('stove','tuktuk') NOT NULL,
+  `quantity`              int(10) unsigned NOT NULL,
+  -- frozen at the moment of ordering, so a price change never rewrites a past order
+  `unit_price`            decimal(10,2) NOT NULL,
+  `total_amount`          decimal(10,2) NOT NULL,
+  `status`                enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  `reference`             varchar(120) DEFAULT NULL,
+  `proof_path`            varchar(255) DEFAULT NULL,
+  `note`                  varchar(255) DEFAULT NULL,
+  `reject_reason`         varchar(255) DEFAULT NULL,
+  `requested_at`          datetime NOT NULL DEFAULT current_timestamp(),
+  `decided_at`            datetime DEFAULT NULL,
+  `decided_by_admin`      int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_stock_order_buyer` (`buyer_type`,`buyer_id`,`status`),
+  KEY `idx_stock_order_seller` (`seller_distributor_id`,`status`),
+  CONSTRAINT `fk_stock_order_seller` FOREIGN KEY (`seller_distributor_id`) REFERENCES `distributors` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_stock_order_admin` FOREIGN KEY (`decided_by_admin`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `stock_ledger` (
+  `id`             int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `owner_type`     enum('distributor','dealer') NOT NULL,
+  `owner_id`       int(10) unsigned NOT NULL,
+  `product`        enum('stove','tuktuk') NOT NULL,
+  -- signed: stock in is positive, stock out negative, and the same for value
+  `units`          int(11) NOT NULL,
+  `value`          decimal(12,2) NOT NULL,
+  `reason`         enum('purchase','sale','transfer_out','adjustment') NOT NULL,
+  `order_id`       int(10) unsigned DEFAULT NULL,
+  `application_id` int(10) unsigned DEFAULT NULL,
+  `note`           varchar(255) DEFAULT NULL,
+  `created_at`     datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ledger_owner` (`owner_type`,`owner_id`,`product`),
+  CONSTRAINT `fk_ledger_order` FOREIGN KEY (`order_id`) REFERENCES `stock_orders` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_ledger_application` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

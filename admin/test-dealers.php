@@ -23,16 +23,22 @@ if (PHP_SAPI !== 'cli') {
 require_once __DIR__ . '/lib.php';
 
 $code   = make_dealer_code();
-$rate   = dealer_commission();
+
+/* what one stove sale pays a dealer under the current rates */
+$plan   = payment_plan('stove');
+$sale   = (float) $plan['booking'] + (float) $plan['delivery'];
+$rate   = round($sale * dealer_rate(), 2);
 
 db()->prepare('INSERT INTO dealers (dealer_code, full_name, email) VALUES (?, ?, ?)')
     ->execute([$code, 'Self-check dealer', 'selfcheck' . $code . '@example.com']);
 
 $dealerId = (int) db()->lastInsertId();
 
-/** One application attributed to the dealer. Paid means the booking cleared. */
-function seed_sale(int $dealerId, float $rate, bool $paid, string $status = 'booking_pending'): int
+/** One application attributed to the dealer. $done means the sale is complete. */
+function seed_sale(int $dealerId, float $rate, bool $done, string $status = 'booking_pending'): int
 {
+    $status = $done ? 'complete' : $status;
+
     db()->prepare(
         'INSERT INTO applications
             (product, status, reference_code, referral_code, full_name, email, mobile_number,
@@ -41,7 +47,7 @@ function seed_sale(int $dealerId, float $rate, bool $paid, string $status = 'boo
     )->execute([
         'stove', $status, 'tmp-' . bin2hex(random_bytes(5)), make_referral_code(),
         'Self-check client', 'selfcheck' . bin2hex(random_bytes(4)) . '@example.com', '0000000000',
-        $dealerId, $rate, $paid ? date('Y-m-d H:i:s') : null,
+        $dealerId, $rate, $done ? date('Y-m-d H:i:s') : null,
     ]);
 
     return (int) db()->lastInsertId();
@@ -65,13 +71,14 @@ function check(string $what, $expected, $actual): void
 }
 
 try {
-    echo "Dealer $code, commission " . money($rate) . "\n\n";
+    echo "Dealer $code, " . rtrim(rtrim(number_format(dealer_rate() * 100, 2, ".", ""), "0"), ".")
+        . "% of a " . money($sale) . " sale = " . money($rate) . "\n\n";
 
-    /* three sales: two paid, one still waiting */
+    /* three sales: two complete, one still in progress */
     $sales = [seed_sale($dealerId, $rate, true), seed_sale($dealerId, $rate, true),
               seed_sale($dealerId, $rate, false)];
 
-    echo "Three sales, two with the booking payment verified:\n";
+    echo "Three sales, two of them complete:\n";
     $t = dealer_totals($dealerId);
     check('sales', 3, $t['sales']);
     check('confirmed', 2, $t['confirmed']);
@@ -88,16 +95,17 @@ try {
     check('paid', $rate, $t['paid']);
     check('remaining', $rate, $t['remaining']);
 
-    /* the third sale pays up: earned goes up, so does what is owed */
-    echo "\nThe third sale has its booking payment verified:\n";
-    db()->prepare('UPDATE applications SET booking_paid_at = NOW() WHERE id = ?')->execute([$sales[2]]);
+    /* the third sale completes: earned goes up, so does what is owed */
+    echo "\nThe third sale completes:\n";
+    db()->prepare("UPDATE applications SET status = 'complete', booking_paid_at = NOW() WHERE id = ?")
+        ->execute([$sales[2]]);
 
     $t = dealer_totals($dealerId);
     check('confirmed', 3, $t['confirmed']);
     check('earned', $rate * 3, $t['earned']);
     check('remaining', $rate * 2, $t['remaining']);
 
-    /* a rejected sale earns nothing, however much was paid on it */
+    /* a rejected sale earns nothing, however far along it got */
     echo "\nOne sale is rejected:\n";
     db()->prepare("UPDATE applications SET status = 'rejected' WHERE id = ?")->execute([$sales[0]]);
 

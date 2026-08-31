@@ -91,7 +91,10 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
                 <?php endif; ?>
 
                 <?php if (!empty($payment['proof_path'])): ?>
-                  <a class="pay-item__proof" target="_blank" rel="noopener"
+                  <?php /* opens over the page rather than in a tab of its own —
+                           the receipt is looked at next to the decision it is
+                           for, and the link still works without JavaScript */ ?>
+                  <a class="pay-item__proof" data-viewer="Proof of payment"
                      href="file.php?path=<?= e(rawurlencode((string) $payment['proof_path'])) ?>&amp;dir=payments">
                     <i class="bi bi-paperclip" aria-hidden="true"></i> Proof of payment
                   </a>

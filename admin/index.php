@@ -14,8 +14,13 @@ $pageLead   = 'Every submission from the website, grouped by form.';
 $activeType = '';
 
 $types     = submission_types();
-$savedId   = (int) ($_GET['saved'] ?? 0);
-$deletedId = (int) ($_GET['deleted'] ?? 0);
+/* what the action that redirected here left behind — read once, so a reload
+   does not repeat a confirmation for something that happened once */
+$flash     = admin_flash_take();
+$savedId   = (int) ($flash['saved'] ?? 0);
+$deletedId = (int) ($flash['deleted'] ?? 0);
+$mailFlash = (string) ($flash['mail'] ?? '');
+$payFlash  = (string) ($flash['pay'] ?? '');
 
 /* Newest ten across all four forms, and only ten — the dashboard is a glance at
    what has just come in, not a place to work through a backlog. Each form's own
@@ -95,7 +100,7 @@ require __DIR__ . '/partials/layout-top.php';
     <p class="empty">Nothing has been submitted yet.</p>
   <?php else: ?>
     <div class="table-wrap">
-      <table class="data-table" id="latestTable">
+      <table class="data-table is-filterable" id="latestTable">
         <!-- fixed widths so switching a filter label cannot reflow the columns -->
         <colgroup>
           <col style="width:6%">

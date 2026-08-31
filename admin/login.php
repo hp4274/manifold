@@ -7,8 +7,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
 
-if (current_user()) {
-    header('Location: index.php');
+if ($signedIn = current_user()) {
+    header('Location: ' . role_landing((string) ($signedIn['role'] ?? 'admin')));
     exit;
 }
 
@@ -45,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'id'    => (int) $user['id'],
                 'name'  => $user['name'],
                 'email' => $user['email'],
+                'role'  => (string) ($user['role'] ?? 'admin'),
             ];
 
             db()->prepare('UPDATE admin_users SET last_login_at = NOW() WHERE id = ?')
@@ -52,7 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             db()->prepare('DELETE FROM login_attempts WHERE email = ?')->execute([$email]);
 
-            header('Location: index.php');
+            /* one sign-in, two destinations: the office lands on the
+               dashboard, R&F on their own */
+            header('Location: ' . role_landing((string) ($user['role'] ?? 'admin')));
             exit;
         }
 

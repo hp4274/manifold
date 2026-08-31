@@ -10,9 +10,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/mailer.php';
 
-/** Rows on one page. The dashboard shows the same number at a glance. */
-const LIST_PER_PAGE = 10;
-
 $user   = require_login();
 $type   = (string) ($_GET['type'] ?? 'stove');
 $config = type_config($type);
@@ -59,13 +56,34 @@ $rows = $stmt->fetchAll();
 
 $groups    = field_groups($type);
 $counts    = status_counts($type);
-$savedId   = (int) ($_GET['saved'] ?? 0);
-$deletedId = (int) ($_GET['deleted'] ?? 0);
+/* what the action that redirected here left behind — read once, so a reload
+   does not repeat a confirmation for something that happened once */
+$flash     = admin_flash_take();
+$savedId   = (int) ($flash['saved'] ?? 0);
+$deletedId = (int) ($flash['deleted'] ?? 0);
+$mailFlash = (string) ($flash['mail'] ?? '');
+$payFlash  = (string) ($flash['pay'] ?? '');
 /* without the page, saving a row on page 3 would come back to page 1 */
 $listUrl   = 'list.php?type=' . urlencode($type) . ($status !== '' ? '&status=' . urlencode($status) : '');
 $returnUrl = $listUrl . ($page > 1 ? '&page=' . $page : '');
 
 [$attentionKeys, $attentionLabel] = attention_status($type);
+
+/* The column headers are the filters, the same as on the dashboard — but this
+   list pages through everything rather than showing the newest ten, so a header
+   here navigates instead of hiding rows. Filtering in the browser would only
+   ever filter the ten rows on screen and quietly lie about the rest.
+
+   Each header steps to the next value and wraps back to all, so one control
+   does the whole job of a row of chips. */
+$statusKeys = array_merge([''], statuses_for($type));
+$statusNext = $statusKeys[(array_search($status, $statusKeys, true) + 1) % count($statusKeys)];
+
+/** Where a header click goes: this list, one step along the status column. */
+$stepUrl = static function (string $toType, string $toStatus): string {
+    return 'list.php?type=' . urlencode($toType)
+        . ($toStatus === '' ? '' : '&status=' . urlencode($toStatus));
+};
 
 $attentionCount = array_sum(array_map(
     static fn (string $key): int => (int) ($counts[$key] ?? 0),
@@ -89,17 +107,10 @@ require __DIR__ . '/partials/layout-top.php';
 
 <?php require __DIR__ . '/partials/mail-flash.php'; ?>
 
-<div class="filters">
-  <a href="list.php?type=<?= e($type) ?>" class="<?= $status === '' ? 'is-active' : '' ?>">
-    All <?= (int) $counts['total'] ?>
-  </a>
-  <?php foreach (statuses_for($type) as $s): ?>
-    <a href="list.php?type=<?= e($type) ?>&amp;status=<?= e($s) ?>" class="<?= $status === $s ? 'is-active' : '' ?>">
-      <?= e(status_label($s)) ?> <?= (int) $counts[$s] ?>
-    </a>
-  <?php endforeach; ?>
-</div>
-
+<?php /* Everything a filter changes, swapped as one: the table and the hidden
+         drawer markup its Details buttons open. Swapping only the table would
+         leave the new rows pointing at the old rows' drawers. */ ?>
+<div data-live-list>
 <div class="panel">
   <div class="panel__head">
     <h2><?= $status === '' ? 'All submissions' : e(status_label($status)) ?></h2>
@@ -115,7 +126,13 @@ require __DIR__ . '/partials/layout-top.php';
   </div>
 
   <?php if (!$rows): ?>
-    <p class="empty">Nothing here yet.</p>
+    <?php /* an empty filter and an empty form are different facts */ ?>
+    <p class="empty">
+      <?= $status === ''
+          ? 'Nothing here yet.'
+          : 'Nothing is ' . e(strtolower(status_label($status)))
+            . '. <a href="' . e($stepUrl($type, '')) . '">Show all</a>.' ?>
+    </p>
   <?php else: ?>
     <div class="table-wrap">
       <table>
@@ -127,7 +144,19 @@ require __DIR__ . '/partials/layout-top.php';
               <th>Contact</th>
             <?php endif; ?>
             <th>Received</th>
-            <th>Status</th>
+            <?php /* click to step through this form's own statuses, then back to all */ ?>
+            <th class="th-filter-cell">
+              <a class="th-filter<?= $status === '' ? '' : ' is-filtered' ?>"
+                 href="<?= e($stepUrl($type, $statusNext)) ?>"
+                 title="Click to filter by status — next: <?= e($statusNext === ''
+                     ? 'all ' . $counts['total'] : status_label($statusNext) . ' ' . $counts[$statusNext]) ?>">
+                <span class="th-filter__label">
+                  <?= $status === '' ? 'Status' : e(status_label($status)) ?>
+                  <?= $status === '' ? '' : (int) $counts[$status] ?>
+                </span>
+                <i class="bi bi-chevron-expand" aria-hidden="true"></i>
+              </a>
+            </th>
             <th>Actions</th>
             <th></th>
           </tr>
@@ -193,7 +222,9 @@ require __DIR__ . '/partials/layout-top.php';
     ?>
   <?php endforeach; ?>
 <?php endif; ?>
+</div><?php /* end of the swapped region */ ?>
 
+<?php /* the drawer itself is a fixture of the page, not of the filter */ ?>
 <?php require __DIR__ . '/partials/drawer.php'; ?>
 
 <?php require __DIR__ . '/partials/layout-bottom.php'; ?>

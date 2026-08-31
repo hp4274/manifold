@@ -417,11 +417,6 @@ function send_payment_received_admin(array $app): bool
     return $sent;
 }
 
-function product_label(string $product): string
-{
-    return $product === 'stove' ? 'Kinetic Hydrogen Cooking Stove' : 'Hydrogen Conversion Kit for TukTuk';
-}
-
 /** One-time sign-in code for the applicant portal. */
 function send_otp_email(string $to, string $code): bool
 {

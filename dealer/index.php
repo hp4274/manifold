@@ -18,23 +18,45 @@ $clients = dealer_own_clients($dealerId);
 $payouts = dealer_payouts($dealerId);
 $recent  = array_slice($clients, 0, 5);
 
+$dashStock = stock_balance('dealer', $dealerId);
+
 require __DIR__ . '/partials/layout-top.php';
 ?>
 
 <div class="tiles">
+  <?php /* what is on the shelf right now, which is the figure that decides
+           whether a sale can be recorded at all */ ?>
+  <span class="tile">
+    <span class="eyebrow">Units in stock</span>
+    <strong class="stock-figure"><?= (int) $dashStock['units'] ?></strong>
+    <?php /* the total is what you have; the split is what you can actually
+             sell, which is the question somebody opens this page with */ ?>
+    <span class="stock-split">
+      <?php foreach (['stove' => 'stoves', 'tuktuk' => 'kits'] as $tileKey => $tileLabel): ?>
+        <span class="stock-split__item<?= (int) $dashStock[$tileKey]['units'] === 0
+            ? ' stock-split__item--empty' : '' ?>">
+          <b><?= (int) $dashStock[$tileKey]['units'] ?></b> <?= e($tileLabel) ?>
+        </span>
+      <?php endforeach; ?>
+    </span>
+    <span class="tile__stats">
+      <span class="tile__stat"><?= e(money((float) $dashStock['value'])) ?> at cost ·
+        <a href="stock.php">Order more</a></span>
+    </span>
+  </span>
   <span class="tile">
     <span class="eyebrow">Units sold</span>
     <strong><?= (int) $totals['confirmed'] ?></strong>
     <span class="tile__stats">
       <span class="tile__stat"><?= (int) $totals['sales'] ?> applied, <?= (int) $totals['confirmed'] ?>
-        have paid their booking</span>
+        complete</span>
     </span>
   </span>
   <span class="tile">
     <span class="eyebrow">Commission earned</span>
     <strong><?= e(money($totals['earned'])) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat">counted once a customer's booking payment clears</span>
+      <span class="tile__stat">counted once the sale is complete</span>
     </span>
   </span>
   <span class="tile">
@@ -115,7 +137,7 @@ require __DIR__ . '/partials/layout-top.php';
         </thead>
         <tbody>
           <?php foreach ($recent as $client): ?>
-            <?php $progress = dealer_progress($client['status']); ?>
+            <?php $progress = partner_progress($client['status']); ?>
             <tr>
               <td>
                 <div class="cell-stack">

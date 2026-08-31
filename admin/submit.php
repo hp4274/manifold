@@ -102,37 +102,6 @@ function int_or_null(string $name): ?int
     return ($value === null || !is_numeric($value)) ? null : (int) $value;
 }
 
-/**
- * Moves one uploaded file into admin/uploads and returns its stored name.
- */
-function store_upload(string $field): ?string
-{
-    if (empty($_FILES[$field]) || $_FILES[$field]['error'] === UPLOAD_ERR_NO_FILE) {
-        return null;
-    }
-
-    $file = $_FILES[$field];
-
-    if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > UPLOAD_MAX_BYTES) {
-        return null;
-    }
-
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime  = $finfo->file($file['tmp_name']);
-
-    if (!isset(UPLOAD_ALLOWED_MIME[$mime])) {
-        return null;
-    }
-
-    if (!is_dir(UPLOAD_DIR) && !mkdir(UPLOAD_DIR, 0775, true) && !is_dir(UPLOAD_DIR)) {
-        return null;
-    }
-
-    $name = date('Ymd-His') . '-' . bin2hex(random_bytes(6)) . '.' . UPLOAD_ALLOWED_MIME[$mime];
-
-    return move_uploaded_file($file['tmp_name'], UPLOAD_DIR . '/' . $name) ? $name : null;
-}
-
 /* ---------- routing ---------- */
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -236,14 +205,6 @@ try {
         $columns['referral_reward']        = $reward;
         $columns['referral_reward_status'] = $referrer ? 'pending' : 'none';
 
-        /* The same box takes a dealer's code. A code is one or the other, never
-           both — the MF/MD prefix decides — so a dealer sale books commission
-           instead of a customer reward. The rate is frozen here for the same
-           reason the reward is: raising it later must not rewrite this sale. */
-        $dealer = $referrer || $quoted === '' ? null : dealer_for_code($quoted);
-
-        $columns['dealer_id']         = $dealer ? (int) $dealer['id'] : null;
-        $columns['dealer_commission'] = $dealer ? dealer_commission() : 0.0;
         /* the price list is frozen onto the row, so a later change to the
            published price never rewrites what this application owes */
         $plan = payment_plan($form);
@@ -251,6 +212,33 @@ try {
         $columns['booking_amount']  = (float) $plan['booking'];
         $columns['delivery_amount'] = (float) $plan['delivery'];
         $columns['payment_amount']  = (float) $plan['booking'];
+
+        /* The same box takes a partner's code, and the prefix decides which kind
+           it is — MF a customer, MD a dealer, MX a distributor. A code is only
+           ever one of the three, so a partner sale books commission instead of a
+           customer reward.
+
+           A dealer's code also books their distributor's override: it follows
+           whoever signed that dealer up, never the form. A distributor's own
+           code cuts the dealer out of the sale entirely.
+
+           Both shares are frozen here for the same reason the price is: raising
+           a rate later must not rewrite what this sale was worth. */
+        $dealer      = $referrer || $quoted === '' ? null : dealer_for_code($quoted);
+        $distributor = $dealer
+            ? distributor_for_dealer($dealer)
+            : ($referrer || $quoted === '' ? null : distributor_for_code($quoted));
+
+        $split = commission_split(
+            (float) $plan['booking'] + (float) $plan['delivery'],
+            $dealer,
+            $distributor
+        );
+
+        $columns['dealer_id']              = $dealer ? (int) $dealer['id'] : null;
+        $columns['dealer_commission']      = $split['dealer'];
+        $columns['distributor_id']         = $distributor ? (int) $distributor['id'] : null;
+        $columns['distributor_commission'] = $split['distributor'];
 
         /* their own code, theirs for good */
         $columns['referral_code'] = make_referral_code();
@@ -269,16 +257,15 @@ try {
 
         db()->prepare('UPDATE applications SET reference_code = ? WHERE id = ?')->execute([$ref, $id]);
 
-        /* the applicant pays first, so the payment email goes out immediately */
+        /* The office looks at it before anything is asked of the applicant, so
+           no payment email goes out here — approving the application in the
+           admin is what sends it, and what opens their portal. */
         $columns['id']             = $id;
         $columns['reference_code'] = $ref;
-        send_payment_email($columns);
 
-        $payable = (float) $columns['booking_amount'];
-
-        respond(true, 'Application received. We have emailed you the payment details — pay the '
-            . money($payable) . ' booking amount and upload the receipt to reserve your place. '
-            . 'The ' . money((float) $columns['delivery_amount']) . ' delivery payment follows later.'
+        respond(true, 'Application received — your booking number is ' . $ref . '. '
+            . 'Our team reviews it first, and we email you the payment details once it is approved. '
+            . 'Nothing to pay yet.'
             . ($referrer ? ' Your referral code has been recorded.' : ''));
     }
 

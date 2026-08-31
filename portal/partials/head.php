@@ -2,6 +2,11 @@
 /** Shared header for the portal. Expects $pageTitle. */
 
 declare(strict_types=1);
+
+/* portal_roles() asks the dealer and distributor guards whether their sessions
+   are still good, so both have to be loaded before the header renders */
+require_once __DIR__ . '/../../dealer/lib.php';
+require_once __DIR__ . '/../../distributor/lib.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -54,12 +59,13 @@ declare(strict_types=1);
       <a href="../contact.html">Contact</a>
 
       <div class="nav-actions">
-        <?php require __DIR__ . '/nav-account.php'; ?>
+        <?php /* the copy inside the nav is the one the mobile panel shows */ ?>
+        <?php $navVariant = 'mobile'; require __DIR__ . '/nav-account.php'; ?>
       </div>
     </nav>
 
     <div class="nav-actions nav-actions--desktop">
-      <?php require __DIR__ . '/nav-account.php'; ?>
+      <?php $navVariant = 'desktop'; require __DIR__ . '/nav-account.php'; ?>
     </div>
 
     <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mainNav">

@@ -33,6 +33,13 @@
     form.submit();
   });
 
+  /* Is a file being looked at? Escape has to close that first — closing the
+     drawer underneath it instead would take away the decision the file was
+     opened for. Declared here because the handlers below ask it. */
+  function viewerOpen() {
+    return !!viewer && !viewer.hidden;
+  }
+
   /* ---------- detail slide-over ----------
      The record's markup is rendered once, hidden, below the table; opening a
      row copies it into the drawer so only one copy is ever interactive. */
@@ -67,6 +74,8 @@
       /* a trigger may ask for a tab other than the first — the pay button opens
          the same drawer straight onto Payouts */
       showTab(toggle.dataset.tabIndex || '0');
+
+      drawer.dispatchEvent(new CustomEvent('drawer:open'));
 
       drawer.hidden = false;
       void drawer.offsetWidth;                 /* let the transition run */
@@ -105,7 +114,7 @@
     });
 
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !drawer.hidden) closeDrawer();
+      if (e.key === 'Escape' && !viewerOpen() && !drawer.hidden) closeDrawer();
     });
 
     /* ---------- the drawer's own tab bar ---------- */
@@ -153,13 +162,31 @@
   function closeModal(modal) {
     modal.classList.remove('is-open');
     document.body.classList.remove('has-modal');
+
+    /* The dialog was opened by ?edit=N in the address bar. Leaving it there
+       after it has been dismissed means a reload — or the back button — puts
+       the same form straight back up, so the parameter goes with the dialog. */
+    if (window.history && history.replaceState && /[?&]edit=/.test(location.search)) {
+      var params = new URLSearchParams(location.search);
+      params.delete('edit');
+
+      var query = params.toString();
+      history.replaceState({}, '', location.pathname + (query ? '?' + query : ''));
+    }
   }
 
   document.addEventListener('click', function (e) {
     var opener = e.target.closest('[data-modal-open]');
     if (opener) {
       var target = document.getElementById(opener.dataset.modalOpen);
-      if (target) openModal(target);
+      if (target) {
+        /* opened from one distributor's drawer: start on them, but leave the
+           select free to be changed before saving */
+        var dist = target.querySelector('[name="distributor_id"]');
+        if (dist && opener.dataset.distId) dist.value = opener.dataset.distId;
+
+        openModal(target);
+      }
       return;
     }
 
@@ -168,7 +195,7 @@
   });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || viewerOpen()) return;
 
     var open = document.querySelector('.modal-x.is-open');
     if (open) closeModal(open);
@@ -184,6 +211,68 @@
       setTimeout(function () { alert.remove(); }, 300);
     }, 5000);
   });
+
+  /* ---------- paging a table that cannot reload ----------
+     The lists inside the drawer are already on the page — reloading to see
+     page 2 would close the drawer, so those page in the browser. Any table
+     marked data-paged="10" hides all but its own slice and grows a pager under
+     itself. Server-rendered lists keep using ?page= and partials/pager.php;
+     this is only for tables that have nowhere to navigate to. */
+  function pageTable(table) {
+    var size = parseInt(table.dataset.paged, 10) || 10;
+    if (!table.tBodies.length) return;
+
+    var rows = Array.prototype.slice.call(table.tBodies[0].rows);
+    if (rows.length <= size) return;
+
+    var pages = Math.ceil(rows.length / size);
+    var bar = document.createElement('nav');
+    bar.className = 'pager';
+    bar.setAttribute('aria-label', 'Pages');
+    table.parentNode.insertBefore(bar, table.nextSibling);
+
+    function show(page) {
+      var first = (page - 1) * size;
+
+      rows.forEach(function (row, i) {
+        row.hidden = i < first || i >= first + size;
+      });
+
+      var links = '';
+      for (var n = 1; n <= pages; n++) {
+        /* first, last and a window around here — the same shape as the
+           server-side pager, so the two do not look like different features */
+        if (n === 1 || n === pages || Math.abs(n - page) <= 1) {
+          links += n === page
+            ? '<span class="pager__page is-here" aria-current="page">' + n + '</span>'
+            : '<button type="button" class="pager__page" data-page="' + n + '">' + n + '</button>';
+        } else if (Math.abs(n - page) === 2) {
+          links += '<span class="pager__gap" aria-hidden="true">…</span>';
+        }
+      }
+
+      bar.innerHTML = '<span class="pager__count">' + (first + 1) + '–'
+        + Math.min(first + size, rows.length) + ' of ' + rows.length + '</span>'
+        + '<span class="pager__links">' + links + '</span>';
+    }
+
+    bar.addEventListener('click', function (e) {
+      var hit = e.target.closest('[data-page]');
+      if (hit) show(parseInt(hit.dataset.page, 10));
+    });
+
+    show(1);
+  }
+
+  /* the drawer copies its markup in fresh each time it opens, so the tables
+     inside it are paged then rather than once at load */
+  if (drawer) {
+    drawer.addEventListener('drawer:open', function () {
+      Array.prototype.forEach.call(drawerBody.querySelectorAll('[data-paged]'), pageTable);
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.main [data-paged]'), pageTable);
 
   /* ---------- copy to clipboard ----------
      Anything with data-copy="text" puts that text on the clipboard and says so
@@ -249,20 +338,31 @@
     showSchedule();
   }
 
-  /* ---------- click-to-cycle column filters ----------
-     Each header button steps through the values actually present in the
-     table — All → first → second → … → All. Two headers combine with AND. */
-  var table = document.getElementById('latestTable');
+  /* ---------- click-to-cycle column headers ----------
+     The header itself is the control. A filter header steps through the values
+     actually present in the table — All → first → second → … → All — and two
+     filter headers combine with AND. A sort header toggles high → low → off,
+     and says which way it is pointing in its own label.
 
-  if (table) {
+     Every table with class="is-filterable" gets this, so a new list does not
+     need new JavaScript — only the right attributes in its markup. */
+  Array.prototype.forEach.call(document.querySelectorAll('table.is-filterable'), function (table) {
+    if (!table.tBodies.length) return;
+
     var rows    = Array.prototype.slice.call(table.tBodies[0].rows);
     var buttons = Array.prototype.slice.call(table.querySelectorAll('.th-filter'));
     var state   = {};
+    var sortKey = '';
+    var sortDir = '';
 
     /* whatever the page put there is what clearing a filter goes back to, so the
        wording lives in the markup and cannot drift from it */
-    var count        = document.querySelector('[data-table-count]');
+    var count        = table.closest('.panel') || document;
+    count            = count.querySelector('[data-table-count]');
     var countDefault = count ? count.textContent : '';
+
+    /* the order the server sent, so switching sorting off restores it */
+    var original = rows.slice();
 
     /* distinct values per filter, in the order they appear */
     function optionsFor(key) {
@@ -288,6 +388,20 @@
 
     var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    /* the label fades through as it swaps, so a changed header is noticed */
+    function swap(button, text, changed) {
+      var label = button.querySelector('.th-filter__label');
+
+      if (!reduceMotion) {
+        label.classList.remove('is-swapping');
+        void label.offsetWidth;
+        label.classList.add('is-swapping');
+      }
+
+      label.textContent = text;
+      button.classList.toggle('is-filtered', changed);
+    }
+
     function apply() {
       var shown = 0;
 
@@ -301,55 +415,193 @@
 
         if (!match) return;
 
-        /* the left-hand number counts what is on screen, not database ids */
-        var seq = row.querySelector('[data-seq]');
-        if (seq) seq.textContent = String(shown + 1);
+        shown++;
 
-        /* only animate rows that have just appeared, and stagger the first few */
-        if (!reduceMotion && wasHidden) {
+        /* the left-hand number counts what is on screen, not database ids */
+        var seq = row.querySelector('.td-seq');
+        if (seq) seq.textContent = shown;
+
+        if (wasHidden && !reduceMotion) {
           row.classList.remove('is-in');
-          void row.offsetWidth;                 /* restart the animation */
-          row.style.animationDelay = Math.min(shown, 6) * 35 + 'ms';
+          void row.offsetWidth;
           row.classList.add('is-in');
         }
-
-        shown++;
       });
 
-      var empty = document.querySelector('[data-table-empty]');
-      if (empty) empty.hidden = shown > 0;
-
       if (count) {
-        var active = Object.keys(state).filter(function (k) { return state[k]; });
-        count.textContent = active.length
+        var filtered = Object.keys(state).some(function (key) { return state[key]; });
+        count.textContent = filtered
           ? shown + (shown === 1 ? ' match' : ' matches')
           : countDefault;
       }
     }
 
+    /* sorting reorders the rows themselves, so paging and filtering see the
+       new order rather than fighting it */
+    function reorder() {
+      var body = table.tBodies[0];
+
+      if (sortDir === '') {
+        original.forEach(function (row) { body.appendChild(row); });
+        return;
+      }
+
+      rows.slice().sort(function (a, b) {
+        var x = parseFloat(a.dataset[sortKey] || 0);
+        var y = parseFloat(b.dataset[sortKey] || 0);
+
+        return sortDir === 'high' ? y - x : x - y;
+      }).forEach(function (row) {
+        body.appendChild(row);
+      });
+    }
+
     buttons.forEach(function (button) {
-      var key = button.dataset.filter;
-      state[key] = '';
-
       button.addEventListener('click', function () {
-        var options = optionsFor(key);
-        var index   = options.indexOf(state[key]);   /* -1 while unfiltered */
-        var next    = index + 1 >= options.length ? '' : options[index + 1];
+        var key = button.dataset.filter;
 
-        state[key] = next;
+        /* ---- a sort header: high to low → low to high → off ---- */
+        if (button.dataset.sort) {
+          var order = ['', 'high', 'low'];
+          var next  = order[(order.indexOf(sortDir) + 1) % order.length];
 
-        /* the header itself becomes the filter — no extra chip */
-        var label = button.querySelector('.th-filter__label');
+          sortKey = button.dataset.sort;
+          sortDir = next;
 
-        label.classList.remove('is-swapping');
-        void label.offsetWidth;
-        label.classList.add('is-swapping');
+          swap(button, next === 'high' ? 'High to low'
+            : (next === 'low' ? 'Low to high' : button.dataset.default), next !== '');
 
-        label.textContent = next ? labelFor(key, next) : button.dataset.default;
-        button.classList.toggle('is-filtered', next !== '');
+          reorder();
+          apply();
 
+          return;
+        }
+
+        /* ---- a filter header: All → each value present → All ---- */
+        var values  = [''].concat(optionsFor(key));
+        var current = state[key] || '';
+        var step    = values[(values.indexOf(current) + 1) % values.length];
+
+        state[key] = step;
+
+        swap(button, step ? labelFor(key, step) : button.dataset.default, step !== '');
         apply();
       });
+    });
+  });
+
+  /* ---------- filtering without losing your place ----------
+     The column headers on a paged list have to filter on the server: the page
+     holds ten of two hundred and fifty rows, so hiding rows in the browser
+     would filter what is on screen and quietly misreport the rest.
+
+     That does not mean a full page load. The same URL is fetched and the one
+     block that changed is swapped in, which keeps the sidebar, the scroll
+     position and the drawer markup exactly where they were. The address bar is
+     kept in step so reload, back and bookmarking all still work.
+
+     Every link here is a real href, so with JavaScript off the browser simply
+     follows it and the server renders the same thing. Nothing is load-bearing. */
+  var liveList = document.querySelector('[data-live-list]');
+
+  if (liveList && window.fetch && window.history && history.pushState) {
+    var listSeq = 0;
+
+    var waitTimer = null;
+
+    /* Blocking clicks is instant; fading the list is not. A swap that comes
+       back in under a fifth of a second should look like nothing happened at
+       all — the fade is for the one that genuinely keeps somebody waiting, and
+       showing it either way is what made a quick list look like it washed out
+       and came back. */
+    function busy(on) {
+      liveList.classList.toggle('is-busy', on);
+
+      if (waitTimer) {
+        clearTimeout(waitTimer);
+        waitTimer = null;
+      }
+
+      if (on) {
+        waitTimer = setTimeout(function () {
+          liveList.classList.add('is-waiting');
+        }, 200);
+      } else {
+        liveList.classList.remove('is-waiting');
+      }
+    }
+
+    function swapList(url, push) {
+      var mine = ++listSeq;
+
+      busy(true);
+
+      fetch(url, { credentials: 'same-origin' })
+        .then(function (response) { return response.text(); })
+        .then(function (html) {
+          /* a slower earlier request must not overwrite a newer answer */
+          if (mine !== listSeq) return;
+
+          var fresh = new DOMParser()
+            .parseFromString(html, 'text/html')
+            .querySelector('[data-live-list]');
+
+          if (!fresh) {
+            window.location.href = url;   /* something unexpected — just go */
+            return;
+          }
+
+          liveList.innerHTML = fresh.innerHTML;
+          busy(false);
+
+          /* A list marked data-live-quiet filters without touching the address
+             bar: the office asked for the page to sit still. The cost is that
+             a reload or a bookmark comes back to the unfiltered list, which is
+             why the other lists still keep their URL in step. */
+          if (push && !liveList.hasAttribute('data-live-quiet')) {
+            history.pushState({ liveList: true }, '', url);
+          }
+        })
+        .catch(function () {
+          if (mine !== listSeq) return;
+
+          /* the network said no: fall back to what the link would have done */
+          window.location.href = url;
+        });
+    }
+
+    /* a picker in a header: the same swap a filter link does, only the URL is
+       built from what the form holds */
+    liveList.addEventListener('change', function (e) {
+      var form = e.target.closest('form[data-live-form]');
+      if (!form) return;
+
+      var query = [];
+
+      Array.prototype.forEach.call(form.elements, function (field) {
+        if (field.name && field.value !== '') {
+          query.push(encodeURIComponent(field.name) + '=' + encodeURIComponent(field.value));
+        }
+      });
+
+      swapList(form.dataset.base + (query.length ? '?' + query.join('&') : ''), true);
+    });
+
+    liveList.addEventListener('click', function (e) {
+      /* the headers, the pager, and the "show all" an empty result offers —
+         every link in here that only changes which rows are listed */
+      var link = e.target.closest('a.th-filter, .pager a, .empty a');
+
+      /* let a new tab or a modified click do what it normally would */
+      if (!link || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || link.target) return;
+
+      e.preventDefault();
+      swapList(link.href, true);
+    });
+
+    /* back and forward move through the filters rather than out of the page */
+    window.addEventListener('popstate', function (e) {
+      if (e.state && e.state.liveList) swapList(window.location.href, false);
     });
   }
 
@@ -430,6 +682,142 @@
 
       paint(box.value.trim());
     });
+
+    /* Clear stays a real link so it still works without this script — with it,
+       emptying the box is the whole job and reloading the page for it would
+       throw away everything else on screen */
+    if (clear) {
+      clear.addEventListener('click', function (e) {
+        e.preventDefault();
+
+        box.value = '';
+        queue();
+        box.focus();
+      });
+    }
+  }
+
+  /* ---------- looking at an uploaded file ----------
+     A receipt is read next to the decision it is for, so it opens over the page
+     rather than in a tab of its own — the drawer, the row and the Accept button
+     are all still there behind it when it closes.
+
+     Every link is a real href to file.php, so a middle-click, "open in new tab"
+     and a browser without this script all still work; this only takes over the
+     plain click. */
+  var viewer = null;
+
+  function buildViewer() {
+    viewer = document.createElement('div');
+    viewer.className = 'viewer';
+    viewer.hidden = true;
+    viewer.innerHTML =
+      '<div class="viewer__backdrop" data-viewer-close></div>' +
+      '<figure class="viewer__frame" role="dialog" aria-modal="true" aria-label="Uploaded file">' +
+        '<figcaption class="viewer__head">' +
+          '<span class="viewer__title"></span>' +
+          '<span class="viewer__tools">' +
+            '<a class="viewer__open" target="_blank" rel="noopener">Open in a new tab</a>' +
+            '<button type="button" class="viewer__close" data-viewer-close aria-label="Close">' +
+              '<i class="bi bi-x-lg" aria-hidden="true"></i></button>' +
+          '</span>' +
+        '</figcaption>' +
+        '<div class="viewer__body"></div>' +
+      '</figure>';
+
+    document.body.appendChild(viewer);
+  }
+
+  function closeViewer() {
+    if (!viewer || viewer.hidden) return;
+
+    viewer.hidden = true;
+    document.body.classList.remove('has-viewer');
+
+    /* stop a PDF rendering behind everything else */
+    viewer.querySelector('.viewer__body').innerHTML = '';
+  }
+
+  function openViewer(url, label) {
+    if (!viewer) buildViewer();
+
+    /* the file name sits in ?path=, with &dir= able to follow it */
+    var isPdf = /\.pdf($|[?&])/i.test(url.split('path=')[1] || url);
+
+    viewer.querySelector('.viewer__title').textContent = label || 'Uploaded file';
+    viewer.querySelector('.viewer__open').href = url;
+    viewer.querySelector('.viewer__body').innerHTML = isPdf
+      ? '<iframe class="viewer__pdf" title="Uploaded file"></iframe>'
+      : '<img class="viewer__img" alt="">';
+
+    var media = viewer.querySelector('.viewer__pdf, .viewer__img');
+    media.src = url;
+
+    viewer.hidden = false;
+    document.body.classList.add('has-viewer');
+    viewer.querySelector('.viewer__close').focus();
+  }
+
+  document.addEventListener('click', function (e) {
+    var close = e.target.closest('[data-viewer-close]');
+
+    if (close) {
+      closeViewer();
+      return;
+    }
+
+    var link = e.target.closest('a[data-viewer]');
+
+    /* a modified click means somebody wants their own tab — let them have it */
+    if (!link || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+    e.preventDefault();
+    openViewer(link.href, link.dataset.viewer);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeViewer();
+  });
+
+  /* ---------- what a stock order will cost ----------
+     One order can be for both products, so each line shows its own figure and
+     the total is their sum. The figure that counts is still the one the server
+     works out — this only saves somebody adding it up before they pay it. */
+  var stockRows  = document.querySelectorAll('[data-stock-qty]');
+  var stockTotal = document.querySelector('[data-stock-total]');
+
+  if (stockRows.length && stockTotal) {
+    var rupees = function (amount) {
+      return '₹' + amount.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    };
+
+    var paintOrder = function () {
+      var total = 0;
+
+      Array.prototype.forEach.call(stockRows, function (box) {
+        var units = Math.max(0, parseInt(box.value, 10) || 0);
+        var line  = units * (parseFloat(box.dataset.price) || 0);
+
+        total += line;
+
+        var sum = box.closest('.order-line');
+        sum = sum && sum.querySelector('[data-stock-line]');
+
+        if (sum) sum.textContent = rupees(line);
+      });
+
+      stockTotal.textContent = rupees(total);
+    };
+
+    Array.prototype.forEach.call(stockRows, function (box) {
+      box.addEventListener('input', paintOrder);
+      box.addEventListener('change', paintOrder);
+    });
+
+    paintOrder();
   }
 
   /* ---------- countdowns ----------

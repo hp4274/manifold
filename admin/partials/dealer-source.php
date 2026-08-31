@@ -100,7 +100,7 @@ $srcPayouts  = dealer_payouts($srcDealerId);
           <p class="empty">Nobody has applied with this dealer's code yet.</p>
         <?php else: ?>
           <div class="table-wrap">
-            <table class="data-table">
+            <table class="data-table" data-paged="10">
               <thead>
                 <tr>
                   <th>Client</th>
@@ -191,7 +191,7 @@ $srcPayouts  = dealer_payouts($srcDealerId);
           <p class="empty">Nothing has been paid to this dealer yet.</p>
         <?php else: ?>
           <div class="table-wrap">
-            <table class="data-table">
+            <table class="data-table" data-paged="10">
               <thead>
                 <tr>
                   <th>Paid on</th>

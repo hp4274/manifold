@@ -3,8 +3,10 @@
 
 declare(strict_types=1);
 
-$mail = (string) ($_GET['mail'] ?? '');
-$pay  = (string) ($_GET['pay'] ?? '');
+/* set by the page that included this, out of the session flash — never out of
+   the query string, which would leave the message sitting in the address bar */
+$mail = $mailFlash ?? '';
+$pay  = $payFlash ?? '';
 ?>
 <?php if ($mail === 'sent'): ?>
   <p class="alert alert--ok">Email sent to the applicant.</p>

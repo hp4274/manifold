@@ -147,7 +147,7 @@ if (!preg_match('/^(index|list)\.php(\?[a-z0-9=&_%-]*)?$/i', $return)) {
     $return = 'list.php?type=' . urlencode($type);
 }
 
-$return .= (strpos($return, '?') === false ? '?' : '&') . 'pay=' . $flash . '&saved=' . $id . '#row-' . $id;
+admin_flash(['pay' => $flash, 'saved' => $id]);
 
 header('Location: ' . $return);
 exit;

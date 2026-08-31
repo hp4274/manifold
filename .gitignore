@@ -38,5 +38,6 @@ admin/uploads/payments/*
 graphify-out
 .playwright
 .playwright-mcp
+.reticle
 # Logs & Temporary files
 *.log
