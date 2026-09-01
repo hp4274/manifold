@@ -19,10 +19,10 @@ $navClass  = ($navVariant ?? 'desktop') === 'mobile' ? 'nav-login-mobile' : 'nav
 
 /* one sign-in for everybody now, so the button only ever says one of two things */
 if (portal_roles()) {
-    $navHref  = '../portal/logout.php';
+    $navHref  = '../portal/logout';
     $navLabel = 'Sign out';
 } else {
-    $navHref  = '../portal/index.php';
+    $navHref  = '../portal/';
     $navLabel = 'Sign in';
 }
 ?>

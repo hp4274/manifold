@@ -33,8 +33,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stockValues = [
             'wanted'    => [
-                'stove'  => max(0, (int) ($posted['stove'] ?? 0)),
-                'tuktuk' => max(0, (int) ($posted['tuktuk'] ?? 0)),
+                /* read as typed: turning a negative into zero here would drop
+                   the line silently and hand back an order nobody asked for.
+                   stock_order_create() refuses it with a sentence instead. */
+                'stove'  => (int) ($posted['stove'] ?? 0),
+                'tuktuk' => (int) ($posted['tuktuk'] ?? 0),
             ],
             'reference' => trim((string) ($_POST['reference'] ?? '')),
             'note'      => trim((string) ($_POST['note'] ?? '')),
@@ -63,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['distributor_flash'] = 'Order sent. The office releases the units once they '
                     . 'have confirmed the payment.';
 
-                header('Location: stock.php');
+                header('Location: stock');
                 exit;
             }
         }
@@ -80,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($error === '') {
                 $_SESSION['distributor_flash'] = 'Released. The units have moved from your shelf to theirs.';
 
-                header('Location: stock.php');
+                header('Location: stock');
                 exit;
             }
         } else {
@@ -89,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($error === '') {
                 $_SESSION['distributor_flash'] = 'Order turned down. Nothing has left your shelf.';
 
-                header('Location: stock.php');
+                header('Location: stock');
                 exit;
             }
         }

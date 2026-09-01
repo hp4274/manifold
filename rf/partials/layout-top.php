@@ -14,10 +14,11 @@ declare(strict_types=1);
 
 $activeNav = $activeNav ?? '';
 $navItems  = [
-    'dashboard' => ['label' => 'Dashboard', 'icon' => 'bi-grid',      'href' => 'index.php'],
-    'queue'     => ['label' => 'To check',  'icon' => 'bi-inbox',     'href' => 'index.php#queue'],
-    'paying'    => ['label' => 'To pay',    'icon' => 'bi-cash-coin', 'href' => 'index.php#paying'],
-    'history'   => ['label' => 'History',   'icon' => 'bi-clock-history', 'href' => 'history.php'],
+    'dashboard' => ['label' => 'Dashboard', 'icon' => 'bi-grid',      'href' => './'],
+    'queue'     => ['label' => 'To check',  'icon' => 'bi-inbox',     'href' => './#queue'],
+    'paying'    => ['label' => 'To pay',    'icon' => 'bi-cash-coin', 'href' => './#paying'],
+    'history'   => ['label' => 'History',   'icon' => 'bi-clock-history', 'href' => 'history'],
+    'settings'  => ['label' => 'Settings',  'icon' => 'bi-sliders',   'href' => 'settings'],
 ];
 ?>
 <!DOCTYPE html>
@@ -25,7 +26,7 @@ $navItems  = [
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= e($pageTitle) ?> — Manifold R&amp;F</title>
+<title><?= e($pageTitle) ?> - Manifold R&amp;F</title>
 <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="../assets/vendor/figtree/figtree.css">
@@ -39,7 +40,7 @@ $navItems  = [
 <div class="shell">
 
   <aside class="sidebar">
-    <a class="sidebar__brand" href="index.php" aria-label="Manifold Clean Energy R&amp;F portal">
+    <a class="sidebar__brand" href="./" aria-label="Manifold Clean Energy R&amp;F portal">
       <img src="../assets/images/manifold-white.webp" alt="Manifold Clean Energy">
     </a>
 
@@ -60,7 +61,7 @@ $navItems  = [
         <?= e($user['email']) ?>
       </p>
       <nav class="sidebar__nav">
-        <a href="../admin/logout.php">
+        <a href="../admin/logout">
           <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out
         </a>
       </nav>

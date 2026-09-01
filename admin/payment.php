@@ -19,7 +19,7 @@ require_once __DIR__ . '/emails.php';
 $user = require_login();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: index.php');
+    header('Location: ./');
     exit;
 }
 
@@ -86,12 +86,27 @@ switch ($action) {
         $payment['decided_at'] = date('Y-m-d H:i:s');
 
         $totals = payment_totals($app);
-        $flash  = send_receipt_email($app, $payment, $totals) ? 'receipt' : 'mailfail';
+
+        /* the receipt carries a generated PDF and takes seconds to send; the
+           office should not stand there while it goes */
+        after_response(static function () use ($app, $payment, $totals): void {
+            send_receipt_email($app, $payment, $totals);
+        });
+
+        $flash = 'receipt';
         break;
 
     /* ---------- that transfer does not check out ---------- */
     case 'reject':
         $payment = load_payment($paymentId, $id);
+
+        /* The applicant is emailed this, and it is the whole of what they are
+           told. Refusing a payment without saying why leaves somebody looking at
+           a rejected receipt for money they have already sent. */
+        if ($reason === '') {
+            http_response_code(422);
+            exit('Say why the payment is being turned down - the applicant is emailed the reason.');
+        }
 
         db()->prepare(
             'UPDATE payments
@@ -110,7 +125,36 @@ switch ($action) {
             }
         }
 
-        $flash = send_payment_rejected_email($app, $reason, $payment, payment_totals($app)) ? 'rejected' : 'mailfail';
+        $rejectTotals = payment_totals($app);
+
+        after_response(static function () use ($app, $reason, $payment, $rejectTotals): void {
+            send_payment_rejected_email($app, $reason, $payment, $rejectTotals);
+        });
+
+        $flash = 'rejected';
+        break;
+
+    /* ---------- the finance team's check ----------
+       Between the booking payment and the delivery payment sits the paperwork.
+       Verifying it is what opens the delivery payment to the applicant — and on
+       a sale a partner recorded as paid in full, it finishes the sale. */
+    case 'docs':
+        $done = docs_verify($id, (int) $user['id']);
+
+        if (isset($done['error'])) {
+            http_response_code(409);
+            exit($done['error']);
+        }
+
+        $fresh = db()->prepare('SELECT * FROM applications WHERE id = ?');
+        $fresh->execute([$id]);
+        $after = $fresh->fetch() ?: $app;
+
+        after_response(static function () use ($after): void {
+            send_docs_verified_email($after);
+        });
+
+        $flash = 'docs';
         break;
 
     /* ---------- nudge whoever still owes ---------- */
@@ -127,13 +171,15 @@ switch ($action) {
             exit('There is a receipt waiting to be checked — verify or reject it first.');
         }
 
-        if (send_payment_reminder_email($app, $totals)) {
-            db()->prepare('UPDATE applications SET reminded_at = NOW(), reminder_count = reminder_count + 1 WHERE id = ?')
-                ->execute([$id]);
-            $flash = 'reminded';
-        } else {
-            $flash = 'mailfail';
-        }
+        /* counted now, sent after: a reminder nobody is watching go out */
+        db()->prepare('UPDATE applications SET reminded_at = NOW(), reminder_count = reminder_count + 1 WHERE id = ?')
+            ->execute([$id]);
+
+        after_response(static function () use ($app, $totals): void {
+            send_payment_reminder_email($app, $totals);
+        });
+
+        $flash = 'reminded';
         break;
 
     default:
@@ -143,8 +189,8 @@ switch ($action) {
 
 $return = (string) ($_POST['return'] ?? '');
 
-if (!preg_match('/^(index|list)\.php(\?[a-z0-9=&_%-]*)?$/i', $return)) {
-    $return = 'list.php?type=' . urlencode($type);
+if (!preg_match('#^(\./|list)(\?[a-z0-9=&_%-]*)?$#i', $return)) {
+    $return = 'list?type=' . urlencode($type);
 }
 
 admin_flash(['pay' => $flash, 'saved' => $id]);

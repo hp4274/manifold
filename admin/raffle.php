@@ -39,7 +39,7 @@ function raffle_done(string $message, string $query = ''): void
 {
     $_SESSION['raffle_flash'] = $message;
 
-    header('Location: raffle.php' . ($query === '' ? '' : '?q=' . urlencode($query)));
+    header('Location: raffle' . ($query === '' ? '' : '?q=' . urlencode($query)));
     exit;
 }
 
@@ -229,7 +229,7 @@ require __DIR__ . '/partials/layout-top.php';
           <span class="finder__spinner" aria-hidden="true"></span>
         </label>
         <button type="submit" class="btn btn--primary finder__submit">Search</button>
-        <a class="btn btn--ghost finder__clear" href="raffle.php"
+        <a class="btn btn--ghost finder__clear" href="raffle"
            <?= $search === '' ? 'hidden' : '' ?>>Clear</a>
       </form>
 
@@ -247,7 +247,7 @@ require __DIR__ . '/partials/layout-top.php';
 
   <div class="panel" id="winners">
     <div class="panel__head">
-      <h2><?= $revealed ? 'Winners' : 'Winners — not public yet' ?></h2>
+      <h2><?= $revealed ? 'Winners' : 'Winners - not public yet' ?></h2>
       <span class="eyebrow"><?= count($winners) ?> of <?= $places ?> recorded</span>
     </div>
 

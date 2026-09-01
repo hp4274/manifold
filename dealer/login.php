@@ -6,5 +6,5 @@
 
 declare(strict_types=1);
 
-header('Location: ../portal/index.php');
+header('Location: ../portal/');
 exit;

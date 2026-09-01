@@ -48,7 +48,7 @@ $offset = ($page - 1) * LIST_PER_PAGE;
 
 /* both are integers we worked out ourselves; MySQL will not take them bound */
 $stmt = db()->prepare(
-    'SELECT * FROM ' . $config['table'] . $clause
+    'SELECT ' . ($config['list'] ?? '*') . ' FROM ' . $config['table'] . $clause
     . ' ORDER BY created_at DESC LIMIT ' . LIST_PER_PAGE . ' OFFSET ' . $offset
 );
 $stmt->execute($params);
@@ -64,7 +64,7 @@ $deletedId = (int) ($flash['deleted'] ?? 0);
 $mailFlash = (string) ($flash['mail'] ?? '');
 $payFlash  = (string) ($flash['pay'] ?? '');
 /* without the page, saving a row on page 3 would come back to page 1 */
-$listUrl   = 'list.php?type=' . urlencode($type) . ($status !== '' ? '&status=' . urlencode($status) : '');
+$listUrl   = 'list?type=' . urlencode($type) . ($status !== '' ? '&status=' . urlencode($status) : '');
 $returnUrl = $listUrl . ($page > 1 ? '&page=' . $page : '');
 
 [$attentionKeys, $attentionLabel] = attention_status($type);
@@ -81,7 +81,7 @@ $statusNext = $statusKeys[(array_search($status, $statusKeys, true) + 1) % count
 
 /** Where a header click goes: this list, one step along the status column. */
 $stepUrl = static function (string $toType, string $toStatus): string {
-    return 'list.php?type=' . urlencode($toType)
+    return 'list?type=' . urlencode($toType)
         . ($toStatus === '' ? '' : '&status=' . urlencode($toStatus));
 };
 
@@ -125,23 +125,38 @@ require __DIR__ . '/partials/layout-top.php';
     </span>
   </div>
 
-  <?php if (!$rows): ?>
-    <?php /* an empty filter and an empty form are different facts */ ?>
-    <p class="empty">
-      <?= $status === ''
-          ? 'Nothing here yet.'
-          : 'Nothing is ' . e(strtolower(status_label($status)))
-            . '. <a href="' . e($stepUrl($type, '')) . '">Show all</a>.' ?>
-    </p>
-  <?php else: ?>
+  <?php /* The table is drawn whether or not it has rows: a filter that matches
+           nothing still has to show which columns it filtered, and the header
+           carries the status filter itself — hiding it left no way back. */ ?>
     <div class="table-wrap">
-      <table>
+      <?php /* Fixed widths, so switching a filter cannot move the columns: the
+               rows behind one status are shorter or longer than another's, and
+               an empty result has no cells to size at all. */ ?>
+      <table class="table--fixed">
+        <colgroup>
+          <?php $hasSource = $type !== 'newsletter' && $type !== 'contact'; ?>
+          <col style="width:5%">
+          <col style="width:<?= $type === 'newsletter' ? '34%' : ($hasSource ? '16%' : '18%') ?>">
+          <?php if ($type !== 'newsletter'): ?>
+            <col style="width:<?= $hasSource ? '18%' : '21%' ?>">
+          <?php endif; ?>
+          <?php if ($hasSource): ?>
+            <col style="width:12%">
+          <?php endif; ?>
+          <col style="width:<?= $type === 'newsletter' ? '20%' : ($hasSource ? '12%' : '14%') ?>">
+          <col style="width:<?= $type === 'newsletter' ? '13%' : '14%' ?>">
+          <col style="width:<?= $hasSource ? '12%' : '14%' ?>">
+          <col style="width:<?= $hasSource ? '11%' : '14%' ?>">
+        </colgroup>
         <thead>
           <tr>
             <th>#</th>
             <th><?= $type === 'newsletter' ? 'Email' : 'Name' ?></th>
             <?php if ($type !== 'newsletter'): ?>
               <th>Contact</th>
+            <?php endif; ?>
+            <?php if ($type !== 'newsletter' && $type !== 'contact'): ?>
+              <th>Source</th>
             <?php endif; ?>
             <th>Received</th>
             <?php /* click to step through this form's own statuses, then back to all */ ?>
@@ -162,6 +177,21 @@ require __DIR__ . '/partials/layout-top.php';
           </tr>
         </thead>
         <tbody>
+          <?php if (!$rows): ?>
+            <?php /* an empty filter and an empty form are different facts */ ?>
+            <tr class="row-empty">
+              <td colspan="<?= $type === 'newsletter' ? 6 : ($hasSource ? 8 : 7) ?>">
+                <?php /* the status is named in the panel heading above, and
+                         some of them carry a dash of their own — repeating one
+                         here read as two sentences run together */ ?>
+                <?= $status === ''
+                    ? 'No entry found — nothing here yet.'
+                    : 'No entry found at this status. <a href="'
+                      . e($stepUrl($type, '')) . '">Show all</a>.' ?>
+              </td>
+            </tr>
+          <?php endif; ?>
+
           <?php /* keep counting where the previous page left off */ ?>
           <?php $seq = $offset; ?>
           <?php foreach ($rows as $row): ?>
@@ -178,6 +208,17 @@ require __DIR__ . '/partials/layout-top.php';
                   <?php endif; ?>
                 </td>
               <?php endif; ?>
+              <?php if ($type !== 'newsletter' && $type !== 'contact'): ?>
+                <?php $rowSource = sale_source($row); ?>
+                <td>
+                  <div class="cell-stack">
+                    <span><?= e($rowSource['label']) ?></span>
+                    <?php if ($rowSource['code'] !== ''): ?>
+                      <span class="cell-sub"><?= e($rowSource['code']) ?></span>
+                    <?php endif; ?>
+                  </div>
+                </td>
+              <?php endif; ?>
               <td><?= e(format_datetime($row['created_at'])) ?></td>
               <td><span class="pill pill--<?= e($row['status']) ?>"><?= e(status_short($row['status'])) ?></span></td>
               <td>
@@ -185,6 +226,7 @@ require __DIR__ . '/partials/layout-top.php';
               </td>
               <td class="td-actions">
                 <button type="button" class="row-toggle" data-drawer="detail-<?= e($type) ?>-<?= $rowId ?>"
+                        data-drawer-url="drawer.php?type=<?= e($type) ?>&amp;id=<?= $rowId ?>&amp;return=<?= e(rawurlencode($returnUrl)) ?>"
                         data-title="<?= e(record_title($type, $row)) ?>"
                         data-code="<?= e((string) ($row['reference_code'] ?? '')) ?>"
                         data-meta="<?= e($config['label']) ?> · received <?= e(format_datetime($row['created_at'])) ?>"
@@ -199,29 +241,19 @@ require __DIR__ . '/partials/layout-top.php';
       </table>
     </div>
 
-    <?php
-      $pagerPage  = $page;
-      $pagerPages = $pages;
-      $pagerTotal = $total;
-      $pagerFrom  = $offset + 1;
-      $pagerTo    = $offset + count($rows);
-      $pagerBase  = $listUrl;
-      require __DIR__ . '/partials/pager.php';
-    ?>
-  <?php endif; ?>
+    <?php if ($rows): ?>
+      <?php
+        $pagerPage  = $page;
+        $pagerPages = $pages;
+        $pagerTotal = $total;
+        $pagerFrom  = $offset + 1;
+        $pagerTo    = $offset + count($rows);
+        $pagerBase  = $listUrl;
+        require __DIR__ . '/partials/pager.php';
+      ?>
+    <?php endif; ?>
 </div>
 
-<!-- ============ detail drawers ============ -->
-<?php if ($rows): ?>
-  <?php foreach ($rows as $row): ?>
-    <?php
-      $srcType   = $type;
-      $srcRow    = $row;
-      $srcReturn = $returnUrl;
-      require __DIR__ . '/partials/drawer-source.php';
-    ?>
-  <?php endforeach; ?>
-<?php endif; ?>
 </div><?php /* end of the swapped region */ ?>
 
 <?php /* the drawer itself is a fixture of the page, not of the filter */ ?>

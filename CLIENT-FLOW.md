@@ -21,8 +21,10 @@ the live value in the `settings` table; all of them are editable under
 | Office             | `admin_users`  | —      | Signs in at `/admin` with an email and password                         |
 
 The apply form has **one** box for a code, and the prefix decides what it
-means. A code is only ever one of the three things, so a partner sale books
-commission _instead of_ a customer referral reward, never both.
+means. A code is only ever one of the three things, so the box never books both
+a partner's own sale and a customer referral reward. A customer's code does
+book both a reward and commission, but the commission goes to the partner
+behind that customer's own sale — see rule 2 below.
 
 Share links are built by `referral_link()` and look like
 `…/apply-stove.html?ref=MD000004` — the same URL shape whoever is sharing it.
@@ -34,15 +36,15 @@ Share links are built by `referral_link()` and look like
 | Stove      | ₹3,500          | ₹16,500          | ₹20,000 |
 | TukTuk kit | ₹6,000          | ₹24,000          | ₹30,000 |
 
-| Earned by                | Rate      | Of what                                         |
-| ------------------------ | --------- | ----------------------------------------------- |
-| Dealer                   | 15%       | The sale value, on their own sales              |
-| Distributor — override   | 5%        | The sale value, on sales by a dealer under them |
-| Distributor — direct     | 15%       | The sale value, on sales they make themselves   |
-| Customer referral reward | ₹500 flat | Per referred application                        |
+| Earned by                | Stove  | TukTuk kit | On what                                   |
+| ------------------------ | ------ | ---------- | ----------------------------------------- |
+| Dealer                   | ₹3,000 | ₹4,500     | Their own sales                           |
+| Distributor — override   | ₹1,000 | ₹1,500     | Sales by a dealer under them              |
+| Distributor — direct     | ₹3,000 | ₹4,500     | Sales they make themselves                |
+| Customer referral reward | ₹500   | ₹500       | Per referred application                  |
 
-What "the sale value" means differs by payment once GST is taken into account,
-and each payment is settled with its own commission — see §9.
+A flat amount per sale, per product — not a share of what the sale is worth —
+and earned in full when the delivery payment is verified. See §9.
 
 Both prices and both commission shares are **frozen onto the application row**
 at the moment it is created. Changing a rate under Settings tomorrow changes
@@ -63,7 +65,12 @@ status: booking_pending    ← payment email sent, portal opens
     ↓  client uploads the booking receipt
 status: booking_review
     ↓  office accepts the receipt (or rejects it)
-status: delivery_pending   ← receipt emailed, delivery payment now due
+status: docs_pending       ← receipt emailed; finance checks the paperwork
+    ↓  office marks the finance documents verified
+status: confirm_pending    ← the client is asked: go ahead, or cancel?
+    ↓  client answers in the portal
+status: delivery_pending   ← delivery payment now open to the client
+        (or cancelled      ← nothing more is owed; the booking amount is refunded)
     ↓  client uploads the delivery receipt
 status: delivery_review
     ↓  office accepts the receipt (or rejects it)
@@ -181,8 +188,8 @@ Consequences worth knowing:
 - No payment email, no QR code, no receipt upload — there is nothing to pay.
 - The partner's commission is earned immediately, because the sale is already
   `complete`.
-- A dealer's direct sale still books their distributor's 5% override, because
-  the override follows whoever signed that dealer up.
+- A dealer's direct sale still books their distributor's override, because the
+  override follows whoever signed that dealer up.
 
 ---
 
@@ -192,15 +199,27 @@ Resolved in `submit.php` at submission, in this order:
 
 1. **Empty** — no reward, no commission. The sale earns nobody anything.
 2. **`MF……`, a live customer code** — `referred_by_id` and `referred_by_code`
-   are recorded and `referral_reward_status = 'pending'` at ₹500. Commission
-   stays zero: a customer referral and a partner sale are different things.
-3. **`MD……`, an approved and active dealer** — `dealer_id` set, dealer
-   commission frozen at 15%, and the 5% override frozen for the distributor
-   that dealer answers to. Every dealer has one, so every dealer sale books an
+   are recorded and `referral_reward_status = 'pending'` at ₹500 for the
+   customer who shared it. The new sale also **inherits the partner behind that
+   customer's own sale**: their dealer and distributor are copied onto it and
+   commission is frozen as if the partner had sold it directly. A dealer who
+   finds a customer keeps the customers that customer goes on to find, and the
+   referring customer is paid their reward on top — both, not one.
+
+   The partner is re-checked, not copied blind. A dealer switched off or no
+   longer approved books nothing, and because their distributor's share is an
+   override on a dealer sale, the distributor takes nothing either. Where the
+   first sale was a distributor's own direct sale, it carries down as one.
+
+   Inheritance follows the chain: a sale that inherited a dealer passes that
+   dealer to anyone **it** refers, with no limit on depth.
+3. **`MD……`, an approved and active dealer** — `dealer_id` set, the dealer's
+   commission for that product frozen onto the row, and the override frozen for
+   the distributor that dealer answers to. Every dealer has one, so every dealer sale books an
    override. This follows the dealer's record, **never the form** — a client
    cannot type a distributor into a sale.
-4. **`MX……`, an active distributor** — `distributor_id` set, the 15% direct
-   share frozen, and no dealer is involved.
+4. **`MX……`, an active distributor** — `distributor_id` set, the direct
+   commission for that product frozen, and no dealer is involved.
 5. **Anything else** — a code that matches nothing, a switched-off dealer, or a
    dealer the office has not approved yet, resolves to nothing. The application
    is still accepted and earns nobody anything. The client is told in the
@@ -387,8 +406,8 @@ selling it to a dealer at ₹27,000 makes ₹1,500; the dealer selling it on at 
 ₹30,000 retail price makes ₹3,000.
 
 Commission is **on top of that margin** and is unaffected by any of it — a
-stocked sale books the dealer's 15% and the distributor's 5% override exactly as
-a share-link sale does.
+stocked sale books the dealer's commission and the distributor's override
+exactly as a share-link sale does.
 
 ---
 
@@ -581,120 +600,92 @@ through their distributor today; if that becomes a real need, the same helper
 
 ## 9. How commission is worked out, and paid, tranche by tranche
 
-**Not built yet — this section is the design.** Today `commission_split()` works
-one figure out for the whole sale when the application arrives, and nothing is
-earned until the sale completes. The rule below replaces both: commission is
-worked out per payment, and **released with the payment it belongs to**.
+**Built and working.** Commission is a flat amount per sale, set per product,
+and earned when the sale's delivery payment is verified. The figures live in
+`commission_lines`, one row per party per sale, which is what every screen and
+every voucher reads.
 
-A sale arrives as up to three payments, and each one is settled with its own
-commission at the time it lands:
+### What a sale pays
 
-```
-  booking amount   +  commission on it
-  loan amount      +  commission on it
- (delivery amount − GST)  +  commission on that
-```
+The amount is read from Settings when the application arrives and written onto
+the row, so a change to the figures never rewrites a sale already made.
 
-Nobody waits for the sale to complete to be paid for the part of it that already
-has.
+| Earned by                | Stove  | TukTuk kit |
+| ------------------------ | ------ | ---------- |
+| Dealer                   | ₹3,000 | ₹4,500     |
+| Distributor — override   | ₹1,000 | ₹1,500     |
+| Distributor — direct     | ₹3,000 | ₹4,500     |
 
-### What GST does, and where
+Those are the starting figures. Both the office (**Admin → Settings →
+Commission**) and R&F (**R&F → Settings**), who pay it, edit the same six
+amounts.
 
-**GST applies to the delivery amount only.** The booking amount and the loan
-amount are commissioned on what was paid, untouched.
+### When it is earned
 
-| What was paid                                                      | GST taken out first? | Commission base                        |
-| ------------------------------------------------------------------ | -------------------- | -------------------------------------- |
-| **Booking amount**                                                 | No                   | The booking amount as paid             |
-| **Loan amount** — the part a financier pays on the client's behalf | No                   | The loan amount as paid                |
-| **Delivery amount**                                                | **Yes**              | The delivery amount, less its own GST  |
+**In full, at delivery.** The booking payment on its own earns nobody anything:
 
-So at delivery, and only there:
+- Booking verified → the sale is under way, nothing is earned.
+- Delivery verified → the whole amount is earned and payable, and the sale is
+  complete.
 
-```
-gst        = delivery amount × gst_rate
-base       = delivery amount − gst
-commission = base × the partner's rate
-```
+Financing is arranged between the client and their lender and never passes
+through this system: the office does not record a loan, and no commission is
+worked out on one.
 
-### Worked example — ₹6,000 booking, ₹15,000 loan, ₹16,500 delivery, at 18% GST
+### Worked example — a dealer sells one stove
 
-| Tranche       | Paid        | GST out                  | Commission base | Dealer at 15% | Distributor at 5% |
-| ------------- | ----------- | ------------------------ | --------------- | ------------- | ----------------- |
-| Booking       | ₹6,000      | —                        | ₹6,000          | ₹900.00       | ₹300.00           |
-| Loan          | ₹15,000     | —                        | ₹15,000         | ₹2,250.00     | ₹750.00           |
-| Delivery      | ₹16,500     | ₹2,970 (18% of ₹16,500)  | ₹13,530         | ₹2,029.50     | ₹676.50           |
-| **Altogether** | **₹37,500** | **₹2,970**              | **₹34,530**     | **₹5,179.50** | **₹1,726.50**     |
+| What happens                | What the dealer earns | What their distributor earns |
+| --------------------------- | --------------------- | ---------------------------- |
+| ₹3,500 booking verified     | —                     | —                            |
+| ₹16,500 delivery verified   | ₹3,000                | ₹1,000                       |
 
-Each row is paid out as it happens: the dealer has ₹900 once the booking payment
-is verified, ₹2,250 more when the loan lands, and ₹2,029.50 at delivery. They
-are never waiting on the whole ₹5,179.50.
-
-_18% shows the arithmetic. The rate belongs in Settings as `gst_rate`, beside
-the commission rates, and is not fixed by this document._
-
-### One question to settle before this is built
-
-The formula above reads `gst = delivery amount × gst_rate`, which treats the
-delivery amount as the figure **before** tax. If the ₹16,500 a client pays is
-meant to be **GST-inclusive**, the tax inside it is `16,500 × 18 ÷ 118 =
-₹2,516.95`, leaving a base of ₹13,983.05 rather than ₹13,530 — about ₹68 more to
-the dealer on this one sale. Both are defensible; they are not the same money.
-Whoever builds this needs the answer first.
+A kit pays ₹4,500 and ₹1,500 the same way. A distributor selling it themselves
+takes the direct figure — ₹3,000 on a stove — and no dealer is involved.
 
 ### When each part is earned
 
-Commission on a tranche becomes payable when **that payment is verified**, not
-when the sale completes:
-
-- Booking verified → the booking share is earned and payable.
-- Loan received → the loan share is earned and payable.
-- Delivery verified → the delivery share is earned, and the sale is complete.
-
-This is a change from today, where nothing is earned until `status = 'complete'`
-(§3). It matters for vouchers (§10): a partner can claim the booking share of a
-sale whose delivery payment is still months away.
+The whole amount becomes payable when the **delivery payment is verified**. A
+sale sitting on its booking payment has earned nobody anything yet, and shows on
+the partner's dashboard as still to come rather than as owed.
 
 ### Rules this has to hold to
 
-- **Frozen per sale.** The GST rate and the commission rates are stamped onto
-  the application when it arrives, exactly as prices already are. Changing
-  `gst_rate` under Settings changes future sales, never a sale already made.
-- **Per tranche, stored per tranche.** Each payment's commission is written when
-  that payment is verified, so it can be shown, claimed and audited on its own.
-  One total field cannot answer "what is owed on this sale so far".
-- **The base can never go negative.** If GST on the delivery amount ever
-  exceeded it, the base is zero and that tranche earns nothing — it does not claw
-  back what the booking or loan tranche earned.
-- **Rounding once, per tranche.** Each tranche's commission is rounded to two
-  decimals when it is written. Rounding a running total instead lets the sum of
-  the tranches disagree with the sale's total by a paisa or two.
-- **A rejected payment un-earns its tranche.** A receipt that is rejected (§2 A5)
-  puts that payment back to due and its commission with it. If it had already
-  been claimed, the correction lands on the next voucher (§10) rather than
-  rewriting a paid one.
-- **Direct sales earn every tranche at once.** A partner's own sale (§3) is
-  created complete and paid in full, so all of it — with the GST already out of
-  the delivery part — is earned the moment it is recorded.
+- **Frozen per sale.** The commission amounts are stamped onto the application
+  when it arrives, exactly as prices already are. Changing an amount under
+  Settings changes future sales, never a sale already made.
+- **Stored per sale, per party.** The line is written when the delivery payment
+  is verified, so it can be shown, claimed and audited on its own.
+- **An amount of zero earns nothing.** A partner whose figure is zero on the day
+  the sale arrived has no line written, rather than a line worth nothing.
+- **A rejected payment un-earns the sale.** A delivery receipt that is rejected
+  (§2 A5) takes its commission line with it, and the sale goes back to being
+  still to come.
+- **A claimed line is never rewritten.** If a rejection lands after the line was
+  claimed, the correction goes on the next voucher (§10) rather than rewriting a
+  paid one.
+- **Direct sales earn at once.** A partner's own sale (§3) is created complete
+  and paid in full, so the amount is earned the moment it is recorded.
 
-### What this needs
+### Where it lives
 
-Sketch only, for whoever builds it:
+| Piece | Where |
+|---|---|
+| The amounts | `settings.commission_<kind>_<product>` — kind being `dealer`, `override` or `direct` — edited under **Admin → Settings → Commission** or **R&F → Settings**, and frozen onto `applications.dealer_commission` / `distributor_commission` when a sale arrives |
+| The figures | `commission_lines` — one row per application and party, written at the `delivery` stage, with `paid_amount` and `amount`. Unique on application, party and stage, so a sale is earned once. `gst_amount`, `base_amount` and `rate` are left from the percentage scheme and stay at zero for new lines |
+| The maths | `commission_value()`, `commission_split()`, `tranche_is_paid()`, `commission_write_lines()`, `commission_earned()`, `commission_pipeline()` in `admin/lib.php` |
+| The check | `admin/tests/voucher-chain.php`, run from the command line |
 
-- `gst_rate` in `settings`, and `gst_rate` frozen onto `applications` beside the
-  commission rates.
-- A `loan_amount` on the application, and a `loan` payment stage beside
-  `booking` and `delivery`, for the financed part of a sale.
-- Commission stored per tranche rather than as one number — a `commission_lines`
-  table keyed by application and stage fits better than three columns, since a
-  voucher line (§10) already wants to point at exactly what it is claiming.
+`commission_write_lines()` is a reconciliation, not an increment: it is called
+after anything that verifies or un-verifies a payment, writes a line for every
+tranche that is earned, and takes away any that no longer is. Running it twice
+changes nothing, and a line already sitting on a voucher is never removed —
+the correction lands on the next voucher instead.
 
 ## 10. Commission vouchers: how a partner actually gets paid
 
 **Built and working.** File and function names are given so the code can be
-found by them. One part of §9 is still design: commission is earned when a sale
-**completes**, not tranche by tranche, because the GST rule has not been built
-yet.
+found by them, and §9 is built too — a voucher claims tranches, so a partner can
+be paid the booking share of a sale whose delivery payment is months away.
 
 Getting commission into a partner's bank is a separate thing, and it does not go straight there: it
 travels up the chain as a claim, and the money comes back down through **R&F**,
@@ -722,7 +713,7 @@ The guard runs both ways. `require_login()` sends an R&F account away from every
 office page, and `require_rf()` sends an office account away from every R&F page.
 Neither reaches the other by typing a URL.
 
-**The account**: `r&f@manifold.com`, password `r&f123`. Change that password
+**The account**: `rf@manifold.com`, password `rf123`. Change that password
 before this is used for real — it is written in this file, which is in the repo.
 
 ### The chain
@@ -791,8 +782,8 @@ sitting on a line of theirs**.
 The line is what makes double payment impossible, and the detail that matters is
 that a line belongs to a *party*, not just to a sale:
 
-> One completed sale owes two people — the dealer their 15% and that dealer's
-> distributor the 5% override. The unique key is
+> One completed sale owes two people — the dealer their commission and that
+> dealer's distributor the override. The unique key is
 > `(application_id, party_type, party_id)`, so a dealer claiming a sale does not
 > block the distributor's override on it, and neither can claim their own share
 > twice. The database enforces that, not only the query that builds the voucher.
@@ -906,7 +897,10 @@ All in `admin/lib.php`.
 | `submitted`        | Waiting for approval      | Application received       | The office, by approving              |
 | `booking_pending`  | Booking payment pending   | Booking payment due        | The client, by uploading a receipt    |
 | `booking_review`   | Booking receipt — verify  | Booking payment submitted  | The office, by accepting or rejecting |
+| `docs_pending`     | Finance documents — verify | Finance documents — verifying | The office, by verifying the documents |
+| `confirm_pending`  | Waiting on the client to confirm | Go ahead with delivery? | The client, by choosing to continue or cancel |
 | `delivery_pending` | Delivery payment pending  | Delivery payment due       | The client, by uploading a receipt    |
 | `delivery_review`  | Delivery receipt — verify | Delivery payment submitted | The office, by accepting or rejecting |
 | `complete`         | Both payments verified    | Complete                   | Nobody — this is the end              |
+| `cancelled`        | Cancelled — refund the booking | Cancelled — refund due | Nobody — the office transfers the refund |
 | `rejected`         | Rejected                  | Not proceeding             | Nobody                                |

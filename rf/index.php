@@ -32,7 +32,7 @@ function rf_done(string $message): void
 {
     $_SESSION['rf_flash'] = $message;
 
-    header('Location: index.php');
+    header('Location: ./');
     exit;
 }
 

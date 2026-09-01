@@ -7,5 +7,5 @@ require_once __DIR__ . '/lib.php';
 
 unset($_SESSION['dealer_id'], $_SESSION['dealer_otp_email']);
 
-header('Location: login.php');
+header('Location: login');
 exit;

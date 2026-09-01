@@ -69,9 +69,10 @@ require __DIR__ . '/partials/layout-top.php';
   </span>
   <span class="tile">
     <span class="eyebrow">Your override</span>
-    <strong><?= e(rtrim(rtrim(number_format(distributor_override_rate() * 100, 2, '.', ''), '0'), '.')) ?>%</strong>
+    <strong><?= e(money_short(commission_value('override', 'stove'))) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat">of every completed sale one of them makes</span>
+      <span class="tile__stat">on every stove one of them sells,
+        <?= e(money_short(commission_value('override', 'tuktuk'))) ?> on a kit</span>
     </span>
   </span>
 </div>
@@ -84,7 +85,7 @@ require __DIR__ . '/partials/layout-top.php';
         of <?= (int) $paging['total'] ?> · <?= (int) $held ?> of <?= (int) $limit ?> allowed</span>
     </div>
     <?php if ($room): ?>
-      <a class="btn-add" href="add-dealer.php">
+      <a class="btn-add" href="add-dealer">
         <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a dealer
       </a>
     <?php else: ?>
@@ -101,12 +102,13 @@ require __DIR__ . '/partials/layout-top.php';
     <div class="table-wrap">
       <table class="data-table data-table--dealer-clients is-filterable">
         <colgroup>
-          <col style="width:26%">
+          <col style="width:23%">
+          <col style="width:12%">
+          <col style="width:11%">
+          <col style="width:12%">
           <col style="width:13%">
-          <col style="width:12%">
-          <col style="width:12%">
-          <col style="width:15%">
-          <col style="width:22%">
+          <col style="width:19%">
+          <col style="width:10%">
         </colgroup>
         <thead>
           <tr>
@@ -131,6 +133,7 @@ require __DIR__ . '/partials/layout-top.php';
                 <i class="bi bi-chevron-expand" aria-hidden="true"></i>
               </button>
             </th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -152,7 +155,15 @@ require __DIR__ . '/partials/layout-top.php';
                   </span>
                 </div>
               </td>
-              <td><span class="drawer__code"><?= e($dealer['dealer_code']) ?></span></td>
+              <td>
+                <?php /* a dealer still waiting has no code — the office issues one
+                         when it approves them */ ?>
+                <?php if ($dealer['dealer_code']): ?>
+                  <span class="drawer__code"><?= e((string) $dealer['dealer_code']) ?></span>
+                <?php else: ?>
+                  <span class="cell-sub">on approval</span>
+                <?php endif; ?>
+              </td>
               <td><?= e($dealer['city'] ?: '—') ?></td>
               <td>
                 <?php if ($dealer['approval_status'] !== 'approved'): ?>
@@ -181,6 +192,13 @@ require __DIR__ . '/partials/layout-top.php';
                   <span class="cell-sub">nothing yet</span>
                 <?php endif; ?>
               </td>
+              <td class="td-actions">
+                <?php /* they signed this dealer up, so a wrong pin code or a
+                         changed account is theirs to fix */ ?>
+                <a class="btn btn--ghost btn--sm" href="edit-dealer?id=<?= (int) $dealer['id'] ?>">
+                  Edit
+                </a>
+              </td>
             </tr>
           <?php endforeach; ?>
         </tbody>
@@ -193,7 +211,7 @@ require __DIR__ . '/partials/layout-top.php';
       $pagerTotal = $paging['total'];
       $pagerFrom  = $paging['from'];
       $pagerTo    = $paging['to'];
-      $pagerBase  = 'dealers.php';
+      $pagerBase  = 'dealers';
       require __DIR__ . '/../admin/partials/pager.php';
     ?>
   <?php endif; ?>

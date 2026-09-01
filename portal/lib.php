@@ -50,7 +50,7 @@ function require_applicant(): string
     $email = applicant();
 
     if (!$email) {
-        header('Location: index.php');
+        header('Location: ./');
         exit;
     }
 
@@ -64,6 +64,42 @@ function applications_for(string $email): array
     $stmt->execute([$email]);
 
     return $stmt->fetchAll();
+}
+
+/**
+ * Who an applicant bought through, as they may see it.
+ *
+ * A name and a code, and nothing else: a client has no business seeing their
+ * dealer's bank details or what the office owes them. Returns null for a sale
+ * that came straight through the website, where there is nobody in between.
+ */
+function sold_by(array $app): ?array
+{
+    if (!empty($app['dealer_id'])) {
+        $stmt = db()->prepare(
+            'SELECT d.full_name, d.dealer_code AS code, d.mobile_number,
+                    x.full_name AS distributor_name, x.distributor_code
+               FROM dealers d
+               LEFT JOIN distributors x ON x.id = d.distributor_id
+              WHERE d.id = ?'
+        );
+        $stmt->execute([(int) $app['dealer_id']]);
+        $row = $stmt->fetch();
+
+        return $row ? $row + ['kind' => 'Dealer'] : null;
+    }
+
+    if (!empty($app['distributor_id'])) {
+        $stmt = db()->prepare(
+            'SELECT full_name, distributor_code AS code, mobile_number FROM distributors WHERE id = ?'
+        );
+        $stmt->execute([(int) $app['distributor_id']]);
+        $row = $stmt->fetch();
+
+        return $row ? $row + ['kind' => 'Distributor'] : null;
+    }
+
+    return null;
 }
 
 /**
@@ -93,12 +129,12 @@ function role_label(string $role): string
 function role_home(string $role): string
 {
     $homes = [
-        'applicant'   => '../portal/status.php',
-        'dealer'      => '../dealer/index.php',
-        'distributor' => '../distributor/index.php',
+        'applicant'   => '../portal/status',
+        'dealer'      => '../dealer/',
+        'distributor' => '../distributor/',
     ];
 
-    return $homes[$role] ?? '../portal/status.php';
+    return $homes[$role] ?? '../portal/status';
 }
 
 /**
@@ -110,7 +146,13 @@ function role_home(string $role): string
 function otp_owner(string $email, string $role): ?array
 {
     if ($role === 'dealer') {
-        $stmt = db()->prepare('SELECT id, full_name FROM dealers WHERE email = ? AND is_active = 1 LIMIT 1');
+        /* A dealer the office has not approved has no code and nothing to do
+           here yet, so their sign-in waits on the decision the same way an
+           applicant's does. */
+        $stmt = db()->prepare(
+            "SELECT id, full_name FROM dealers
+              WHERE email = ? AND is_active = 1 AND approval_status = 'approved' LIMIT 1"
+        );
     } elseif ($role === 'distributor') {
         $stmt = db()->prepare('SELECT id, full_name FROM distributors WHERE email = ? AND is_active = 1 LIMIT 1');
     } else {
@@ -194,7 +236,20 @@ function issue_otp(string $email, string $audience = 'any'): string
          VALUES (?, ?, (NOW() + INTERVAL ? MINUTE), ?)'
     )->execute([$email, password_hash($code, PASSWORD_DEFAULT), OTP_TTL_MINUTES, $ip]);
 
-    send_otp_email($email, $code);
+    /* The mailbox has an hourly cap and refuses over it — "451 4.7.1 Ratelimit
+       exceeded", then "454 4.3.0 Try again later". Saying the code is on its way
+       when it is not leaves somebody waiting on an email that will never come, so
+       the failure is passed back rather than swallowed.
+
+       The unused code goes with it: it would otherwise count against the hourly
+       allowance and lock them out of trying again over our own failure. */
+    if (!send_otp_email($email, $code)) {
+        db()->prepare('DELETE FROM applicant_otps WHERE id = ?')
+            ->execute([(int) db()->lastInsertId()]);
+
+        return 'We could not send the code just now. Please try again in a few minutes, '
+             . 'or call +91 97251 54186 and we will help you in.';
+    }
 
     return '';
 }

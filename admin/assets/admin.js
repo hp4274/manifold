@@ -7,14 +7,144 @@
 (function () {
   'use strict';
 
-  /* ---------- confirm before a destructive action ---------- */
+  /* ---------- confirm before a destructive action ----------
+     The browser's own confirm box says "localhost says" above the question and
+     looks like nothing else on the page, which is a poor frame for "delete this
+     permanently". This asks the same question in the product's own dialog.
+
+     Two things it has to get right that a naive version does not:
+
+       1. The answer often rides on the button, not the form —
+          <button name="action" value="delete"> — and form.submit() sends the
+          form without any submitter. The clicked button's name and value are
+          copied into a hidden field before submitting, or fifteen actions here
+          would post with no action at all.
+
+       2. form.submit() does not fire another submit event, so the dialog
+          cannot loop. The flag is belt and braces for anything that submits
+          the form another way.
+
+     With JavaScript off the form posts as it always did, unconfirmed, and the
+     server still checks CSRF and the record before removing anything. */
+  /* the link itself, selected and ready, when the browser will not take it */
+  function showCopyFallback(text) {
+    var ask = document.createElement('div');
+    ask.className = 'ask';
+    ask.innerHTML =
+      '<div class="ask__backdrop" data-ask-close></div>' +
+      '<div class="ask__card" role="dialog" aria-modal="true" aria-labelledby="copyText">' +
+        '<i class="bi bi-clipboard ask__icon" aria-hidden="true"></i>' +
+        '<p class="ask__text" id="copyText">Your browser would not take this automatically. ' +
+          'It is selected below — press Ctrl+C, or ⌘C on a Mac.</p>' +
+        '<input class="ask__copy" type="text" readonly>' +
+        '<div class="ask__actions">' +
+          '<button type="button" class="btn btn--primary" data-ask-close>Done</button>' +
+        '</div>' +
+      '</div>';
+
+    var field = ask.querySelector('.ask__copy');
+    field.value = text;
+
+    ask.addEventListener('click', function (e) {
+      if (!e.target.closest('[data-ask-close]')) return;
+
+      ask.classList.remove('is-open');
+      document.body.classList.remove('has-ask');
+      setTimeout(function () { ask.remove(); }, 200);
+    });
+
+    document.body.appendChild(ask);
+    document.body.classList.add('has-ask');
+    requestAnimationFrame(function () { ask.classList.add('is-open'); });
+
+    field.focus();
+    field.select();
+  }
+
+  function askDialog(message, danger, onYes) {
+    var ask = document.createElement('div');
+    ask.className = 'ask';
+    ask.innerHTML =
+      '<div class="ask__backdrop" data-ask-close></div>' +
+      '<div class="ask__card" role="alertdialog" aria-modal="true" aria-labelledby="askText">' +
+        '<i class="bi ' + (danger ? 'bi-exclamation-triangle' : 'bi-question-circle') +
+          ' ask__icon" aria-hidden="true"></i>' +
+        '<p class="ask__text" id="askText"></p>' +
+        '<div class="ask__actions">' +
+          '<button type="button" class="btn btn--ghost" data-ask-close>Cancel</button>' +
+          '<button type="button" class="btn ' + (danger ? 'btn--danger' : 'btn--primary') +
+            '" data-ask-yes>' + (danger ? 'Yes, go ahead' : 'Continue') + '</button>' +
+        '</div>' +
+      '</div>';
+
+    /* the question is set as text, never as markup: it carries names and notes
+       somebody typed, and those are not ours to render as HTML */
+    ask.querySelector('.ask__text').textContent = message;
+
+    var opener = document.activeElement;
+
+    function close() {
+      ask.classList.remove('is-open');
+      setTimeout(function () { ask.remove(); }, 200);
+      document.body.classList.remove('has-ask');
+      if (opener && opener.focus) opener.focus();
+    }
+
+    ask.addEventListener('click', function (e) {
+      if (e.target.closest('[data-ask-close]')) {
+        close();
+        return;
+      }
+
+      if (e.target.closest('[data-ask-yes]')) {
+        close();
+        onYes();
+      }
+    });
+
+    document.addEventListener('keydown', function onKey(e) {
+      if (!ask.isConnected) {
+        document.removeEventListener('keydown', onKey);
+        return;
+      }
+
+      if (e.key === 'Escape') close();
+    });
+
+    document.body.appendChild(ask);
+    document.body.classList.add('has-ask');
+    requestAnimationFrame(function () { ask.classList.add('is-open'); });
+
+    /* the safe answer is the one under the cursor */
+    ask.querySelector('[data-ask-close]').focus();
+  }
+
   document.addEventListener('submit', function (e) {
     var form = e.target.closest('[data-confirm]');
-    if (!form) return;
+    if (!form || form.dataset.confirmed === '1') return;
 
-    if (!window.confirm(form.dataset.confirm)) {
-      e.preventDefault();
-    }
+    e.preventDefault();
+
+    /* which button was pressed, before the dialog takes the focus away */
+    var submitter = e.submitter || null;
+
+    /* red where the outcome is red: a delete button, a danger button, or a
+       question that opens by naming what it is about to destroy */
+    var danger = /^(delete|remove|turn down)/i.test(form.dataset.confirm)
+      || !!form.querySelector('.is-delete, .btn--danger, .is-reject');
+
+    askDialog(form.dataset.confirm, danger, function () {
+      if (submitter && submitter.name) {
+        var carried = document.createElement('input');
+        carried.type  = 'hidden';
+        carried.name  = submitter.name;
+        carried.value = submitter.value;
+        form.appendChild(carried);
+      }
+
+      form.dataset.confirmed = '1';
+      form.submit();
+    });
   });
 
   /* ---------- a switch that applies itself ----------
@@ -53,14 +183,41 @@
     var drawerCode   = document.getElementById('drawerCode');
     var lastTrigger  = null;
 
+    /* One record's markup, kept once it has been fetched. Opening the same row
+       twice should not ask twice. */
+    var drawerCache = {};
+
+    function fillDrawer(toggle, html) {
+      drawerBody.innerHTML = html;
+
+      /* The partial wraps the record in the hidden .drawer-source element the
+         inline lists relied on; fetched, that wrapper would hide the record
+         inside the drawer. Lift its contents out. */
+      var wrapper = drawerBody.firstElementChild;
+
+      if (wrapper && wrapper.classList.contains('drawer-source')) {
+        wrapper.removeAttribute('hidden');
+        drawerBody.innerHTML = wrapper.innerHTML;
+      }
+
+      /* a trigger may ask for a tab other than the first — the pay button opens
+         the same drawer straight onto Payouts */
+      showTab(toggle.dataset.tabIndex || '0');
+
+      drawer.dispatchEvent(new CustomEvent('drawer:open'));
+    }
+
     function openDrawer(toggle) {
-      var source = document.getElementById(toggle.dataset.drawer);
-      if (!source) return;
+      var inline = document.getElementById(toggle.dataset.drawer);
+      var url    = toggle.dataset.drawerUrl;
+
+      /* nothing to show and nowhere to get it */
+      if (!inline && !url) return;
 
       lastTrigger = toggle;
 
-      drawerTitle.textContent = toggle.dataset.title || 'Submission';
-      drawerMeta.textContent  = toggle.dataset.meta || '';
+      drawerTitle.textContent  = toggle.dataset.title || 'Submission';
+      drawerMeta.textContent   = toggle.dataset.meta || '';
       drawerStatus.textContent = toggle.dataset.statusLabel || '';
       drawerStatus.className   = 'pill pill--' + (toggle.dataset.status || 'new');
 
@@ -69,14 +226,6 @@
       drawerCode.textContent = code;
       drawerCode.hidden      = code === '';
 
-      drawerBody.innerHTML = source.innerHTML;
-
-      /* a trigger may ask for a tab other than the first — the pay button opens
-         the same drawer straight onto Payouts */
-      showTab(toggle.dataset.tabIndex || '0');
-
-      drawer.dispatchEvent(new CustomEvent('drawer:open'));
-
       drawer.hidden = false;
       void drawer.offsetWidth;                 /* let the transition run */
       drawer.classList.add('is-open');
@@ -84,6 +233,44 @@
 
       var close = drawer.querySelector('.drawer__close');
       if (close) close.focus();
+
+      /* Rendered into the page already — the way every list used to work, and
+         still the way anything that keeps its markup inline does. */
+      if (inline) {
+        fillDrawer(toggle, inline.innerHTML);
+
+        return;
+      }
+
+      var key = toggle.dataset.drawer || url;
+
+      if (drawerCache[key]) {
+        fillDrawer(toggle, drawerCache[key]);
+
+        return;
+      }
+
+      /* A list sends its rows and nothing else; the record behind one is asked
+         for when somebody opens it. That is 200 KB a dashboard no longer sends
+         for ten rows nobody clicked. */
+      drawerBody.innerHTML = '<p class="drawer__loading">Fetching…</p>';
+
+      fetch(url, { credentials: 'same-origin' })
+        .then(function (response) {
+          if (!response.ok) throw new Error('That record could not be opened.');
+
+          return response.text();
+        })
+        .then(function (html) {
+          drawerCache[key] = html;
+
+          /* they may have closed it, or opened another, while this was coming */
+          if (lastTrigger === toggle && !drawer.hidden) fillDrawer(toggle, html);
+        })
+        .catch(function () {
+          drawerBody.innerHTML = '<p class="drawer__loading">That record could not be opened. '
+            + 'Reload the page and try again.</p>';
+        });
     }
 
     function closeDrawer() {
@@ -202,15 +389,127 @@
   });
 
   /* ---------- flash messages ----------
-     A confirmation is read in a second and then only takes up room, so it
-     clears itself after five. An error stays: it is the one thing somebody
-     may need to still be there when they look back at the screen. */
-  Array.prototype.forEach.call(document.querySelectorAll('.alert--ok'), function (alert) {
-    setTimeout(function () {
-      alert.classList.add('is-going');
-      setTimeout(function () { alert.remove(); }, 300);
-    }, 5000);
-  });
+     What the last action did is news, not part of the page: it belongs over the
+     top of it and out of the way, not pushing the table down every time
+     somebody saves something. Each one is lifted out of the document on load
+     and shown as a popup in the corner.
+
+     A confirmation reads in a second and then only takes up room, so it clears
+     itself after five. An error stays until it is dismissed — it is the one
+     thing somebody may need to still be there when they look back.
+
+     The markup stays a plain <p class="alert"> in every page. Without this
+     script they render where they always did, which is why nothing here is
+     load-bearing. */
+  var toasts = document.querySelectorAll('.alert');
+
+  if (toasts.length) {
+    var stack = document.createElement('div');
+    stack.className = 'toast-stack';
+    /* announced, never focused: reading a table should not be interrupted */
+    stack.setAttribute('aria-live', 'polite');
+    document.body.appendChild(stack);
+
+    var HOLD = 5000;                       /* long enough to read, short enough to go */
+
+    var dismiss = function (toast) {
+      if (toast.dataset.going) return;
+
+      toast.dataset.going = '1';
+      toast.classList.add('is-going');
+      setTimeout(function () { toast.remove(); }, 160);
+    };
+
+    /* "Payment rejected. The applicant has been emailed." is two things: what
+       happened, and what it means. The first sentence carries the message and
+       anything after it becomes the quieter line underneath — so every toast
+       has a headline rather than a paragraph in a box. */
+    var split = function (html) {
+      var plain = html.replace(/<[^>]*>/g, '');
+      var stop  = plain.search(/[.!?](\s|$)/);
+
+      if (stop < 0 || stop >= plain.length - 2) {
+        return [html, ''];
+      }
+
+      /* the split has to land on the same character in the markup, so tags in
+         either half stay closed — anything with markup inside keeps one line */
+      if (/<[a-z]/i.test(html)) {
+        return [html, ''];
+      }
+
+      return [plain.slice(0, stop + 1), plain.slice(stop + 1).trim()];
+    };
+
+    Array.prototype.forEach.call(toasts, function (alert) {
+      var isError = alert.classList.contains('alert--error');
+      var isWarn  = alert.classList.contains('alert--warn');
+      var kind    = isError ? 'error' : (isWarn ? 'warn' : 'ok');
+
+      var toast = document.createElement('div');
+      toast.className = 'toast toast--' + kind;
+      toast.setAttribute('role', kind === 'ok' ? 'status' : 'alert');
+
+      var icon = document.createElement('span');
+      icon.className = 'toast__icon';
+      icon.innerHTML = '<i class="bi ' + (kind === 'ok'
+        ? 'bi-check-lg'
+        : (kind === 'warn' ? 'bi-exclamation-triangle' : 'bi-exclamation-octagon'))
+        + '" aria-hidden="true"></i>';
+
+      var parts = split(alert.innerHTML.trim());
+
+      var body = document.createElement('div');
+      body.className = 'toast__body';
+      body.innerHTML = '<p class="toast__title">' + parts[0] + '</p>'
+        + (parts[1] ? '<p class="toast__detail">' + parts[1] + '</p>' : '');
+
+      var close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'toast__close';
+      close.setAttribute('aria-label', 'Dismiss this message');
+      close.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+      close.addEventListener('click', function () { dismiss(toast); });
+
+      toast.appendChild(icon);
+      toast.appendChild(body);
+      toast.appendChild(close);
+
+      /* A confirmation goes on its own and says so: the bar runs down while it
+         waits, and stops while somebody is reading or tabbing through it. An
+         error stays — it is the one thing that may need to still be there. */
+      if (kind === 'ok') {
+        var timer = document.createElement('span');
+        timer.className = 'toast__timer';
+        timer.style.animationDuration = HOLD + 'ms';
+        toast.appendChild(timer);
+
+        var left  = HOLD;
+        var since = Date.now();
+        var clock = setTimeout(function () { dismiss(toast); }, left);
+
+        toast.addEventListener('mouseenter', function () {
+          clearTimeout(clock);
+          left -= Date.now() - since;
+        });
+
+        toast.addEventListener('mouseleave', function () {
+          since = Date.now();
+          clock = setTimeout(function () { dismiss(toast); }, Math.max(left, 1200));
+        });
+      }
+
+      stack.appendChild(toast);
+      alert.remove();
+    });
+
+    /* Escape clears whatever is still on screen */
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+
+      Array.prototype.forEach.call(stack.querySelectorAll('.toast'), dismiss);
+    });
+  }
 
   /* ---------- paging a table that cannot reload ----------
      The lists inside the drawer are already on the page — reloading to see
@@ -306,7 +605,15 @@
     box.style.left = '-9999px';
     document.body.appendChild(box);
     box.select();
-    try { document.execCommand('copy'); done(); } catch (err) { window.prompt('Copy this link', text); }
+    try {
+      document.execCommand('copy');
+      done();
+    } catch (err) {
+      /* No clipboard and no execCommand — an old browser, or a page served over
+         plain http. Rather than a browser prompt box, the link is put on screen
+         already selected, so it is one keystroke away from copied. */
+      showCopyFallback(text);
+    }
     document.body.removeChild(box);
   });
 
@@ -794,10 +1101,27 @@
       });
     };
 
+    /* A quantity is a count of things, so a minus sign has no meaning here.
+       The field carries min and max, but those only speak up when the form is
+       submitted — and a form submitted from script never asks. Typing one is
+       corrected as it happens instead. */
+    var clampOrder = function (box) {
+      var typed = parseInt(box.value, 10);
+
+      if (isNaN(typed)) return;
+
+      var most = parseInt(box.getAttribute('max'), 10);
+
+      if (typed < 0) box.value = '0';
+      else if (!isNaN(most) && typed > most) box.value = String(most);
+    };
+
     var paintOrder = function () {
       var total = 0;
 
       Array.prototype.forEach.call(stockRows, function (box) {
+        clampOrder(box);
+
         var units = Math.max(0, parseInt(box.value, 10) || 0);
         var line  = units * (parseFloat(box.dataset.price) || 0);
 
@@ -860,4 +1184,183 @@
   }
 
   document.documentElement.classList.add('js');
+
+  /* ---------- number fields ----------
+     A wheel over a focused number field changes it, so scrolling past a form
+     quietly edits a quantity somebody already set. The page scrolls instead. */
+  document.addEventListener('wheel', function (e) {
+    var field = e.target;
+
+    if (!field.matches || !field.matches('input[type="number"]')) return;
+    if (document.activeElement !== field) return;
+
+    field.blur();
+  }, { passive: true });
+
+  /* ---------- an email box takes no spaces ----------
+     The space key does nothing in an email field, so there is never a space to
+     take back out. Paste is cleaned on arrival, since that is the other way
+     whitespace gets in. */
+  function isEmailBox(el) {
+    if (!el || el.tagName !== 'INPUT') return false;
+
+    return el.type === 'email' || /email/i.test((el.getAttribute('name') || '') + ' ' + (el.id || ''));
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === ' ' && isEmailBox(e.target)) e.preventDefault();
+  });
+
+  document.addEventListener('input', function (e) {
+    if (!isEmailBox(e.target)) return;
+
+    var clean = e.target.value.replace(/\s+/g, '');
+    if (clean !== e.target.value) e.target.value = clean;
+  });
+
+  /* The box reads lower case as it is typed (CSS), and the value itself is put
+     into lower case on the way out of the field - doing it on every keystroke
+     would drag the caret to the end of an input[type=email], which cannot be
+     put back. */
+  document.addEventListener('change', function (e) {
+    if (!isEmailBox(e.target)) return;
+
+    e.target.value = e.target.value.toLowerCase();
+  });
+
+  /* ---------- a mobile box takes digits ----------
+     A letter in a phone number is never meant, so the key does nothing rather
+     than being typed and then complained about. Paste is cleaned on arrival. */
+  function isPhoneBox(el) {
+    if (!el || el.tagName !== 'INPUT') return false;
+
+    return el.type === 'tel'
+      || /mobile|phone/i.test((el.getAttribute('name') || '') + ' ' + (el.id || ''));
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (!isPhoneBox(e.target)) return;
+    /* shortcuts, arrows, backspace and tab all report more than one character */
+    if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+
+    if (!/[0-9]/.test(e.key)) e.preventDefault();
+  });
+
+  document.addEventListener('input', function (e) {
+    if (!isPhoneBox(e.target)) return;
+
+    var digitsOnly = e.target.value.replace(/[^0-9]/g, '');
+    if (digitsOnly !== e.target.value) e.target.value = digitsOnly;
+  });
+
+  /* ---------- a wrong answer is marked on the field ----------
+     The browser's own bubble points at one field, disappears on the next click
+     and reads like a system message. The same red border and line of text the
+     public forms use says it in place, and stays until it is right. */
+  function fieldBox(el) {
+    return el.closest('.field') || el.closest('.field-consent') || el.closest('.order-line');
+  }
+
+  function gradable(el) {
+    return el.willValidate && el.type !== 'hidden' && el.type !== 'submit';
+  }
+
+  function fieldWhy(el) {
+    var v = el.validity;
+
+    if (v.valueMissing) {
+      return el.type === 'checkbox' ? 'Please tick this to continue.' : 'This one is needed.';
+    }
+    if (v.rangeUnderflow || v.rangeOverflow) {
+      return el.title || 'That is outside the range we can accept.';
+    }
+    if (v.typeMismatch || v.patternMismatch || v.tooShort || v.tooLong) {
+      return el.title || 'That does not look right yet.';
+    }
+
+    return el.validationMessage || 'Please check this one.';
+  }
+
+  function gradeField(el) {
+    if (!gradable(el)) return true;
+
+    var box = fieldBox(el);
+    /* validity.valid, not checkValidity(): the call fires an invalid event of
+       its own, and the listener below grades the field again - straight into a
+       stack overflow */
+    var ok  = el.validity.valid;
+
+    if (box) {
+      box.classList.toggle('field--error', !ok);
+
+      var note = box.querySelector('[data-live-error]');
+
+      if (ok) {
+        if (note) note.remove();
+      } else {
+        if (!note) {
+          note = document.createElement('span');
+          note.className = 'field-error';
+          note.setAttribute('data-live-error', '');
+          note.setAttribute('role', 'alert');
+          note.innerHTML = '<i class="bi bi-exclamation-circle" aria-hidden="true"></i><span></span>';
+          box.appendChild(note);
+        }
+
+        note.lastChild.textContent = fieldWhy(el);
+      }
+    }
+
+    ok ? el.removeAttribute('aria-invalid') : el.setAttribute('aria-invalid', 'true');
+
+    return ok;
+  }
+
+  /* judged when the field is left - blur does not bubble, so this listens on
+     the way down - and re-judged on every keystroke once it has been marked */
+  document.addEventListener('blur', function (e) {
+    if (!gradable(e.target)) return;
+
+    e.target.dataset.touched = '1';
+    gradeField(e.target);
+  }, true);
+
+  document.addEventListener('input', function (e) {
+    if (!gradable(e.target)) return;
+
+    var full = e.target.maxLength > 0 && String(e.target.value).length >= e.target.maxLength;
+
+    if (e.target.dataset.touched || full) gradeField(e.target);
+  });
+
+  document.addEventListener('change', function (e) {
+    if (!gradable(e.target)) return;
+
+    e.target.dataset.touched = '1';
+    gradeField(e.target);
+  });
+
+  /* The browser fires this at every field it will not accept, one after the
+     other, and the bubble it wants to show is cancelled here. Works for a form
+     that arrived with the page and for one the drawer fetched later. */
+  document.addEventListener('invalid', function (e) {
+    e.preventDefault();
+
+    var el = e.target;
+    el.dataset.touched = '1';
+    gradeField(el);
+
+    /* the first one to complain is the one to go to */
+    var form = el.form;
+    if (form && form.dataset.grading === '1') return;
+
+    if (form) {
+      form.dataset.grading = '1';
+      setTimeout(function () { delete form.dataset.grading; }, 0);
+    }
+
+    el.focus();
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, true);
+
 })();

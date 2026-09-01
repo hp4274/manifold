@@ -27,7 +27,7 @@ function distributors_done(string $message): void
 {
     $_SESSION['distributors_flash'] = $message;
 
-    header('Location: distributors.php');
+    header('Location: distributors');
     exit;
 }
 
@@ -73,28 +73,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         distributors_done($dist['is_active']
             ? $dist['full_name'] . ' is active again — their code works.'
             : $dist['full_name'] . ' is switched off. Their code no longer books commission.');
-    } elseif ($action === 'payout') {
-        $amount = str_replace(',', '', trim((string) ($_POST['amount'] ?? '')));
-        $note   = mb_substr(trim((string) ($_POST['note'] ?? '')), 0, 255);
-        $dist   = distributor_by_id($id);
-
-        if (!$dist) {
-            $error = 'That distributor no longer exists.';
-        } elseif (!is_numeric($amount) || (float) $amount <= 0) {
-            $error = 'Enter the amount transferred, greater than zero.';
-        } else {
-            db()->prepare(
-                'INSERT INTO distributor_payouts (distributor_id, amount, note, paid_by) VALUES (?, ?, ?, ?)'
-            )->execute([$id, (float) $amount, $note !== '' ? $note : null, (int) $user['id']]);
-
-            distributors_done(money((float) $amount) . ' recorded against ' . $dist['full_name'] . '.');
-        }
-    } elseif ($action === 'payout_delete') {
-        /* a mistyped amount has to be removable, or the running total lies for good */
-        db()->prepare('DELETE FROM distributor_payouts WHERE id = ? AND distributor_id = ?')
-            ->execute([(int) ($_POST['payout_id'] ?? 0), $id]);
-
-        distributors_done('Payout removed.');
     } elseif ($action === 'add_dealer') {
         /* the office adds a dealer straight under a distributor — no queue,
            because the office approving its own entry would be theatre. The
@@ -131,22 +109,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /* A dealer a distributor asked for. Approving is what makes their code
            work — until then it books nothing, so nothing is lost by taking time
            over it. */
-        $dealerId = (int) ($_POST['dealer_id'] ?? 0);
-        $verdict  = $action === 'approve_dealer' ? 'approved' : 'rejected';
-        $dealer   = dealer_by_id($dealerId);
+        $done = dealer_decide(
+            (int) ($_POST['dealer_id'] ?? 0),
+            $action === 'approve_dealer' ? 'approved' : 'rejected',
+            (int) $user['id']
+        );
 
-        if (!$dealer || $dealer['approval_status'] !== 'pending') {
-            $error = 'That request has already been decided.';
-        } elseif ($verdict === 'approved' && !distributor_has_room((int) $dealer['distributor_id'])) {
-            $error = 'That distributor is already at the dealer limit. Raise it under Settings first.';
+        if (isset($done['error'])) {
+            $error = $done['error'];
         } else {
-            db()->prepare(
-                'UPDATE dealers SET approval_status = ?, decided_at = NOW(), decided_by = ? WHERE id = ?'
-            )->execute([$verdict, (int) $user['id'], $dealerId]);
-
-            distributors_done($verdict === 'approved'
-                ? $dealer['full_name'] . ' is approved. Their code books commission from now on.'
-                : $dealer['full_name'] . ' was turned down. Their code stays dead.');
+            distributors_done($done['message']);
         }
     } elseif ($action === 'delete') {
         /* Every dealer answers to a distributor, so deleting one that still
@@ -224,11 +196,11 @@ $distributors = db()->query(
       LIMIT ' . LIST_PER_PAGE . ' OFFSET ' . $paging['offset']
 )->fetchAll();
 
-$distUrl = 'distributors.php' . ($sort === '' ? '' : '?sort=' . urlencode($sort));
+$distUrl = 'distributors' . ($sort === '' ? '' : '?sort=' . urlencode($sort));
 
 /** The same list ordered another way — paging starts over, as it must. */
 $distUrlFor = static function (string $next): string {
-    return 'distributors.php' . ($next === '' ? '' : '?sort=' . urlencode($next));
+    return 'distributors' . ($next === '' ? '' : '?sort=' . urlencode($next));
 };
 
 /* a header click steps high to low, then low to high, then back to the
@@ -306,15 +278,15 @@ require __DIR__ . '/partials/layout-top.php';
   </span>
   <span class="tile">
     <span class="eyebrow">Commission earned</span>
-    <strong><?= e(money($totals['earned'])) ?></strong>
+    <strong><?= e(money_short($totals['earned'])) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat"><?= e(rtrim(rtrim(number_format(distributor_override_rate() * 100, 2, '.', ''), '0'), '.')) ?>%
-        override, <?= e(rtrim(rtrim(number_format(distributor_direct_rate() * 100, 2, '.', ''), '0'), '.')) ?>% direct</span>
+      <span class="tile__stat"><?= e(money_short(commission_value('override', 'stove'))) ?> override,
+        <?= e(money_short(commission_value('direct', 'stove'))) ?> direct, on a stove</span>
     </span>
   </span>
   <span class="tile">
     <span class="eyebrow">Still owed</span>
-    <strong><?= e(money($totals['remaining'])) ?></strong>
+    <strong><?= e(money_short($totals['remaining'])) ?></strong>
     <span class="tile__stats">
       <span class="tile__stat"><?= e(money($totals['paid'])) ?> paid so far</span>
     </span>
@@ -337,13 +309,9 @@ require __DIR__ . '/partials/layout-top.php';
     </button>
   </div>
 
-  <?php if (!$distributors): ?>
-    <?php /* an empty filter and an empty business are different facts */ ?>
-    <p class="empty">
-      No distributors yet. Add one and they get a code, and dealers to put under it.
-    </p>
-  <?php else: ?>
-    <div class="table-wrap">
+  <?php /* The table is drawn even with nothing in it: its header carries the
+           sorting, so hiding it would take away the way back. */ ?>
+  <div class="table-wrap">
       <table class="data-table data-table--dealers">
         <?php /* the two sortable headers carry a chevron as well as their label,
                  so they need more room than the numbers under them do */ ?>
@@ -384,6 +352,15 @@ require __DIR__ . '/partials/layout-top.php';
           </tr>
         </thead>
         <tbody>
+          <?php if (!$distributors): ?>
+            <tr class="row-empty">
+              <td colspan="7">
+                No entry found — no distributors yet. Add one and they get a code,
+                and dealers to put under it.
+              </td>
+            </tr>
+          <?php endif; ?>
+
           <?php foreach ($distributors as $dist): ?>
             <?php $distId = (int) $dist['id']; ?>
             <tr>
@@ -419,18 +396,6 @@ require __DIR__ . '/partials/layout-top.php';
               <td class="td-amount"><strong><?= e(money($dist['totals']['remaining'])) ?></strong></td>
               <td>
                 <div class="row-actions">
-                  <button type="button" class="icon-btn is-accept"
-                          data-drawer="detail-distributor-<?= $distId ?>" data-tab-index="3"
-                          data-title="<?= e($dist['full_name']) ?>"
-                          data-code="<?= e($dist['distributor_code']) ?>"
-                          data-meta="Distributor · added <?= e(format_datetime($dist['created_at'])) ?>"
-                          data-status="<?= $dist['is_active'] ? 'accepted' : 'rejected' ?>"
-                          data-status-label="<?= $dist['is_active'] ? 'Active' : 'Stopped' ?>"
-                          title="Record a payout — <?= e(money($dist['totals']['remaining'])) ?> owed">
-                    <i class="bi bi-cash-coin" aria-hidden="true"></i>
-                    <span class="visually-hidden">Record a payout for <?= e($dist['full_name']) ?></span>
-                  </button>
-
                   <form method="post">
                     <?= csrf_field() ?>
                     <input type="hidden" name="id" value="<?= $distId ?>">
@@ -460,6 +425,7 @@ require __DIR__ . '/partials/layout-top.php';
               </td>
               <td class="td-actions">
                 <button type="button" class="row-toggle" data-drawer="detail-distributor-<?= $distId ?>"
+                        data-drawer-url="drawer.php?kind=distributor&amp;id=<?= $distId ?>"
                         data-title="<?= e($dist['full_name']) ?>"
                         data-code="<?= e($dist['distributor_code']) ?>"
                         data-meta="Distributor · added <?= e(format_datetime($dist['created_at'])) ?>"
@@ -474,22 +440,18 @@ require __DIR__ . '/partials/layout-top.php';
       </table>
     </div>
 
-    <?php
-      $pagerPage  = $paging['page'];
-      $pagerPages = $paging['pages'];
-      $pagerTotal = $paging['total'];
-      $pagerFrom  = $paging['from'];
-      $pagerTo    = $paging['to'];
-      $pagerBase  = $distUrl;
-      require __DIR__ . '/partials/pager.php';
-    ?>
-  <?php endif; ?>
+    <?php if ($distributors): ?>
+      <?php
+        $pagerPage  = $paging['page'];
+        $pagerPages = $paging['pages'];
+        $pagerTotal = $paging['total'];
+        $pagerFrom  = $paging['from'];
+        $pagerTo    = $paging['to'];
+        $pagerBase  = $distUrl;
+        require __DIR__ . '/partials/pager.php';
+      ?>
+    <?php endif; ?>
 </div>
-
-<!-- ============ detail drawers ============ -->
-<?php foreach ($distributors as $dist): ?>
-  <?php $srcDist = $dist; require __DIR__ . '/partials/distributor-source.php'; ?>
-<?php endforeach; ?>
 
 </div><!-- /data-live-list -->
 

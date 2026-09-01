@@ -27,7 +27,7 @@ function dealers_done(string $message): void
 {
     $_SESSION['dealers_flash'] = $message;
 
-    header('Location: dealers.php');
+    header('Location: dealers');
     exit;
 }
 
@@ -75,6 +75,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             dealers_done($values['full_name'] . ' added, with code ' . $values['dealer_code'] . '.');
         }
+    } elseif ($action === 'approve_dealer' || $action === 'reject_dealer') {
+        /* A dealer a distributor asked for. The same decision the distributor's
+           own drawer offers — the office should not have to go looking for the
+           request in a drawer to answer it. */
+        $done = dealer_decide($id, $action === 'approve_dealer' ? 'approved' : 'rejected', (int) $user['id']);
+
+        if (isset($done['error'])) {
+            $error = $done['error'];
+        } else {
+            dealers_done($done['message']);
+        }
     } elseif ($action === 'toggle') {
         db()->prepare('UPDATE dealers SET is_active = 1 - is_active WHERE id = ?')->execute([$id]);
 
@@ -85,27 +96,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         dealers_done($dealer['is_active']
             ? $dealer['full_name'] . ' is active again — their code works.'
             : $dealer['full_name'] . ' is switched off. Their code no longer books commission.');
-    } elseif ($action === 'payout') {
-        $amount = str_replace(',', '', trim((string) ($_POST['amount'] ?? '')));
-        $note   = mb_substr(trim((string) ($_POST['note'] ?? '')), 0, 255);
-        $dealer = dealer_by_id($id);
-
-        if (!$dealer) {
-            $error = 'That dealer no longer exists.';
-        } elseif (!is_numeric($amount) || (float) $amount <= 0) {
-            $error = 'Enter the amount transferred, greater than zero.';
-        } else {
-            db()->prepare('INSERT INTO dealer_payouts (dealer_id, amount, note, paid_by) VALUES (?, ?, ?, ?)')
-                ->execute([$id, (float) $amount, $note !== '' ? $note : null, (int) $user['id']]);
-
-            dealers_done(money((float) $amount) . ' recorded against ' . $dealer['full_name'] . '.');
-        }
-    } elseif ($action === 'payout_delete') {
-        /* a mistyped amount has to be removable, or the running total lies for good */
-        db()->prepare('DELETE FROM dealer_payouts WHERE id = ? AND dealer_id = ?')
-            ->execute([(int) ($_POST['payout_id'] ?? 0), $id]);
-
-        dealers_done('Payout removed.');
     } elseif ($action === 'delete') {
         /* the sales stay: the foreign key nulls dealer_id rather than removing
            applications, so the customers are never lost with the dealer */
@@ -144,7 +134,7 @@ if (($_GET['edit'] ?? '') !== '') {
 $show = (string) ($_GET['show'] ?? '');
 $dist = (string) ($_GET['dist'] ?? '');
 
-if (!in_array($show, ['active', 'stopped'], true)) {
+if (!in_array($show, ['waiting', 'active', 'stopped'], true)) {
     $show = '';
 }
 
@@ -188,11 +178,15 @@ $filter = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 /* Each header's counts ignore its own setting but respect the other one, so
    the number on offer is the number you will actually get. */
 $distFilter = $dist === '' ? '' : 'd.distributor_id = ' . (int) $dist;
-$showFilter = $show === '' ? '' : 'd.is_active = ' . ($show === 'active' ? '1' : '0');
+$showFilter = $show === ''
+    ? ''
+    : ($show === 'waiting' ? "d.approval_status = 'pending'" : 'd.is_active = ' . ($show === 'active' ? '1' : '0'));
 
 $statusCounts = [
     ''        => (int) db()->query('SELECT COUNT(*) FROM dealers d'
                      . ($distFilter ? ' WHERE ' . $distFilter : ''))->fetchColumn(),
+    'waiting' => (int) db()->query("SELECT COUNT(*) FROM dealers d WHERE d.approval_status = 'pending'"
+                     . ($distFilter ? ' AND ' . $distFilter : ''))->fetchColumn(),
     'active'  => (int) db()->query('SELECT COUNT(*) FROM dealers d WHERE d.is_active = 1'
                      . ($distFilter ? ' AND ' . $distFilter : ''))->fetchColumn(),
     'stopped' => (int) db()->query('SELECT COUNT(*) FROM dealers d WHERE d.is_active = 0'
@@ -221,8 +215,8 @@ $dealerCount = $dist === '' ? $statusCounts[$show] : $distCounts[$dist];
 $paging      = paged($dealerCount, $_GET['page'] ?? 1);
 
 /* what one more click on each header lands on */
-$showLabels = ['active' => 'Selling', 'stopped' => 'Stopped'];
-$showSteps  = ['', 'active', 'stopped'];
+$showLabels = ['waiting' => 'Waiting', 'active' => 'Selling', 'stopped' => 'Stopped'];
+$showSteps  = ['', 'waiting', 'active', 'stopped'];
 $showNext   = $showSteps[(array_search($show, $showSteps, true) + 1) % count($showSteps)];
 
 
@@ -278,7 +272,7 @@ $dealerFilterUrl = static function (string $nextShow, string $nextDist, ?string 
         static fn (string $v): bool => $v !== ''
     );
 
-    return 'dealers.php' . ($query ? '?' . http_build_query($query) : '');
+    return 'dealers' . ($query ? '?' . http_build_query($query) : '');
 };
 
 /* the money tiles count every dealer, the table shows one page of the filter */
@@ -332,22 +326,22 @@ require __DIR__ . '/partials/layout-top.php';
   </span>
   <span class="tile">
     <span class="eyebrow">Commission earned</span>
-    <strong><?= e(money($totals['earned'])) ?></strong>
+    <strong><?= e(money_short($totals['earned'])) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat">at <?= e(rtrim(rtrim(number_format(dealer_rate() * 100, 2, '.', ''), '0'), '.')) ?>%
-        of each completed sale</span>
+      <span class="tile__stat"><?= e(money_short(commission_value('dealer', 'stove'))) ?> a stove,
+        <?= e(money_short(commission_value('dealer', 'tuktuk'))) ?> a kit</span>
     </span>
   </span>
   <span class="tile">
     <span class="eyebrow">Paid out so far</span>
-    <strong><?= e(money($totals['paid'])) ?></strong>
+    <strong><?= e(money_short($totals['paid'])) ?></strong>
     <span class="tile__stats">
       <span class="tile__stat">across every transfer recorded</span>
     </span>
   </span>
   <span class="tile">
     <span class="eyebrow">Still owed</span>
-    <strong><?= e(money($totals['remaining'])) ?></strong>
+    <strong><?= e(money_short($totals['remaining'])) ?></strong>
     <span class="tile__stats">
       <span class="tile__stat">earned but not yet transferred</span>
     </span>
@@ -370,15 +364,9 @@ require __DIR__ . '/partials/layout-top.php';
     </button>
   </div>
 
-  <?php if (!$dealers): ?>
-    <?php /* an empty filter and an empty business are different facts */ ?>
-    <p class="empty">
-      <?= $show === '' && $dist === ''
-          ? 'No dealers yet. Add one and they get a code to share.'
-          : 'No dealers match that filter. <a href="dealers.php">Show all</a>.' ?>
-    </p>
-  <?php else: ?>
-    <div class="table-wrap">
+  <?php /* The table is drawn even with nothing in it: its header carries the
+           filters, so hiding it would take away the way back. */ ?>
+  <div class="table-wrap">
       <table class="data-table data-table--dealers has-distributor">
         <?php /* fixed layout, so the columns need telling how to share the width.
                  Action carries three icons and the Details button, which is why
@@ -387,10 +375,12 @@ require __DIR__ . '/partials/layout-top.php';
           <col style="width:16%">
           <col style="width:8%">
           <col style="width:12%">
-          <col style="width:19%">
+          <col style="width:17%">
+          <col style="width:9%">
           <col style="width:11%">
-          <col style="width:12%">
-          <col style="width:12%">
+          <?php /* a dealer waiting on the office carries two more icons in
+                   here — the decision — so the column is sized for five */ ?>
+          <col style="width:17%">
           <col style="width:10%">
         </colgroup>
         <thead>
@@ -455,9 +445,34 @@ require __DIR__ . '/partials/layout-top.php';
           </tr>
         </thead>
         <tbody>
+          <?php if (!$dealers): ?>
+            <?php /* an empty filter and an empty business are different facts */ ?>
+            <tr class="row-empty">
+              <td colspan="8">
+                <?= $show === '' && $dist === ''
+                    ? 'No entry found — no dealers yet. Add one and they get a code to share.'
+                    : 'No entry found. <a href="dealers">Show all</a>.' ?>
+              </td>
+            </tr>
+          <?php endif; ?>
+
           <?php foreach ($dealers as $dealer): ?>
             <?php $dealerId = (int) $dealer['id']; ?>
             <tr>
+              <?php
+                /* A dealer the office has not answered yet is not active, whatever
+                   is_active says — that flag is for stopping one who is already
+                   selling. One reading, used by the pill, the drawer header and
+                   what this row is allowed to do. */
+                $dealerWaiting = $dealer['approval_status'] === 'pending';
+                $dealerState   = $dealerWaiting
+                    ? ['pill' => 'pending',  'label' => 'Waiting for approval']
+                    : ($dealer['approval_status'] === 'rejected'
+                        ? ['pill' => 'rejected', 'label' => 'Turned down']
+                        : ($dealer['is_active']
+                            ? ['pill' => 'accepted', 'label' => 'Active']
+                            : ['pill' => 'rejected', 'label' => 'Stopped']));
+              ?>
               <td>
                 <div class="cell-stack">
                   <strong><?= e($dealer['full_name']) ?></strong>
@@ -468,12 +483,22 @@ require __DIR__ . '/partials/layout-top.php';
                     <?php if ($dealer['mobile_number']): ?><?= e($dealer['mobile_number']) ?> · <?php endif; ?>
                     <?= e($dealer['email'] ?: 'no email') ?>
                   </span>
-                  <?php if (!$dealer['is_active']): ?>
-                    <span class="pill pill--rejected">Switched off</span>
+                  <?php if ($dealerWaiting || $dealer['approval_status'] === 'rejected' || !$dealer['is_active']): ?>
+                    <span class="pill pill--<?= e($dealerState['pill']) ?>"><?= e($dealerState['label']) ?></span>
                   <?php endif; ?>
                 </div>
               </td>
-              <td><span class="drawer__code"><?= e($dealer['dealer_code']) ?></span></td>
+              <td>
+                <?php /* A dealer who was turned down never got a code, so the cell
+                         says so with a dash rather than sitting empty. */ ?>
+                <?php if ($dealerWaiting): ?>
+                  <span class="cell-sub">on approval</span>
+                <?php elseif ($dealer['dealer_code']): ?>
+                  <span class="drawer__code"><?= e((string) $dealer['dealer_code']) ?></span>
+                <?php else: ?>
+                  <span class="cell-none">-</span>
+                <?php endif; ?>
+              </td>
               <td>
                 <div class="cell-stack">
                   <span><?= e($dealer['distributor_name']) ?></span>
@@ -481,9 +506,14 @@ require __DIR__ . '/partials/layout-top.php';
                 </div>
               </td>
               <td>
+                <?php /* no code, no links to hand out - a turned down dealer had
+                         buttons here that copied a URL with nothing in it */ ?>
+                <?php if (!$dealer['dealer_code']): ?>
+                  <span class="cell-none">-</span>
+                <?php else: ?>
                 <div class="copy-links">
                   <?php /* the full URLs, spelled out, are a click away under Details */ ?>
-                  <?php foreach (['stove' => 'Stove', 'tuktuk' => 'TukTuk'] as $product => $label): ?>
+                  <?php foreach ($dealerWaiting ? [] : ['stove' => 'Stove', 'tuktuk' => 'TukTuk'] as $product => $label): ?>
                     <?php $link = referral_link((string) $dealer['dealer_code'], $product); ?>
                     <button type="button" class="btn btn--ghost btn--sm" data-copy="<?= e($link) ?>"
                             title="Copy the <?= e($label) ?> apply link">
@@ -492,23 +522,39 @@ require __DIR__ . '/partials/layout-top.php';
                     </button>
                   <?php endforeach; ?>
                 </div>
+                <?php endif; ?>
               </td>
               <td class="td-amount"><strong><?= (int) $dealer['totals']['confirmed'] ?></strong></td>
               <td class="td-amount"><strong><?= e(money($dealer['totals']['remaining'])) ?></strong></td>
               <td>
                 <div class="row-actions">
-                  <button type="button" class="icon-btn is-accept"
-                          data-drawer="detail-dealer-<?= $dealerId ?>" data-tab-index="2"
-                          data-title="<?= e($dealer['full_name']) ?>"
-                          data-code="<?= e($dealer['dealer_code']) ?>"
-                          data-meta="Dealer · added <?= e(format_datetime($dealer['created_at'])) ?>"
-                          data-status="<?= $dealer['is_active'] ? 'accepted' : 'rejected' ?>"
-                          data-status-label="<?= $dealer['is_active'] ? 'Active' : 'Stopped' ?>"
-                          title="Record a payout — <?= e(money($dealer['totals']['remaining'])) ?> owed">
-                    <i class="bi bi-cash-coin" aria-hidden="true"></i>
-                    <span class="visually-hidden">Record a payout for <?= e($dealer['full_name']) ?></span>
-                  </button>
+                  <?php if ($dealer['approval_status'] === 'pending'): ?>
+                    <?php /* the request a distributor raised, answered here rather
+                             than only inside their drawer */ ?>
+                    <form method="post">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="id" value="<?= $dealerId ?>">
+                      <button type="submit" name="action" value="approve_dealer"
+                              class="icon-btn is-accept" title="Approve <?= e($dealer['full_name']) ?>">
+                        <i class="bi bi-check-lg" aria-hidden="true"></i>
+                        <span class="visually-hidden">Approve <?= e($dealer['full_name']) ?></span>
+                      </button>
+                    </form>
 
+                    <form method="post"
+                          data-confirm="Turn down <?= e($dealer['full_name']) ?>? Their code stays dead.">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="id" value="<?= $dealerId ?>">
+                      <button type="submit" name="action" value="reject_dealer"
+                              class="icon-btn is-reject" title="Turn down <?= e($dealer['full_name']) ?>">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        <span class="visually-hidden">Turn down <?= e($dealer['full_name']) ?></span>
+                      </button>
+                    </form>
+                  <?php endif; ?>
+
+                  <?php /* nothing can be stopped while the request is still open */ ?>
+                  <?php if (!$dealerWaiting): ?>
                   <form method="post">
                     <?= csrf_field() ?>
                     <input type="hidden" name="id" value="<?= $dealerId ?>">
@@ -524,6 +570,7 @@ require __DIR__ . '/partials/layout-top.php';
                       </span>
                     </button>
                   </form>
+                  <?php endif; ?>
 
                   <form method="post"
                         data-confirm="Delete <?= e($dealer['full_name']) ?>? Their customers keep their applications.">
@@ -539,11 +586,12 @@ require __DIR__ . '/partials/layout-top.php';
               </td>
               <td class="td-actions">
                 <button type="button" class="row-toggle" data-drawer="detail-dealer-<?= $dealerId ?>"
+                        data-drawer-url="drawer.php?kind=dealer&amp;id=<?= $dealerId ?>"
                         data-title="<?= e($dealer['full_name']) ?>"
-                        data-code="<?= e($dealer['dealer_code']) ?>"
+                        data-code="<?= e((string) $dealer['dealer_code']) ?>"
                         data-meta="Dealer · added <?= e(format_datetime($dealer['created_at'])) ?>"
-                        data-status="<?= $dealer['is_active'] ? 'accepted' : 'rejected' ?>"
-                        data-status-label="<?= $dealer['is_active'] ? 'Active' : 'Stopped' ?>">
+                        data-status="<?= e($dealerState['pill']) ?>"
+                        data-status-label="<?= e($dealerState['label']) ?>">
                   Details <i class="bi bi-chevron-right" aria-hidden="true"></i>
                 </button>
               </td>
@@ -553,22 +601,18 @@ require __DIR__ . '/partials/layout-top.php';
       </table>
     </div>
 
-    <?php
-      $pagerPage  = $paging['page'];
-      $pagerPages = $paging['pages'];
-      $pagerTotal = $paging['total'];
-      $pagerFrom  = $paging['from'];
-      $pagerTo    = $paging['to'];
-      $pagerBase  = $dealerUrl;
-      require __DIR__ . '/partials/pager.php';
-    ?>
-  <?php endif; ?>
+    <?php if ($dealers): ?>
+      <?php
+        $pagerPage  = $paging['page'];
+        $pagerPages = $paging['pages'];
+        $pagerTotal = $paging['total'];
+        $pagerFrom  = $paging['from'];
+        $pagerTo    = $paging['to'];
+        $pagerBase  = $dealerUrl;
+        require __DIR__ . '/partials/pager.php';
+      ?>
+    <?php endif; ?>
 </div>
-
-<!-- ============ detail drawers ============ -->
-<?php foreach ($dealers as $dealer): ?>
-  <?php $srcDealer = $dealer; require __DIR__ . '/partials/dealer-source.php'; ?>
-<?php endforeach; ?>
 
 </div><!-- /data-live-list -->
 

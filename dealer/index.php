@@ -41,7 +41,7 @@ require __DIR__ . '/partials/layout-top.php';
     </span>
     <span class="tile__stats">
       <span class="tile__stat"><?= e(money((float) $dashStock['value'])) ?> at cost ·
-        <a href="stock.php">Order more</a></span>
+        <a href="stock">Order more</a></span>
     </span>
   </span>
   <span class="tile">
@@ -111,7 +111,7 @@ require __DIR__ . '/partials/layout-top.php';
       <h2>Latest clients</h2>
       <span class="eyebrow"><?= count($clients) ?> in total</span>
     </div>
-    <a class="btn btn--ghost btn--sm" href="clients.php">See all</a>
+    <a class="btn btn--ghost btn--sm" href="clients">See all</a>
   </div>
 
   <?php if (!$recent): ?>

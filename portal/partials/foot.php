@@ -6,10 +6,10 @@
       <p class="footer-legal">&copy; <?= date('Y') ?> Manifold Clean Energy Pvt. Ltd. All rights reserved.</p>
 
       <nav class="footer-policy" aria-label="Legal">
-        <a href="../privacy-policy.html#privacy-policy">Privacy Policy</a>
-        <a href="../privacy-policy.html#terms-of-service">Terms of Service</a>
-        <a href="../privacy-policy.html#data-deletion">Data Deletion</a>
-        <a href="../contact.html">Contact</a>
+        <a href="../privacy-policy#privacy-policy">Privacy Policy</a>
+        <a href="../privacy-policy#terms-of-service">Terms of Service</a>
+        <a href="../privacy-policy#data-deletion">Data Deletion</a>
+        <a href="../contact">Contact</a>
       </nav>
 
       <p class="footer-credit">Need help? Call
@@ -20,6 +20,6 @@
 </footer>
 
 <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="../assets/js/main.js"></script>
+<script src="../assets/js/main.js?v=1788265946"></script>
 </body>
 </html>

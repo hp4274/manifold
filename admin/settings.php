@@ -27,7 +27,7 @@ function settings_done(string $message): void
 {
     $_SESSION['settings_flash'] = $message;
 
-    header('Location: settings.php');
+    header('Location: settings');
     exit;
 }
 
@@ -35,10 +35,24 @@ function settings_done(string $message): void
 $editingAdmin = null;
 $openAccountModal = false;
 
-/** How many accounts could still sign in if this one were gone. */
+/* What an account can be. The office runs everything; R&F sees the commission
+   claims and nothing else. */
+const ADMIN_ROLES = [
+    'admin' => 'Office',
+    'rf'    => 'R&F',
+];
+
+/**
+ * How many office accounts could still sign in if this one were gone.
+ *
+ * Only the office counts: an R&F account cannot reach Settings, so leaving R&F
+ * as the last account standing locks everybody out of the admin.
+ */
 function other_active_admins(int $exceptId): int
 {
-    $stmt = db()->prepare('SELECT COUNT(*) FROM admin_users WHERE is_active = 1 AND id <> ?');
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) FROM admin_users WHERE is_active = 1 AND role = 'admin' AND id <> ?"
+    );
     $stmt->execute([$exceptId]);
 
     return (int) $stmt->fetchColumn();
@@ -51,39 +65,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id     = (int) ($_POST['id'] ?? 0);
 
     if ($action === 'commission') {
-        /* three rates, saved together or not at all: a half-applied change would
-           leave the office paying out under two schemes at once */
-        $rates = [
-            'dealer_rate'               => 'The dealer share',
-            'distributor_override_rate' => "The distributor's share of a dealer sale",
-            'distributor_direct_rate'   => 'The distributor share',
-        ];
+        $done = commission_values_save($_POST);
 
-        $clean = [];
-
-        foreach ($rates as $name => $label) {
-            $value = str_replace([',', '%'], '', trim((string) ($_POST[$name] ?? '')));
-
-            if (!is_numeric($value) || (float) $value < 0 || (float) $value > 100) {
-                $error = $label . ' has to be a percentage between 0 and 100.';
-                break;
-            }
-
-            $clean[$name] = number_format((float) $value, 2, '.', '');
-        }
-
-        if ($error === '' && (float) $clean['dealer_rate'] + (float) $clean['distributor_override_rate'] > 100) {
-            $error = 'The dealer share and the override together come to more than the whole sale.';
-        }
-
-        if ($error === '') {
-            foreach ($clean as $name => $value) {
-                save_setting($name, $value);
-            }
-
-            settings_done('Saved. A dealer sale from now on pays the dealer '
-                . rtrim(rtrim($clean['dealer_rate'], '0'), '.') . '% and their distributor '
-                . rtrim(rtrim($clean['distributor_override_rate'], '0'), '.') . '%.');
+        if (isset($done['error'])) {
+            $error = $done['error'];
+        } else {
+            settings_done($done['message']);
         }
     } elseif ($action === 'dealer_limit') {
         $limit = trim((string) ($_POST['dealer_limit'] ?? ''));
@@ -139,6 +126,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name     = trim((string) ($_POST['name'] ?? ''));
         $email    = strtolower(trim((string) ($_POST['email'] ?? '')));
         $password = (string) ($_POST['password'] ?? '');
+        $role     = (string) ($_POST['role'] ?? 'admin');
+
+        if (!isset(ADMIN_ROLES[$role])) {
+            $role = 'admin';
+        }
 
         $taken = db()->prepare('SELECT id FROM admin_users WHERE email = ? AND id <> ?');
         $taken->execute([$email, $id]);
@@ -151,12 +143,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Give the new account a password of at least 10 characters.';
         } elseif ($password !== '' && strlen($password) < 10) {
             $error = 'A password has to be at least 10 characters.';
+        } elseif ($id === (int) $user['id'] && $role !== 'admin') {
+            $error = 'You cannot move your own account out of the office — you would lock yourself out.';
+        } elseif ($id > 0 && $role !== 'admin' && other_active_admins($id) === 0) {
+            $error = 'That is the only office account left. Add another before moving this one to R&F.';
         } elseif ($id > 0) {
-            $sql = 'UPDATE admin_users SET name = ?, email = ?'
+            $sql = 'UPDATE admin_users SET name = ?, email = ?, role = ?'
                  . ($password === '' ? '' : ', password_hash = ?')
                  . ' WHERE id = ?';
 
-            $params = [$name, $email];
+            $params = [$name, $email, $role];
 
             if ($password !== '') {
                 $params[] = password_hash($password, PASSWORD_DEFAULT);
@@ -174,10 +170,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             settings_done('Account updated.');
         } else {
-            db()->prepare('INSERT INTO admin_users (name, email, password_hash) VALUES (?, ?, ?)')
-                ->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT)]);
+            db()->prepare('INSERT INTO admin_users (name, email, role, password_hash) VALUES (?, ?, ?, ?)')
+                ->execute([$name, $email, $role, password_hash($password, PASSWORD_DEFAULT)]);
 
-            settings_done('Account created. ' . $name . ' can sign in now.');
+            settings_done('Account created. ' . $name . ' can sign in now, '
+                . ($role === 'rf' ? 'and lands on the R&F commission screens.' : 'as the office.'));
         }
     } elseif ($action === 'admin_toggle') {
         if ($id === (int) $user['id']) {
@@ -219,17 +216,6 @@ $fullest = db()->query(
       GROUP BY x.id ORDER BY held DESC LIMIT 1"
 )->fetch() ?: [];
 
-/* shown as whole percentages, stored the same way */
-$rateValues = [
-    'dealer_rate'               => dealer_rate() * 100,
-    'distributor_override_rate' => distributor_override_rate() * 100,
-    'distributor_direct_rate'   => distributor_direct_rate() * 100,
-];
-
-/* what the rates come to on a real order, so a percentage is not abstract */
-$ratePlan = payment_plan('stove');
-$rateSale = (float) $ratePlan['booking'] + (float) $ratePlan['delivery'];
-
 if (($_GET['admin'] ?? '') !== '') {
     $stmt = db()->prepare('SELECT * FROM admin_users WHERE id = ?');
     $stmt->execute([(int) $_GET['admin']]);
@@ -238,7 +224,7 @@ if (($_GET['admin'] ?? '') !== '') {
 }
 
 $admins = db()->query(
-    'SELECT id, name, email, is_active, last_login_at, created_at
+    'SELECT id, name, email, role, is_active, last_login_at, created_at
        FROM admin_users ORDER BY is_active DESC, name'
 )->fetchAll();
 
@@ -265,7 +251,7 @@ require __DIR__ . '/partials/layout-top.php';
 <?php endif; ?>
 
 <div class="tiles">
-  <a class="tile" href="referrals.php">
+  <a class="tile" href="referrals">
     <span class="eyebrow">Referred applications</span>
     <strong><?= (int) $stats['referred'] ?></strong>
     <span class="tile__stats">
@@ -274,14 +260,14 @@ require __DIR__ . '/partials/layout-top.php';
   </a>
   <span class="tile">
     <span class="eyebrow">Pending payouts</span>
-    <strong><?= e(money((float) $stats['pending'])) ?></strong>
+    <strong><?= e(money_short((float) $stats['pending'])) ?></strong>
     <span class="tile__stats">
       <span class="tile__stat">owed but not yet transferred</span>
     </span>
   </span>
   <span class="tile">
     <span class="eyebrow">Paid out so far</span>
-    <strong><?= e(money((float) $stats['paid'])) ?></strong>
+    <strong><?= e(money_short((float) $stats['paid'])) ?></strong>
     <span class="tile__stats">
       <span class="tile__stat">marked sent by the office</span>
     </span>
@@ -305,7 +291,7 @@ require __DIR__ . '/partials/layout-top.php';
         Earned once somebody who applied with an existing customer's code has their booking payment
         verified. The new applicant pays the published price in full — nothing is discounted. Nothing is
         transferred automatically either: the office pays it and marks the row sent under
-        <a href="referrals.php">Referrals</a>. Each referral keeps the figure that applied on the day it came
+        <a href="referrals">Referrals</a>. Each referral keeps the figure that applied on the day it came
         in, so changing this never rewrites a payout already owed.
       </span>
     </div>
@@ -320,82 +306,9 @@ require __DIR__ . '/partials/layout-top.php';
     <span class="eyebrow">Applies to new sales only</span>
   </div>
 
-  <form method="post" class="panel__body">
-    <?= csrf_field() ?>
-    <input type="hidden" name="action" value="commission">
-
-    <?php /* Two ways a sale can arrive, and who is paid out of each. Stating it
-             in full is the only way the three fields below read as one scheme
-             rather than three unrelated numbers. */ ?>
-    <div class="rate-rules">
-      <p class="rate-rule">
-        <strong>A dealer sells.</strong> The dealer keeps their share and the distributor who signed
-        them up takes the override. Every dealer answers to a distributor, so the
-        override is owed to nobody.
-      </p>
-      <p class="rate-rule">
-        <strong>A distributor sells.</strong> They keep the distributor share and no dealer is involved.
-      </p>
-    </div>
-
-    <div class="form-grid">
-      <div class="field">
-        <label for="dealer_rate">Dealer share</label>
-        <div class="rate-input">
-          <input id="dealer_rate" name="dealer_rate" type="number" step="0.01" min="0" max="100"
-                 value="<?= e(rtrim(rtrim(number_format($rateValues['dealer_rate'], 2, '.', ''), '0'), '.')) ?>"
-                 required>
-          <span class="rate-input__unit">%</span>
-        </div>
-        <span class="field-hint">
-          <?= e(money($rateSale * $rateValues['dealer_rate'] / 100)) ?> on a
-          <?= e(money($rateSale)) ?> stove
-        </span>
-      </div>
-
-      <div class="field">
-        <label for="distributor_override_rate">Distributor override</label>
-        <div class="rate-input">
-          <input id="distributor_override_rate" name="distributor_override_rate" type="number"
-                 step="0.01" min="0" max="100"
-                 value="<?= e(rtrim(rtrim(number_format($rateValues['distributor_override_rate'], 2, '.', ''), '0'), '.')) ?>"
-                 required>
-          <span class="rate-input__unit">%</span>
-        </div>
-        <span class="field-hint">
-          <?= e(money($rateSale * $rateValues['distributor_override_rate'] / 100)) ?> on the same sale,
-          to their distributor
-        </span>
-      </div>
-
-      <div class="field">
-        <label for="distributor_direct_rate">Distributor share</label>
-        <div class="rate-input">
-          <input id="distributor_direct_rate" name="distributor_direct_rate" type="number"
-                 step="0.01" min="0" max="100"
-                 value="<?= e(rtrim(rtrim(number_format($rateValues['distributor_direct_rate'], 2, '.', ''), '0'), '.')) ?>"
-                 required>
-          <span class="rate-input__unit">%</span>
-        </div>
-        <span class="field-hint">
-          <?= e(money($rateSale * $rateValues['distributor_direct_rate'] / 100)) ?> when a distributor
-          sells it themselves
-        </span>
-      </div>
-    </div>
-
-    <span class="field-hint">
-      A share of what the sale is worth — the booking amount plus the delivery amount — and earned only
-      once the order is <strong>complete</strong>, with both payments verified. Nothing is transferred
-      automatically: the office pays it and records the transfer under
-      <a href="dealers.php">Dealers</a> or <a href="distributors.php">Distributors</a>. Every sale keeps
-      the figures that applied on the day it came in, so changing these never rewrites commission already
-      owed.
-    </span>
-
-    <button type="submit" class="btn btn--primary">Save</button>
-  </form>
+  <?php require __DIR__ . '/partials/commission-rates.php'; ?>
 </div>
+
 
 <div class="panel">
   <div class="panel__head">
@@ -488,14 +401,16 @@ require __DIR__ . '/partials/layout-top.php';
   <div class="table-wrap">
     <table class="data-table data-table--admins">
       <colgroup>
-        <col style="width:30%">
-        <col style="width:14%">
-        <col style="width:26%">
-        <col style="width:30%">
+        <col style="width:28%">
+        <col style="width:12%">
+        <col style="width:12%">
+        <col style="width:20%">
+        <col style="width:28%">
       </colgroup>
       <thead>
         <tr>
           <th>Account</th>
+          <th>Role</th>
           <th>State</th>
           <th>Last signed in</th>
           <th>Action</th>
@@ -513,6 +428,9 @@ require __DIR__ . '/partials/layout-top.php';
               </div>
             </td>
             <td>
+              <span class="cell-sub"><?= e(ADMIN_ROLES[$account['role']] ?? $account['role']) ?></span>
+            </td>
+            <td>
               <span class="pill pill--<?= $account['is_active'] ? 'accepted' : 'rejected' ?>">
                 <?= $account['is_active'] ? 'Active' : 'Switched off' ?>
               </span>
@@ -524,7 +442,7 @@ require __DIR__ . '/partials/layout-top.php';
             </td>
             <td>
               <div class="blog-actions">
-                <a class="btn btn--ghost btn--sm" href="settings.php?admin=<?= (int) $account['id'] ?>">Edit</a>
+                <a class="btn btn--ghost btn--sm" href="settings?admin=<?= (int) $account['id'] ?>">Edit</a>
 
                 <?php if (!$isSelf): ?>
                   <form method="post">
@@ -581,6 +499,22 @@ require __DIR__ . '/partials/layout-top.php';
         <input id="admin_email" name="email" type="email" maxlength="190" required
                value="<?= e($editingAdmin['email'] ?? '') ?>">
         <span class="field-hint">They sign in with this, or with their name.</span>
+      </div>
+
+      <div class="field">
+        <label for="admin_role">Role</label>
+        <select id="admin_role" name="role">
+          <?php foreach (ADMIN_ROLES as $roleKey => $roleLabel): ?>
+            <option value="<?= e($roleKey) ?>"
+              <?= ($editingAdmin['role'] ?? 'admin') === $roleKey ? 'selected' : '' ?>>
+              <?= e($roleLabel) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+        <span class="field-hint">
+          The office runs everything here. R&F signs in at the same door and lands on the commission
+          claims — no clients, no stock, no forms.
+        </span>
       </div>
 
       <div class="field">

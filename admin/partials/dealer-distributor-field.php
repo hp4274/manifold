@@ -28,8 +28,9 @@ $fieldCurrent = (int) ($pf['distributor_id'] ?? 0);
     <?php endforeach; ?>
   </select>
   <span class="field-hint">
-    Whoever this dealer answers to takes the
-    <?= e(rtrim(rtrim(number_format(distributor_override_rate() * 100, 2, '.', ''), '0'), '.')) ?>% override on
-    every sale they make from now on. Sales already made keep the split they were written with.
+    Whoever this dealer answers to takes the override —
+    <?= e(money_short(commission_value('override', 'stove'))) ?> a stove,
+    <?= e(money_short(commission_value('override', 'tuktuk'))) ?> a kit — on every sale they make from
+    now on. Sales already made keep the figures they were written with.
   </span>
 </div>

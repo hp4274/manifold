@@ -51,12 +51,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_c
             . ' can now sign in to their portal with ' . $saleValues['email'] . '. '
             . $wanted . ' ' . product_label($product) . ' taken off your stock.';
 
-        header('Location: clients.php');
+        header('Location: clients');
         exit;
     }
 }
 
 $saleKind = 'distributor';
+
+/* Nothing to sell, nothing to record: a direct sale takes a unit off this
+   partner's own shelf, so with an empty shelf the form has no honest outcome.
+   The page says so instead of opening it and failing on submit. */
+$shelf = stock_balance('distributor', $distId);
 
 require __DIR__ . '/partials/layout-top.php';
 ?>
@@ -65,20 +70,43 @@ require __DIR__ . '/partials/layout-top.php';
   <p class="alert alert--error"><?= e($error) ?></p>
 <?php endif; ?>
 
+<?php if ((int) $shelf['units'] < 1): ?>
+  <div class="panel">
+    <div class="panel__body">
+      <div class="nostock">
+        <span class="nostock__icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
+        <h2>There is nothing on your shelf</h2>
+        <p>
+          Recording a sale takes a unit off your own stock, and you have none - not a
+          stove, not a TukTuk kit. Order from the office first; the moment an order is
+          approved the units land here and this form opens.
+        </p>
+        <div class="nostock__actions">
+          <a class="btn btn--primary" href="stock">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i> Order stock
+          </a>
+          <a class="btn btn--ghost" href="clients">Back to clients</a>
+        </div>
+      </div>
+    </div>
+  </div>
+<?php else: ?>
 <div class="panel">
   <div class="panel__head">
     <div class="panel__head-text">
       <h2>A sale you took yourself</h2>
       <span class="eyebrow">
-        earns you <?= e(rtrim(rtrim(number_format(distributor_direct_rate() * 100, 2, '.', ''), '0'), '.')) ?>%
+        earns you <?= e(money_short(commission_value('direct', 'stove'))) ?> on a stove,
+        <?= e(money_short(commission_value('direct', 'tuktuk'))) ?> on a kit
       </span>
     </div>
-    <a class="btn btn--ghost btn--sm" href="clients.php">Back to clients</a>
+    <a class="btn btn--ghost btn--sm" href="clients">Back to clients</a>
   </div>
 
   <div class="panel__body">
     <?php require __DIR__ . '/../admin/partials/direct-sale-form.php'; ?>
   </div>
 </div>
+<?php endif; ?>
 
 <?php require __DIR__ . '/partials/layout-bottom.php'; ?>

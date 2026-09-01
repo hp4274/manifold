@@ -11,7 +11,7 @@ require_once __DIR__ . '/lib.php';
 $user = require_login();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: index.php');
+    header('Location: ./');
     exit;
 }
 
@@ -49,8 +49,8 @@ db()->prepare('DELETE FROM status_log WHERE entity = ? AND entity_id = ?')
 
 $return = (string) ($_POST['return'] ?? '');
 
-if (!preg_match('/^(index|list)\.php(\?[a-z0-9=&_%-]*)?$/i', $return)) {
-    $return = 'list.php?type=' . urlencode($type);
+if (!preg_match('#^(\./|list)(\?[a-z0-9=&_%-]*)?$#i', $return)) {
+    $return = 'list?type=' . urlencode($type);
 }
 
 admin_flash(['deleted' => $id]);

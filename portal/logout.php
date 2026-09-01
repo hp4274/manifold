@@ -13,5 +13,5 @@ unset(
     $_SESSION['otp_email']
 );
 
-header('Location: index.php');
+header('Location: ./');
 exit;

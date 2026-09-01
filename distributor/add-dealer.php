@@ -40,9 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_d
     }
 
     if ($error === '') {
-        /* the code is issued now and never changes — it simply books nothing
-           until the office says yes */
-        $values['dealer_code']     = make_dealer_code();
+        /* No code yet: the office issues one when it approves them, so nothing
+           is in circulation while the answer is still open. */
         $values['distributor_id']  = $distId;
         $values['requested_by']    = $distId;
         $values['approval_status'] = 'pending';
@@ -54,10 +53,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_d
             . $placeholders . ')')->execute(array_values($values));
 
         $_SESSION['distributor_flash'] = $values['full_name']
-            . ' has been sent to the office. Their code is ' . $values['dealer_code']
-            . ', and it starts booking your override once they are approved.';
+            . ' has been sent to the office. They get their code once it is approved,'
+            . ' and it books your override from then on.';
 
-        header('Location: dealers.php');
+        header('Location: dealers');
         exit;
     }
 
@@ -78,10 +77,11 @@ require __DIR__ . '/partials/layout-top.php';
       <h2>A dealer under you</h2>
       <span class="eyebrow">
         <?= (int) $held ?> of <?= (int) $limit ?> used · every completed sale of theirs earns you
-        <?= e(rtrim(rtrim(number_format(distributor_override_rate() * 100, 2, '.', ''), '0'), '.')) ?>%
+        <?= e(money_short(commission_value('override', 'stove'))) ?> on a stove,
+        <?= e(money_short(commission_value('override', 'tuktuk'))) ?> on a kit
       </span>
     </div>
-    <a class="btn btn--ghost btn--sm" href="dealers.php">Back to dealers</a>
+    <a class="btn btn--ghost btn--sm" href="dealers">Back to dealers</a>
   </div>
 
   <?php if (!$room): ?>
@@ -109,7 +109,7 @@ require __DIR__ . '/partials/layout-top.php';
           Everything except the name can be added later. The office checks the request before
           their code starts earning.
         </span>
-        <a class="btn btn--ghost" href="dealers.php">Cancel</a>
+        <a class="btn btn--ghost" href="dealers">Cancel</a>
         <button type="submit" class="btn btn--primary">Send to the office</button>
       </div>
     </form>

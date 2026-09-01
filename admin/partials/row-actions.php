@@ -87,6 +87,7 @@ $actions = ($isApplication || $isSettled) ? [] : [
   <?php if ($isApplication && in_array($row['status'], ['booking_review', 'delivery_review'], true)): ?>
     <button type="button" class="icon-btn is-review"
             data-drawer="detail-<?= e($rowType) ?>-<?= (int) $row['id'] ?>" data-tab-index="0"
+            data-drawer-url="drawer.php?type=<?= e($rowType) ?>&amp;id=<?= (int) $row['id'] ?>&amp;return=<?= e(rawurlencode($returnUrl ?? './')) ?>"
             data-title="<?= e(record_title($rowType, $row)) ?>"
             data-code="<?= e((string) ($row['reference_code'] ?? '')) ?>"
             data-meta="<?= e(type_config($rowType)['label']) ?> · received

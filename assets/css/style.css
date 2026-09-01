@@ -154,6 +154,12 @@ p{margin:0}
   margin-inline:auto;
   padding-inline:20px;
 }
+/* Bootstrap turns a gutter into a negative margin on the row and padding on its
+   columns. A gutter wider than twice the container padding therefore hangs off
+   both edges — gx-5 is 48px against 20px of padding, which is the 8px of
+   sideways scroll every page had on a phone. The gutter is capped to what the
+   container can absorb at each width. */
+.container-x .row{--bs-gutter-x:2.5rem}
 
 .section{padding:var(--sec-pad) 0}
 /* second half of a two-part band — the previous section already paid the gap */
@@ -419,6 +425,8 @@ p{margin:0}
 .offer-flash__cta{
   display:inline-flex;
   align-items:center;
+  /* a thumb needs somewhere to land — the text alone is 26px tall */
+  min-height:32px;
   gap:7px;
   font-size:var(--t-ui);
   font-weight:700;
@@ -757,7 +765,8 @@ p{margin:0}
   border:1px solid rgba(255,255,255,.34);
   border-radius:999px;
   padding:6px 16px;
-  font-size:calc(9.5px * var(--fs));
+  /* 9.5 rounded to under 10px on a phone: below what a label should ever be */
+  font-size:max(11px, calc(10px * var(--fs)));
   font-weight:600;
   letter-spacing:.15em;
   text-transform:uppercase;
@@ -2404,7 +2413,7 @@ body.has-drawer{overflow:hidden}
    The top bar's twin, pinned to the bottom of the viewport over a scrim that
    holds the page until Accept or Decline is chosen. Injected by main.js on
    first visit and removed once a choice is stored. */
-.cookie-scrim{
+.consent-scrim{
   position:fixed;
   inset:0;
   z-index:1001;
@@ -2413,11 +2422,11 @@ body.has-drawer{overflow:hidden}
   opacity:0;
   transition:opacity .35s ease;
 }
-.cookie-scrim.is-visible{opacity:1}
+.consent-scrim.is-visible{opacity:1}
 
 /* nothing behind the gate scrolls or answers to a click */
-body.is-cookie-gated{overflow:hidden}
-.cookie-bar{
+body.is-consent-gated{overflow:hidden}
+.consent-bar{
   position:fixed;
   inset:auto 0 0 0;
   z-index:1003;
@@ -2428,9 +2437,9 @@ body.is-cookie-gated{overflow:hidden}
   transform:translateY(100%);
   transition:transform .45s cubic-bezier(.22,.61,.36,1);
 }
-.cookie-bar.is-visible{transform:none}
+.consent-bar.is-visible{transform:none}
 
-.cookie-bar__inner{
+.consent-bar__inner{
   width:100%;
   display:flex;
   align-items:center;
@@ -2438,7 +2447,7 @@ body.is-cookie-gated{overflow:hidden}
   gap:22px;
 }
 
-.cookie-bar__text{
+.consent-bar__text{
   margin:0;
   min-width:0;
   color:rgba(255,255,255,.82);
@@ -2446,7 +2455,7 @@ body.is-cookie-gated{overflow:hidden}
   font-weight:500;
   line-height:1.6;
 }
-.cookie-bar__icon{
+.consent-bar__icon{
   width:calc(18px * var(--fs));
   height:calc(18px * var(--fs));
   margin-right:10px;
@@ -2454,16 +2463,16 @@ body.is-cookie-gated{overflow:hidden}
   color:var(--accent);
   flex:0 0 auto;
 }
-.cookie-bar__text a{
+.consent-bar__text a{
   color:var(--accent-on-dark);
   font-weight:600;
   text-decoration:underline;
   text-underline-offset:3px;
 }
-.cookie-bar__text a:hover{color:#fff}
+.consent-bar__text a:hover{color:#fff}
 
-.cookie-bar__actions{display:flex;align-items:center;gap:10px;flex:0 0 auto}
-.cookie-btn{
+.consent-bar__actions{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.consent-btn{
   border:1px solid transparent;
   border-radius:999px;
   padding:9px 22px;
@@ -2474,31 +2483,31 @@ body.is-cookie-gated{overflow:hidden}
   cursor:pointer;
   transition:background .2s ease,border-color .2s ease,color .2s ease,transform .2s ease;
 }
-.cookie-btn--accept{
+.consent-btn--accept{
   background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
   color:var(--white);
 }
-.cookie-btn--accept:hover{transform:translateY(-1px);filter:brightness(1.06)}
-.cookie-btn--decline{
+.consent-btn--accept:hover{transform:translateY(-1px);filter:brightness(1.06)}
+.consent-btn--decline{
   background:rgba(255,255,255,.06);
   border-color:rgba(255,255,255,.18);
   color:rgba(255,255,255,.82);
 }
-.cookie-btn--decline:hover{background:rgba(255,255,255,.12);color:#fff}
+.consent-btn--decline:hover{background:rgba(255,255,255,.12);color:#fff}
 
 /* the back-to-top button steps over the bar while it is up */
-body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
+body.has-consent-bar .to-top{bottom:calc(26px + var(--consent-h,86px))}
 
 @media (max-width:767px){
-  .cookie-bar__inner{flex-direction:column;align-items:stretch;gap:14px}
-  .cookie-bar__actions{justify-content:stretch}
-  .cookie-btn{flex:1 1 0}
-  body.has-cookie-bar .to-top{bottom:calc(18px + var(--cookie-h,132px))}
+  .consent-bar__inner{flex-direction:column;align-items:stretch;gap:14px}
+  .consent-bar__actions{justify-content:stretch}
+  .consent-btn{flex:1 1 0}
+  body.has-consent-bar .to-top{bottom:calc(18px + var(--consent-h,132px))}
 }
 
 @media (prefers-reduced-motion:reduce){
-  .cookie-bar,
-  .cookie-scrim{transition:none}
+  .consent-bar,
+  .consent-scrim{transition:none}
 }
 
 /* ---------- 12c. Referral promo popup ----------
@@ -3422,7 +3431,10 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   display:grid;
   grid-template-columns:1.2fr 0.8fr;
   gap:36px;
-  align-items:start;
+  /* the picture is as tall as the questions beside it, whatever is open: with
+     one answer at a time the list is short, and a fixed portrait crop hung well
+     below the last question */
+  align-items:stretch;
 }
 .faq{
   display:grid;
@@ -3430,8 +3442,6 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   max-width:100%;
 }
 .faq-media{
-  position:sticky;
-  top:calc(var(--header-offset) + 20px);
   border-radius:var(--radius-lg);
   overflow:hidden;
   box-shadow:var(--shadow-card);
@@ -3440,9 +3450,9 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 }
 .faq-media img{
   width:100%;
-  height:auto;
+  height:100%;
+  min-height:320px;
   display:block;
-  aspect-ratio:3/4;
   object-fit:cover;
 }
 @media (max-width:991px){
@@ -3451,9 +3461,14 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
     gap:28px;
   }
   .faq-media{
-    position:static;
     max-width:440px;
     margin:0 auto;
+  }
+
+  /* stacked, there is nothing to match, so the picture keeps its own shape */
+  .faq-media img{
+    height:auto;
+    aspect-ratio:3/4;
   }
 }
 .faq-item{
@@ -3462,6 +3477,9 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   background:#fff;
   padding:4px 26px;
   box-shadow:var(--shadow-card);
+  /* the answer is revealed by animating this box's height, so anything still
+     folded away has to stay inside it */
+  overflow:hidden;
 }
 .faq-item summary{
   list-style:none;
@@ -3490,7 +3508,10 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   transition:transform .25s ease;
 }
 .faq-item[open] summary::after{transform:rotate(45deg)}
+/* while an answer is opening or closing it fades with the height, which is
+   what stops the column beside it looking like it flinched */
 .faq-item p{
+  transition:opacity .18s ease;
   padding:0 0 22px;
   font-size:var(--t-sub);
   font-weight:400;
@@ -3639,6 +3660,7 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
 
 .field-consent{
   display:flex;
+  flex-wrap:wrap;
   align-items:flex-start;
   gap:12px;
   font-size:var(--t-sub);
@@ -3768,6 +3790,118 @@ body.has-cookie-bar .to-top{bottom:calc(26px + var(--cookie-h,86px))}
   text-transform:uppercase;
   color:var(--muted);
 }
+/* ---------- what the last action did ----------
+   Over the page rather than in it, so a confirmation does not push the thing
+   somebody is reading down the screen. */
+.toast-stack{
+  position:fixed;
+  right:22px;
+  bottom:22px;
+  z-index:1700;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  width:min(420px,calc(100vw - 44px));
+  pointer-events:none;
+}
+.toast{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding:15px 17px;
+  border:1px solid var(--line);
+  border-left:3px solid var(--accent-2);
+  border-radius:var(--radius);
+  background:#fff;
+  box-shadow:0 18px 44px rgba(9,26,44,.22);
+  font-size:var(--t-ui);
+  line-height:1.55;
+  color:var(--body);
+  pointer-events:auto;
+  animation:toastIn .26s ease both;
+}
+.toast--error{border-left-color:#c9455c}
+.toast--warn{border-left-color:#c98a2b}
+.toast > i{flex:none;margin-top:2px;font-size:16px;color:#26743a}
+.toast--error > i{color:#c9455c}
+.toast--warn > i{color:#c98a2b}
+.toast__body{flex:1 1 auto;min-width:0}
+.toast__body strong{color:var(--ink)}
+.toast__body a{color:inherit;font-weight:700;text-decoration:underline}
+.toast__close{
+  flex:none;
+  width:26px;height:26px;
+  display:flex;align-items:center;justify-content:center;
+  margin:-2px -4px 0 0;
+  border:0;
+  border-radius:50%;
+  background:none;
+  color:var(--muted);
+  font-size:11px;
+  cursor:pointer;
+  transition:background .2s ease,color .2s ease;
+}
+.toast__close:hover{background:var(--tint);color:var(--ink)}
+.toast.is-going{animation:toastOut .24s ease both}
+
+@keyframes toastIn{
+  from{opacity:0;transform:translateY(12px)}
+  to{opacity:1;transform:none}
+}
+@keyframes toastOut{
+  from{opacity:1;transform:none}
+  to{opacity:0;transform:translateY(8px)}
+}
+
+@media (max-width:639px){
+  .toast-stack{right:12px;left:12px;bottom:12px;width:auto}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .toast,
+  .toast.is-going{animation:none}
+}
+
+/* an upload that failed, said against the box it was chosen in.
+   The wording is red and carries an icon, so the reason does not rest on colour
+   alone for anybody who cannot see it. */
+.field-error{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin:8px 0 0;
+  font-size:var(--t-ui);
+  line-height:1.5;
+  font-weight:600;
+  color:#a8324a;
+}
+.field-error i{flex:none;margin-top:2px;font-size:15px}
+/* the box itself picks up the same red, so the eye finds it before the words.
+   It is only ever set while an answer is actually wrong - correcting the field
+   takes the class off again and the border returns to the ordinary one. */
+.field--error input:not([type="radio"]):not([type="checkbox"]),
+.field--error select,
+.field--error textarea{
+  border-color:rgba(201,69,92,.55);
+  background:rgba(201,69,92,.04);
+}
+.field--error input:not([type="radio"]):not([type="checkbox"]):focus,
+.field--error select:focus,
+.field--error textarea:focus{
+  border-color:#c2445c;
+  box-shadow:0 0 0 3px rgba(201,69,92,.14);
+}
+/* a consent line is the label, so the red goes on the words and the tick */
+.field-consent.field--error{color:#a8324a}
+.field-consent.field--error input[type="checkbox"]{
+  accent-color:#c2445c;
+  outline:2px solid rgba(201,69,92,.55);
+  outline-offset:2px;
+}
+/* the reason sits under the line it belongs to, lined up with its words */
+.field-consent .field-error{flex-basis:100%;margin:2px 0 0 32px}
+.field--error label{color:#a8324a}
+
 .form-info{
   padding:16px 20px;
   border-radius:var(--radius-sm);
@@ -3824,9 +3958,12 @@ label.upload{
   flex:1 1 0;
   display:flex;
   align-items:center;
-  justify-content:center;
-  gap:10px;
-  padding:13px 16px;
+  /* The dot leads, the word follows. Centring the pair moved the dot with the
+     length of its label, so "Yes" and "No" sat in different places and a column
+     of questions read as ragged. */
+  justify-content:flex-start;
+  gap:12px;
+  padding:13px 18px;
   border:1px solid #dfe7ee;
   border-radius:var(--radius-sm);
   background:#fff;
@@ -3836,14 +3973,18 @@ label.upload{
   color:var(--ink-soft);
   transition:border-color .2s ease,background .2s ease,color .2s ease;
 }
-.choice input{accent-color:var(--accent);width:18px;height:18px;flex:none}
-.choice:hover{border-color:#c3d3df}
+.choice input{accent-color:var(--accent);width:18px;height:18px;flex:none;margin:0}
+.choice:hover{border-color:#c3d3df;background:#fbfdfe}
 .choice:has(input:checked){
   border-color:var(--accent);
   background:rgba(75,180,83,.09);
   color:var(--ink);
+  font-weight:600;
 }
 .choice:focus-within{box-shadow:0 0 0 3px rgba(75,180,83,.14)}
+
+/* a legend is a heading for its pair, not a label crowding them */
+fieldset.field legend{margin-bottom:2px}
 
 /* --- terms --- */
 .terms-box{
@@ -4231,6 +4372,39 @@ label.upload{
   margin-bottom:6px;
 }
 .portal-app__meta{font-size:var(--t-sub);color:var(--muted)}
+/* who this order went through — a name and a code, so a client knows who to
+   ring before they ring us */
+.portal-app__seller{
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+  font-size:var(--t-sub);
+  color:var(--body);
+}
+.portal-app__seller strong{color:var(--ink)}
+.portal-app__seller-kind{
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.portal-app__code{
+  padding:2px 9px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#fff;
+  font-size:13px;
+  font-weight:600;
+  letter-spacing:.04em;
+  color:var(--accent-deep);
+  white-space:nowrap;
+}
+/* the distributor behind the dealer: true, but not the headline */
+.portal-app__under{font-size:var(--t-ui);color:var(--muted)}
+
 .portal-app__copy{font-size:var(--t-sub);line-height:var(--t-sub-lh);color:var(--body);max-width:70ch}
 .portal-app__copy strong{color:var(--ink)}
 
@@ -5040,7 +5214,9 @@ label.upload{
 @media (max-width:767px){
   .hero{min-height:600px}
   .top-bar__email span{display:none}
-  .top-bar__email{font-size:0}
+  /* the address is dropped and the icon carries the link, so the link has to
+     stay big enough to press — a 14px-wide envelope is not */
+  .top-bar__email{font-size:0;min-width:32px;min-height:32px;justify-content:center}
 
   .hero-media::after{
     background:
@@ -5171,6 +5347,7 @@ body{overflow-x:hidden}
 
 @media (max-width:575px){
   .container-x{padding-inline:16px}
+  .container-x .row{--bs-gutter-x:2rem}
   .btn-pill{padding:12px 18px}
   .why-card{padding:22px 18px}
   .proof-card{padding:22px 18px}
@@ -5648,3 +5825,82 @@ body{overflow-x:hidden}
 .role-card__text{display:grid;gap:2px;flex:1 1 auto;min-width:0}
 .role-card__text strong{font-size:var(--t-sub);font-weight:700}
 .role-card__text span{font-size:13px;color:var(--muted);line-height:1.5}
+
+/* ---------- number fields ----------
+   The arrows invite a click that changes a quantity by one, and the wheel does
+   the same by accident while somebody is scrolling past. Both are removed; the
+   value is typed. */
+input[type="number"]{-moz-appearance:textfield;appearance:textfield}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* ---------- a phone number and its country code ----------
+   Two controls, read as one field: the code is as wide as it needs to be and
+   the number takes the rest. */
+.tel-field{display:flex;gap:8px;align-items:stretch}
+.tel-field select{flex:0 0 auto;width:auto;min-width:96px}
+.tel-field input{flex:1 1 auto;min-width:0}
+
+@media (max-width:480px){
+  .tel-field select{min-width:88px}
+}
+
+/* an answer that is on its way out has nothing to say yet */
+.faq-item.is-folding p{opacity:0}
+
+@media (prefers-reduced-motion:reduce){
+  .faq-item p{transition:none}
+}
+
+/* ---------- a payment stage behind the finance check ----------
+   The section stays where it is — hiding it entirely reads as though the
+   payment had gone away. What is behind the check is what you would act on. */
+.portal-stage.is-sealed .portal-pay,
+.portal-stage.is-sealed .portal-ledger__list{
+  filter:blur(5px);
+  opacity:.55;
+  pointer-events:none;
+  user-select:none;
+}
+.portal-stage.is-sealed{position:relative}
+.portal-stage.is-sealed .portal-stage__note{position:relative;z-index:1}
+
+@media (prefers-reduced-motion:reduce){
+  .portal-stage.is-sealed .portal-pay{filter:none;opacity:.35}
+}
+
+/* ---------- the one question the portal asks ----------
+   Two answers, side by side: the one most people want in the accent pill, the
+   other plainly available rather than hidden behind small print. */
+.portal-choice{
+  margin:22px 0 6px;
+  padding:20px 22px;
+  border:1px solid var(--line);
+  border-left:4px solid var(--accent);
+  border-radius:var(--radius);
+  background:#fbfdfc;
+}
+.portal-choice__title{
+  margin:0 0 6px;
+  font-size:var(--t-sub);
+  font-weight:700;
+  color:var(--ink);
+}
+.portal-choice__note{
+  margin:0 0 16px;
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--body);
+}
+.portal-choice__actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.portal-choice__actions form{margin:0}
+.portal-choice__cancel{
+  color:var(--ink-soft);
+  border:1px solid var(--line);
+  background:#fff;
+}
+.portal-choice__cancel:hover{border-color:#c9a0a8;color:#a33a4e;background:#fff}
+
+/* An address is case blind: the box shows it the way it is written down. */
+input[type="email"],
+input[name*="email"]{text-transform:lowercase}

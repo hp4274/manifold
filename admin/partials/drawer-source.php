@@ -12,7 +12,7 @@ declare(strict_types=1);
 $srcId     = (int) $srcRow['id'];
 $srcGroups = field_groups($srcType);
 $srcIsApp  = type_config($srcType)['table'] === 'applications';
-$srcReturn = $srcReturn ?? 'index.php';
+$srcReturn = $srcReturn ?? './';
 
 /* the payment panel is the first tab on an application */
 $srcTabs = $srcIsApp ? ['Payment'] : [];
@@ -22,6 +22,44 @@ foreach (array_keys($srcGroups) as $groupLabel) {
 }
 ?>
 <div class="drawer-source" id="detail-<?= e($srcType) ?>-<?= $srcId ?>" hidden>
+
+  <?php /* An application waiting on the office is waiting on one decision, and
+           this is where somebody is when they have finished reading it. The
+           same two answers as the row, at the point the reading ends. */ ?>
+  <?php if ($srcIsApp && ($srcRow['status'] ?? '') === 'submitted'): ?>
+    <div class="decide-bar">
+      <div class="decide-bar__text">
+        <p class="decide-bar__title">Waiting for your approval</p>
+        <p class="decide-bar__note">
+          Approving emails <?= e($srcRow['full_name']) ?> the payment details and opens their portal.
+          Turning it down tells them nothing and leaves it shut.
+        </p>
+      </div>
+
+      <div class="decide-bar__actions">
+        <form method="post" action="status.php">
+          <?= csrf_field() ?>
+          <input type="hidden" name="type" value="<?= e($srcType) ?>">
+          <input type="hidden" name="id" value="<?= $srcId ?>">
+          <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
+          <input type="hidden" name="status" value="booking_pending">
+          <button type="submit" class="btn btn--primary">
+            <i class="bi bi-check-lg" aria-hidden="true"></i> Approve
+          </button>
+        </form>
+
+        <form method="post" action="status.php"
+              data-confirm="Turn down <?= e($srcRow['full_name']) ?>? Nothing is emailed and their portal stays shut.">
+          <?= csrf_field() ?>
+          <input type="hidden" name="type" value="<?= e($srcType) ?>">
+          <input type="hidden" name="id" value="<?= $srcId ?>">
+          <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
+          <input type="hidden" name="status" value="rejected">
+          <button type="submit" class="btn btn--ghost">Turn down</button>
+        </form>
+      </div>
+    </div>
+  <?php endif; ?>
 
   <?php if (count($srcTabs) > 1): ?>
     <nav class="detail-tabs" role="tablist" aria-label="Sections">

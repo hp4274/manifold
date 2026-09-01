@@ -42,7 +42,11 @@ function return_url(bool $ok): string
         $page = 'index.html';
     }
 
-    return SITE_URL . '/' . $page . '?' . ($ok ? 'sent=1' : 'error=1');
+    /* the address never carries the file name: index.html is the site root and
+       every other page drops its extension */
+    $clean = $page === 'index.html' ? '' : preg_replace('/\.html$/i', '', $page);
+
+    return SITE_URL . '/' . $clean . '?' . ($ok ? 'sent=1' : 'error=1');
 }
 
 function respond(bool $ok, string $message, int $code = 200): void
@@ -118,10 +122,6 @@ if (!empty($_POST['website'])) {
 
 try {
     if ($form === 'stove' || $form === 'tuktuk') {
-        if (field('full_name') === null || field('email') === null || field('mobile_number') === null) {
-            respond(false, 'Name, mobile number and email are required.');
-        }
-
         if (!checkbox('declaration_accepted') || !checkbox('terms_accepted')) {
             respond(false, 'The declaration and the terms must both be accepted.');
         }
@@ -177,18 +177,97 @@ try {
             'ip_address'                   => $ip,
         ];
 
+        /* ---------- what an application cannot arrive without ----------
+           The browser marks these required too, but a request that did not come
+           from our form has to meet the same bar — the office cannot verify an
+           applicant it has no identity, address or paperwork for. */
+        $required = [
+            'full_name'            => 'full name',
+            'date_of_birth'        => 'date of birth',
+            'nationality'          => 'nationality',
+            'gender'               => 'gender',
+            'occupation'           => 'occupation',
+            'mobile_number'        => 'mobile number',
+            'email'                => 'email address',
+            'id_number'            => 'National ID or passport number',
+            'id_document_path'     => 'copy of your ID',
+            'residence_proof_path' => 'residence proof',
+            'house_number'         => 'house, villa or apartment number',
+            'street'               => 'street name',
+            'city'                 => 'city',
+            'state'                => 'state',
+            'country'              => 'country',
+            'pin_code'             => 'pin code',
+        ];
+
+        foreach ($required as $column => $label) {
+            if (($columns[$column] ?? null) === null || $columns[$column] === '') {
+                respond(false, 'Your ' . $label . ' is missing. Applicant information, '
+                    . 'identification and residential address are all required.');
+            }
+        }
+
+        /* ---------- the shape of what was typed ----------
+           The browser marks each of these with a pattern, which is a courtesy to
+           somebody typing rather than a rule: a request that did not come from
+           our form has to meet the same bar. */
+        $digits = static fn (?string $value): string => preg_replace('/\D/', '', (string) $value);
+
+        if (strlen($digits($columns['mobile_number'])) !== 10) {
+            respond(false, 'The mobile number has to be ten digits — no country code, no spaces.');
+        }
+
+        if ($columns['alt_mobile_number'] !== null
+            && strlen($digits($columns['alt_mobile_number'])) !== 10) {
+            respond(false, 'The alternative mobile number has to be ten digits, or left empty.');
+        }
+
+        /* The country code is chosen beside the number, and follows the
+           nationality unless the applicant says otherwise. It is stored in
+           front of the number so a call can be made from what is on the row;
+           the ten digits stay the ten digits. */
+        $dial = static function (string $field) use ($digits): string {
+            $code = $digits(field($field, 6));
+
+            /* an empty or absurd code means the form was not ours: fall back to
+               the one this business is run from rather than refusing over it */
+            return $code === '' || strlen($code) > 4 ? DEFAULT_DIAL_CODE : $code;
+        };
+
+        $columns['mobile_number'] = '+' . $dial('mobile_code') . $digits($columns['mobile_number']);
+
+        if ($columns['alt_mobile_number'] !== null) {
+            $columns['alt_mobile_number'] = '+' . $dial('alt_mobile_code')
+                . $digits($columns['alt_mobile_number']);
+        }
+
+        if (!filter_var((string) $columns['email'], FILTER_VALIDATE_EMAIL)) {
+            respond(false, 'That email address does not look right — we send the payment link to it.');
+        }
+
+        if (strlen($digits($columns['pin_code'])) !== 6) {
+            respond(false, 'The pin code has to be six digits.');
+        }
+
+        $columns['pin_code'] = $digits($columns['pin_code']);
+
+        if (!preg_match('#^[A-Za-z0-9\-/]{4,20}$#', (string) $columns['id_number'])) {
+            respond(false, 'The ID number should be the number as printed — letters and digits, four to twenty.');
+        }
+
         /* ---------- dates ----------
-           Nobody is born tomorrow, and an installation cannot be arranged for
-           a day that has gone. The picker greys both out; this is the copy of
-           the rule that a hand-made request cannot get past. */
+           Nobody is born tomorrow, and the first installations are built for
+           2027. The picker greys both out; this is the copy of the rule that a
+           hand-made request cannot get past. */
         if ($columns['date_of_birth'] !== null
             && strtotime((string) $columns['date_of_birth']) > strtotime('today 23:59:59')) {
             respond(false, 'That date of birth is in the future — please check it.');
         }
 
         if ($columns['preferred_install_date'] !== null
-            && strtotime((string) $columns['preferred_install_date']) < strtotime('today')) {
-            respond(false, 'The preferred installation date has already passed. Please pick a later day.');
+            && strtotime((string) $columns['preferred_install_date']) < strtotime(INSTALL_FROM)) {
+            respond(false, 'Installations start on ' . date('j F Y', strtotime(INSTALL_FROM))
+                . '. Please pick that day or later.');
         }
 
         /* ---------- referral ----------
@@ -198,17 +277,43 @@ try {
            code is still stored as typed so the office can see what was meant. */
         $quoted   = normalise_referral_code(field('referral_code', 20));
         $referrer = $quoted === '' ? null : referrer_for_code($quoted);
-        $reward   = $referrer ? referral_reward() : 0.0;
+
+        /* Nobody refers themselves. Somebody who bought a stove and comes back
+           for a kit is the same customer, not a customer they found, so quoting
+           their own code books no reward — matched on the email and the mobile,
+           because the code is the one thing they can copy off their own portal.
+
+           The partner behind that first sale is still inherited below: the
+           dealer who found this customer keeps the second sale, which is what
+           the code was quoted for in the first place. */
+        $selfReferred = $referrer && (
+            strcasecmp((string) ($referrer['email'] ?? ''), (string) $columns['email']) === 0
+            || (
+                $columns['mobile_number'] !== null
+                && substr($digits($referrer['mobile_number'] ?? ''), -10) !== ''
+                && substr($digits($referrer['mobile_number'] ?? ''), -10)
+                   === substr($digits($columns['mobile_number']), -10)
+            )
+        );
+
+        $reward = $referrer && !$selfReferred ? referral_reward() : 0.0;
 
         $columns['referred_by_code']       = $quoted === '' ? null : $quoted;
-        $columns['referred_by_id']         = $referrer ? (int) $referrer['id'] : null;
+        $columns['referred_by_id']         = $referrer && !$selfReferred ? (int) $referrer['id'] : null;
         $columns['referral_reward']        = $reward;
-        $columns['referral_reward_status'] = $referrer ? 'pending' : 'none';
+        $columns['referral_reward_status'] = $referrer && !$selfReferred ? 'pending' : 'none';
+
+        if ($selfReferred) {
+            /* the office should still see what was typed, and why it paid
+               nothing, rather than wondering where the reward went */
+            $columns['referral_reward_note'] = 'Own code — a customer cannot refer themselves.';
+        }
 
         /* the price list is frozen onto the row, so a later change to the
            published price never rewrites what this application owes */
         $plan = payment_plan($form);
 
+        /* frozen with the prices, so a rate change never rewrites this sale */
         $columns['booking_amount']  = (float) $plan['booking'];
         $columns['delivery_amount'] = (float) $plan['delivery'];
         $columns['payment_amount']  = (float) $plan['booking'];
@@ -224,16 +329,42 @@ try {
 
            Both shares are frozen here for the same reason the price is: raising
            a rate later must not rewrite what this sale was worth. */
-        $dealer      = $referrer || $quoted === '' ? null : dealer_for_code($quoted);
-        $distributor = $dealer
-            ? distributor_for_dealer($dealer)
-            : ($referrer || $quoted === '' ? null : distributor_for_code($quoted));
+        if ($referrer) {
+            /* A customer's code, so the reward is theirs — and the partner who
+               made that first sale keeps this one too. Without this the dealer
+               who found the customer earns nothing on the customer they went on
+               to find, and the sale books commission to nobody at all.
 
-        $split = commission_split(
-            (float) $plan['booking'] + (float) $plan['delivery'],
-            $dealer,
-            $distributor
-        );
+               Re-checked rather than copied: a dealer switched off since the
+               first sale books no more, and if theirs is the one that went, the
+               distributor takes an override on a dealer sale that has no dealer,
+               so they take nothing either. A distributor's own direct sale
+               carries down as a direct sale. */
+            $dealer = dealer_by_id((int) ($referrer['dealer_id'] ?? 0));
+
+            if ($dealer && ((int) $dealer['is_active'] !== 1 || $dealer['approval_status'] !== 'approved')) {
+                $dealer = null;
+            }
+
+            if ($dealer) {
+                $distributor = distributor_for_dealer($dealer);
+            } elseif (empty($referrer['dealer_id'])) {
+                $distributor = distributor_by_id((int) ($referrer['distributor_id'] ?? 0));
+            } else {
+                $distributor = null;
+            }
+
+            if ($distributor && (int) $distributor['is_active'] !== 1) {
+                $distributor = null;
+            }
+        } else {
+            $dealer      = $quoted === '' ? null : dealer_for_code($quoted);
+            $distributor = $dealer
+                ? distributor_for_dealer($dealer)
+                : ($quoted === '' ? null : distributor_for_code($quoted));
+        }
+
+        $split = commission_split($form, $dealer, $distributor);
 
         $columns['dealer_id']              = $dealer ? (int) $dealer['id'] : null;
         $columns['dealer_commission']      = $split['dealer'];
@@ -262,11 +393,19 @@ try {
            admin is what sends it, and what opens their portal. */
         $columns['id']             = $id;
         $columns['reference_code'] = $ref;
+        $columns['created_at']     = date('Y-m-d H:i:s');
+
+        /* the applicant hears that it arrived, and the office that it is
+           waiting — neither should depend on somebody refreshing a page */
+        after_response(static function () use ($columns): void {
+            send_application_received_email($columns);
+            send_new_application_admin($columns);
+        });
 
         respond(true, 'Application received — your booking number is ' . $ref . '. '
             . 'Our team reviews it first, and we email you the payment details once it is approved. '
             . 'Nothing to pay yet.'
-            . ($referrer ? ' Your referral code has been recorded.' : ''));
+            . ($referrer && !$selfReferred ? ' Your referral code has been recorded.' : ''));
     }
 
     if ($form === 'contact') {
@@ -293,7 +432,9 @@ try {
         /* a thank you goes back straight away, so nobody is left wondering
            whether the form worked; a bad address only costs a line in email_log */
         if (filter_var((string) $enquiry['email'], FILTER_VALIDATE_EMAIL)) {
-            send_contact_thanks_email($enquiry);
+            after_response(static function () use ($enquiry): void {
+                send_contact_thanks_email($enquiry);
+            });
         }
 
         respond(true, 'Thank you — your enquiry has reached the Ahmedabad team. We have emailed you a copy.');
@@ -318,7 +459,9 @@ try {
            updated instead, so only somebody genuinely new gets welcomed —
            signing up twice does not send the same email twice */
         if ($stmt->rowCount() === 1) {
-            send_newsletter_welcome_email($email);
+            after_response(static function () use ($email): void {
+                send_newsletter_welcome_email($email);
+            });
         }
 
         respond(true, 'You are on the list.');

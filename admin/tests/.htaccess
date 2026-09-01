@@ -1,0 +1,9 @@
+# Self-checks, run from the command line. Nothing here is ever served — they
+# write to the live database, and a URL is not a reason to run one.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>

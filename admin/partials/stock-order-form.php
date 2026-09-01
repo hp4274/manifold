@@ -40,7 +40,7 @@ foreach (['stove', 'tuktuk'] as $soProduct) {
 
         <div class="order-line__qty">
           <input id="qty_<?= e($orderKey) ?>" name="qty[<?= e($orderKey) ?>]" type="number"
-                 min="0" step="1" inputmode="numeric"
+                 min="0" max="<?= STOCK_ORDER_MAX_UNITS ?>" step="1" inputmode="numeric"
                  data-stock-qty data-price="<?= e(number_format($orderPrice, 2, '.', '')) ?>"
                  value="<?= (int) ($soWanted[$orderKey] ?? 0) ?>">
           <span class="order-line__unit">units</span>

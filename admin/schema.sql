@@ -4,22 +4,20 @@
 -- Creates the `manifold` database with empty tables, one admin account and the
 -- default settings. This is the current structure, for a fresh install.
 --
--- An existing database is brought forward by the files in admin/migrations/
--- instead — importing this one would destroy its data. After a deploy, sign in
--- and open admin/check-schema.php: it names anything the code needs that the
--- database has not got yet.
---
---   WARNING: this DROPS the existing `manifold` database. Everything in it —
---   applications, payments, receipts, enquiries — is destroyed. Take a backup
---   first if this is not a clean machine.
+-- WARNING: this DROPS the existing `manifold` database. Everything in it —
+-- applications, payments, receipts, enquiries — is destroyed. Take a backup
+-- first if this is not a clean machine.
 --
 -- Import:  mysql -u root -p < schema.sql
 --
 -- Then sign in at /manifold/admin/login.php with
---   username  admin        (or admin@manifold.com)
---   password  admin12345
+--   the office     admin  (or admin@manifold.com)  password admin12345
+--   R&F            rf@manifold.com                 password rf123
 --
--- CHANGE THAT PASSWORD before this touches a real server.
+-- One sign-in, two destinations: the office lands on the dashboard, R&F on
+-- their own commission screens.
+--
+-- CHANGE BOTH PASSWORDS before this touches a real server.
 -- ==========================================================================
 
 DROP DATABASE IF EXISTS `manifold`;
@@ -37,6 +35,7 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(120) NOT NULL,
   `email` varchar(190) NOT NULL,
+  `role` enum('admin','rf') NOT NULL DEFAULT 'admin',
   `password_hash` varchar(255) NOT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `last_login_at` datetime DEFAULT NULL,
@@ -88,11 +87,20 @@ CREATE TABLE IF NOT EXISTS `distributors` (
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `dealers` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `dealer_code` varchar(20) NOT NULL,
+  /* issued when the office approves them: a dealer still waiting has no code,
+     because a code that books nothing is a code somebody will share anyway */
+  `dealer_code` varchar(20) DEFAULT NULL,
   -- every dealer answers to a distributor; there is no such thing as one
   -- without, which is why this is NOT NULL and the key below refuses rather
   -- than nulling it
   `distributor_id` int(10) unsigned NOT NULL,
+  -- A dealer a distributor asked for waits on the office. Their code books
+  -- nothing until it is approved, which is what dealer_for_code() insists on;
+  -- one the office added itself is approved from the start.
+  `approval_status` enum('pending','approved','rejected') NOT NULL DEFAULT 'approved',
+  `requested_by` int(10) unsigned DEFAULT NULL,
+  `decided_at` datetime DEFAULT NULL,
+  `decided_by` int(10) unsigned DEFAULT NULL,
   `full_name` varchar(160) NOT NULL,
   `company` varchar(160) DEFAULT NULL,
   `email` varchar(190) DEFAULT NULL,
@@ -117,8 +125,13 @@ CREATE TABLE IF NOT EXISTS `dealers` (
   UNIQUE KEY `uq_dealer_code` (`dealer_code`),
   KEY `ix_dealer_active` (`is_active`),
   KEY `ix_dealer_distributor` (`distributor_id`),
+  KEY `ix_dealer_approval` (`approval_status`),
   KEY `fk_dealer_admin` (`created_by`),
+  KEY `fk_dealer_requested_by` (`requested_by`),
+  KEY `fk_dealer_decided_by` (`decided_by`),
   CONSTRAINT `fk_dealer_admin` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_dealer_requested_by` FOREIGN KEY (`requested_by`) REFERENCES `distributors` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_dealer_decided_by` FOREIGN KEY (`decided_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_dealer_distributor` FOREIGN KEY (`distributor_id`) REFERENCES `distributors` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -131,7 +144,7 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `product` enum('stove','tuktuk') NOT NULL,
   -- an application from the website waits on the office before it becomes a
   -- payment: 'submitted' is that wait, and approving it is what starts the rest
-  `status` enum('submitted','booking_pending','booking_review','delivery_pending','delivery_review','complete','rejected')
+  `status` enum('submitted','booking_pending','booking_review','docs_pending','confirm_pending','delivery_pending','delivery_review','complete','cancelled','rejected')
       NOT NULL DEFAULT 'submitted',
   `reference_code` varchar(20) NOT NULL DEFAULT '',
   `referral_code` varchar(20) NOT NULL DEFAULT '',
@@ -141,6 +154,11 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `dealer_commission` decimal(10,2) NOT NULL DEFAULT 0.00,
   `distributor_id` int(10) unsigned DEFAULT NULL,
   `distributor_commission` decimal(10,2) NOT NULL DEFAULT 0.00,
+  -- 'direct' is a sale a partner took and was paid for themselves: money the
+  -- company never received, which is why it is told apart from an online one
+  `sale_channel` enum('online','direct') NOT NULL DEFAULT 'online',
+  `entered_by_dealer` int(10) unsigned DEFAULT NULL,
+  `entered_by_distributor` int(10) unsigned DEFAULT NULL,
   `referral_reward` decimal(10,2) NOT NULL DEFAULT 0.00,
   `referral_reward_status` enum('none','pending','sent','cancelled') NOT NULL DEFAULT 'none',
   `referral_reward_sent_at` datetime DEFAULT NULL,
@@ -195,8 +213,17 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `payment_amount` decimal(10,2) NOT NULL DEFAULT 3500.00,
   `booking_amount` decimal(10,2) NOT NULL DEFAULT 3500.00,
   `delivery_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `loan_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `gst_rate` decimal(5,2) NOT NULL DEFAULT 0.00,
   `booking_paid_at` datetime DEFAULT NULL,
   `delivery_paid_at` datetime DEFAULT NULL,
+  /* the finance team's check of the paperwork, between the two payments */
+  `docs_verified_at` datetime DEFAULT NULL,
+  `docs_verified_by` int(10) unsigned DEFAULT NULL,
+  /* the client's own answer once the documents pass: build it, or refund me */
+  `delivery_choice` enum('waiting','continue','cancel') NOT NULL DEFAULT 'waiting',
+  `delivery_choice_at` datetime DEFAULT NULL,
+  `loan_paid_at` datetime DEFAULT NULL,
   `payment_reference` varchar(120) DEFAULT NULL,
   `payment_proof_path` varchar(255) DEFAULT NULL,
   `payment_uploaded_at` datetime DEFAULT NULL,
@@ -220,23 +247,28 @@ CREATE TABLE IF NOT EXISTS `applications` (
   KEY `ix_app_referred_by` (`referred_by_id`),
   KEY `ix_app_dealer` (`dealer_id`),
   KEY `ix_app_distributor` (`distributor_id`),
+  KEY `ix_app_sale_channel` (`sale_channel`),
+  KEY `fk_app_entered_dealer` (`entered_by_dealer`),
+  KEY `fk_app_entered_distributor` (`entered_by_distributor`),
   KEY `ix_app_reward_status` (`referral_reward_status`),
   KEY `ix_app_booking_paid` (`booking_paid_at`),
   KEY `fk_app_reward_admin` (`referral_reward_by`),
   CONSTRAINT `fk_app_referrer` FOREIGN KEY (`referred_by_id`) REFERENCES `applications` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_dealer` FOREIGN KEY (`dealer_id`) REFERENCES `dealers` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_distributor` FOREIGN KEY (`distributor_id`) REFERENCES `distributors` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_app_reward_admin` FOREIGN KEY (`referral_reward_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+  CONSTRAINT `fk_app_reward_admin` FOREIGN KEY (`referral_reward_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_app_entered_dealer` FOREIGN KEY (`entered_by_dealer`) REFERENCES `dealers` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_app_entered_distributor` FOREIGN KEY (`entered_by_distributor`) REFERENCES `distributors` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- One row per transfer. Every application has two of them — the booking
--- payment and the delivery payment — and each verified one gets a receipt.
+-- One row per transfer. Every application has transfers (booking, loan,
+-- delivery) and each verified one gets a receipt.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `payments` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `application_id` int(10) unsigned NOT NULL,
-  `stage` enum('booking','delivery') NOT NULL DEFAULT 'booking',
+  `stage` enum('booking','loan','delivery') NOT NULL DEFAULT 'booking',
   `amount` decimal(10,2) NOT NULL,
   `reference` varchar(120) DEFAULT NULL,
   `proof_path` varchar(255) DEFAULT NULL,
@@ -252,6 +284,82 @@ CREATE TABLE IF NOT EXISTS `payments` (
   KEY `fk_pay_admin` (`decided_by`),
   CONSTRAINT `fk_pay_admin` FOREIGN KEY (`decided_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_pay_app` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- Commission lines per tranche per party.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `commission_lines` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `application_id` int(10) unsigned NOT NULL,
+  `party_type` enum('dealer','distributor') NOT NULL,
+  `party_id` int(10) unsigned NOT NULL,
+  `stage` enum('booking','loan','delivery') NOT NULL,
+  `paid_amount` decimal(10,2) NOT NULL,
+  `gst_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `base_amount` decimal(10,2) NOT NULL,
+  `rate` decimal(5,2) NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `earned_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_line_app_party_stage` (`application_id`,`party_type`,`party_id`,`stage`),
+  KEY `idx_commission_party` (`party_type`,`party_id`),
+  CONSTRAINT `fk_commission_application` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- Commission vouchers, voucher lines, and voucher audit events.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `commission_vouchers` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `party_type` enum('dealer','distributor') NOT NULL,
+  `party_id` int(10) unsigned NOT NULL,
+  `parent_id` int(10) unsigned DEFAULT NULL,
+  `is_bundle` tinyint(1) NOT NULL DEFAULT 0,
+  `cycle_date` date NOT NULL,
+  `status` enum('with_distributor','bundled','with_rf','with_admin','funded','paid','rejected','cancelled') NOT NULL DEFAULT 'with_distributor',
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `reject_reason` varchar(255) DEFAULT NULL,
+  `payment_reference` varchar(120) DEFAULT NULL,
+  `raised_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `decided_at` datetime DEFAULT NULL,
+  `paid_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_voucher_party` (`party_type`,`party_id`,`status`),
+  KEY `idx_voucher_parent` (`parent_id`),
+  KEY `idx_voucher_cycle` (`cycle_date`),
+  CONSTRAINT `fk_voucher_parent` FOREIGN KEY (`parent_id`) REFERENCES `commission_vouchers` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `commission_voucher_lines` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `voucher_id` int(10) unsigned NOT NULL,
+  `party_type` enum('dealer','distributor') NOT NULL DEFAULT 'dealer',
+  `party_id` int(10) unsigned NOT NULL DEFAULT 0,
+  `application_id` int(10) unsigned NOT NULL,
+  `commission_line_id` int(10) unsigned DEFAULT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_line_voucher` (`voucher_id`),
+  KEY `idx_line_application` (`application_id`),
+  KEY `idx_line_commission_line` (`commission_line_id`),
+  UNIQUE KEY `uq_line_party_app` (`application_id`,`party_type`,`party_id`),
+  CONSTRAINT `fk_line_voucher` FOREIGN KEY (`voucher_id`) REFERENCES `commission_vouchers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_line_application` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_line_commission` FOREIGN KEY (`commission_line_id`) REFERENCES `commission_lines` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `commission_voucher_events` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `voucher_id` int(10) unsigned NOT NULL,
+  `from_status` varchar(30) DEFAULT NULL,
+  `to_status` varchar(30) NOT NULL,
+  `actor` varchar(60) NOT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_event_voucher` (`voucher_id`),
+  CONSTRAINT `fk_event_voucher` FOREIGN KEY (`voucher_id`) REFERENCES `commission_vouchers` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
@@ -359,7 +467,7 @@ CREATE TABLE IF NOT EXISTS `login_attempts` (
 -- 'scheduled' is 'published' with a date in the future: the post appears on
 -- its own once publish_at passes.
 -- --------------------------------------------------------------------------
-CREATE TABLE `blog_posts` (
+CREATE TABLE IF NOT EXISTS `blog_posts` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `slug` varchar(160) NOT NULL,
   `title` varchar(200) NOT NULL,
@@ -390,15 +498,6 @@ CREATE TABLE `blog_posts` (
 -- witnesses and records each winner by hand from the Raffle screen, searching
 -- by name, reference code or mobile number. A list appears on the website once
 -- its draw's reveal_at has passed.
---
--- Several columns here are left from an earlier version that drew winners
--- automatically and tracked what each of them took. Nothing reads or writes
--- them now, and they are kept only so this file still describes a database
--- that has been running:
---
---   raffle_draws     pool_size, drawn_at, drawn_by
---   raffle_winners   prize_choice, cash_amount, payout_status, paid_at,
---                    note, shuffles
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `raffle_draws` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
@@ -441,40 +540,42 @@ CREATE TABLE IF NOT EXISTS `raffle_winners` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- One row per transfer the office makes to a dealer. Nothing here points at a
--- particular application: the amount is free-form and settles against the
--- running total, so paying for 5 of 10 delivered units leaves the other 5
--- standing without ticking individual applications off.
+-- One row per transfer the office makes to a dealer.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `dealer_payouts` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `dealer_id` int(10) unsigned NOT NULL,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
   `amount` decimal(10,2) NOT NULL,
   `note` varchar(255) DEFAULT NULL,
   `paid_by` int(10) unsigned DEFAULT NULL,
   `paid_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `ix_payout_dealer` (`dealer_id`),
+  KEY `idx_payout_voucher` (`voucher_id`),
   KEY `fk_payout_admin` (`paid_by`),
   CONSTRAINT `fk_payout_dealer` FOREIGN KEY (`dealer_id`) REFERENCES `dealers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payout_voucher` FOREIGN KEY (`voucher_id`) REFERENCES `commission_vouchers` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_payout_admin` FOREIGN KEY (`paid_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
--- Transfers made to a distributor. Same shape as dealer_payouts: free-form
--- amounts settling against a running total.
+-- Transfers made to a distributor.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `distributor_payouts` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `distributor_id` int(10) unsigned NOT NULL,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
   `amount` decimal(10,2) NOT NULL,
   `note` varchar(255) DEFAULT NULL,
   `paid_by` int(10) unsigned DEFAULT NULL,
   `paid_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `ix_dpayout_distributor` (`distributor_id`),
+  KEY `idx_dpayout_voucher` (`voucher_id`),
   KEY `fk_dpayout_admin` (`paid_by`),
   CONSTRAINT `fk_dpayout_distributor` FOREIGN KEY (`distributor_id`) REFERENCES `distributors` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_dpayout_voucher` FOREIGN KEY (`voucher_id`) REFERENCES `commission_vouchers` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_dpayout_admin` FOREIGN KEY (`paid_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -493,10 +594,18 @@ CREATE TABLE IF NOT EXISTS `settings` (
 -- Only the raffle date, cycle and winner count are editable from the admin; the
 -- prize figures below are changed here or straight in the `settings` table.
 INSERT INTO `settings` (`name`, `value`) VALUES
+  ('commission_dealer_stove',    '3000.00'),
+  ('commission_dealer_tuktuk',   '4500.00'),
+  ('commission_override_stove',  '1000.00'),
+  ('commission_override_tuktuk', '1500.00'),
+  ('commission_direct_stove',    '3000.00'),
+  ('commission_direct_tuktuk',   '4500.00'),
+  ('dealer_limit',              '10'),
+  ('stock_price_distributor_stove',  '17000.00'),
+  ('stock_price_distributor_tuktuk', '25500.00'),
+  ('stock_price_dealer_stove',       '18500.00'),
+  ('stock_price_dealer_tuktuk',      '27000.00'),
   ('referral_reward',           '500'),
-  ('dealer_rate',               '15'),
-  ('distributor_override_rate', '5'),
-  ('distributor_direct_rate',   '15'),
   ('raffle_enabled',            '1'),
   ('raffle_first_draw',         ''),
   ('raffle_cycle_days',         '90'),
@@ -507,35 +616,36 @@ INSERT INTO `settings` (`name`, `value`) VALUES
   ('raffle_cash_discount_max',  '7');
 
 -- --------------------------------------------------------------------------
--- The one account you start with.
--- Sign in with "admin" or "admin@manifold.com", password "admin12345".
+-- The two accounts you start with.
+--
+--   admin@manifold.com  password admin12345  — the office, /admin
+--   rf@manifold.com     password rf123       — the paying agent, /rf
+--
+-- Both sign in at the same door, /manifold/admin/login.php, and land in
+-- different places: `role` is what decides which. R&F sees commission vouchers
+-- and nothing else — no clients, no stock, no settings.
+--
+-- CHANGE BOTH PASSWORDS before this touches a real server. They are written in
+-- this file, and this file is in the repository.
 -- --------------------------------------------------------------------------
-INSERT INTO `admin_users` (`name`, `email`, `password_hash`) VALUES
-  ('admin', 'admin@manifold.com', '$2y$10$UoO.3dsFFzlN0PsyNNbAjOAJ0yITCnUYzPcyiBX6nQNPLk6WPPJC6');
+INSERT INTO `admin_users` (`name`, `email`, `role`, `password_hash`) VALUES
+  ('admin', 'admin@manifold.com', 'admin', '$2y$10$UoO.3dsFFzlN0PsyNNbAjOAJ0yITCnUYzPcyiBX6nQNPLk6WPPJC6'),
+  ('R&F',   'rf@manifold.com',    'rf',    '$2y$12$lZyHI3M1i5w1MIrlC/tJHOTelCSNU5vQClGBgwtHhVkpI5c8mJ4MK');
 
 -- ---------------------------------------------------------------------------
 -- Stock: what a partner has bought from the tier above them, and what is left
---
--- A distributor buys units from the office; a dealer buys them from their own
--- distributor. Both pay first and upload proof, and the tier above releases the
--- stock by approving it. `stock_orders` is that request and its decision.
---
--- `stock_ledger` is every movement of stock afterwards, one row per event, and
--- a balance is the sum of them. Storing the balance instead would mean two
--- places to keep in step, and no way to answer "where did that unit go" once
--- they disagree. Units and value move together and always at cost.
 -- ---------------------------------------------------------------------------
-CREATE TABLE `stock_orders` (
+CREATE TABLE IF NOT EXISTS `stock_orders` (
   `id`                    int(10) unsigned NOT NULL AUTO_INCREMENT,
   `buyer_type`            enum('distributor','dealer') NOT NULL,
   `buyer_id`              int(10) unsigned NOT NULL,
   -- NULL means the office sold it: a distributor buys from nobody else
   `seller_distributor_id` int(10) unsigned DEFAULT NULL,
-  `product`               enum('stove','tuktuk') NOT NULL,
-  `quantity`              int(10) unsigned NOT NULL,
+  `product`               enum('stove','tuktuk') DEFAULT NULL,
+  `quantity`              int(10) unsigned DEFAULT NULL,
   -- frozen at the moment of ordering, so a price change never rewrites a past order
-  `unit_price`            decimal(10,2) NOT NULL,
-  `total_amount`          decimal(10,2) NOT NULL,
+  `unit_price`            decimal(10,2) DEFAULT NULL,
+  `total_amount`          decimal(14,2) NOT NULL,
   `status`                enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   `reference`             varchar(120) DEFAULT NULL,
   `proof_path`            varchar(255) DEFAULT NULL,
@@ -551,14 +661,26 @@ CREATE TABLE `stock_orders` (
   CONSTRAINT `fk_stock_order_admin` FOREIGN KEY (`decided_by_admin`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `stock_ledger` (
+CREATE TABLE IF NOT EXISTS `stock_order_items` (
+  `id`         int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `order_id`   int(10) unsigned NOT NULL,
+  `product`    enum('stove','tuktuk') NOT NULL,
+  `quantity`   int(10) unsigned NOT NULL,
+  `unit_price` decimal(10,2) NOT NULL,
+  `line_total` decimal(14,2) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_item_order_product` (`order_id`,`product`),
+  CONSTRAINT `fk_item_order` FOREIGN KEY (`order_id`) REFERENCES `stock_orders` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `stock_ledger` (
   `id`             int(10) unsigned NOT NULL AUTO_INCREMENT,
   `owner_type`     enum('distributor','dealer') NOT NULL,
   `owner_id`       int(10) unsigned NOT NULL,
   `product`        enum('stove','tuktuk') NOT NULL,
   -- signed: stock in is positive, stock out negative, and the same for value
   `units`          int(11) NOT NULL,
-  `value`          decimal(12,2) NOT NULL,
+  `value`          decimal(14,2) NOT NULL,
   `reason`         enum('purchase','sale','transfer_out','adjustment') NOT NULL,
   `order_id`       int(10) unsigned DEFAULT NULL,
   `application_id` int(10) unsigned DEFAULT NULL,

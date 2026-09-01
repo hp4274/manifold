@@ -26,7 +26,7 @@ $flash = (string) ($_SESSION['blog_flash'] ?? '');
 unset($_SESSION['blog_flash']);
 
 /** Finish an action: remember what happened and start again with a clean form. */
-function blog_done(string $message, string $to = 'blog.php'): void
+function blog_done(string $message, string $to = 'blog'): void
 {
     $_SESSION['blog_flash'] = $message;
 
@@ -160,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         db()->prepare('UPDATE blog_posts SET image_path = NULL WHERE id = ?')->execute([$id]);
 
         /* back to the post being edited, not to a blank form */
-        blog_done('Picture removed.', 'blog.php?edit=' . $id);
+        blog_done('Picture removed.', 'blog?edit=' . $id);
     } elseif ($action === 'delete') {
         delete_blog_image($id);
         db()->prepare('DELETE FROM blog_posts WHERE id = ?')->execute([$id]);
@@ -231,7 +231,7 @@ require __DIR__ . '/partials/layout-top.php';
   <div class="panel__head">
     <h2><?= $editing ? 'Edit post' : 'Write a post' ?></h2>
     <?php if ($editing): ?>
-      <a class="eyebrow" href="blog.php">Cancel and start a new one</a>
+      <a class="eyebrow" href="blog">Cancel and start a new one</a>
     <?php endif; ?>
   </div>
 
@@ -372,7 +372,7 @@ require __DIR__ . '/partials/layout-top.php';
               </td>
               <td>
                 <div class="blog-actions">
-                  <a class="btn btn--ghost btn--sm" href="blog.php?edit=<?= (int) $post['id'] ?>">Edit</a>
+                  <a class="btn btn--ghost btn--sm" href="blog?edit=<?= (int) $post['id'] ?>">Edit</a>
 
                   <?php if ($state !== 'published'): ?>
                     <form method="post">

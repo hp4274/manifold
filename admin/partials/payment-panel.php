@@ -39,6 +39,45 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
     <span style="width:<?= (int) $payTotals['percent'] ?>%"></span>
   </div>
 
+  <?php /* Between the two payments: the finance team's check of the paperwork.
+           Until it is done the delivery payment stays shut, which is what the
+           applicant sees in their portal too. */ ?>
+  <?php $docsDone = !empty($srcRow['docs_verified_at']); ?>
+  <?php if ($payTotals['stages']['booking']['settled'] || $docsDone): ?>
+    <section class="pay-stage pay-stage--<?= $docsDone ? 'paid' : 'due' ?>">
+      <header class="pay-stage__head">
+        <h4 class="pay-stage__title">Finance documents</h4>
+        <span class="pay-stage__state">
+          <?php if ($docsDone): ?>
+            <i class="bi bi-patch-check" aria-hidden="true"></i>
+            verified <?= e(format_datetime((string) $srcRow['docs_verified_at'])) ?>
+          <?php else: ?>
+            <i class="bi bi-hourglass-split" aria-hidden="true"></i> waiting on finance
+          <?php endif; ?>
+        </span>
+      </header>
+
+      <?php if (!$docsDone): ?>
+        <p class="pay-stage__note">
+          The delivery payment opens for the applicant the moment this is verified, and they are
+          emailed. On a sale a partner recorded as paid in full, this is the only step left.
+        </p>
+
+        <form method="post" action="payment"
+              data-confirm="Mark the finance documents verified for <?= e(record_title($srcType, $srcRow)) ?>?">
+          <?= csrf_field() ?>
+          <input type="hidden" name="action" value="docs">
+          <input type="hidden" name="type" value="<?= e($srcType) ?>">
+          <input type="hidden" name="id" value="<?= $payId ?>">
+          <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
+          <button type="submit" class="btn btn--primary btn--sm">
+            <i class="bi bi-check-lg" aria-hidden="true"></i> Documents verified
+          </button>
+        </form>
+      <?php endif; ?>
+    </section>
+  <?php endif; ?>
+
   <?php foreach (PAYMENT_STAGES as $stageKey): ?>
     <?php $stage = $payTotals['stages'][$stageKey]; ?>
     <section class="pay-stage pay-stage--<?= e($stage['state']) ?>">
@@ -64,9 +103,13 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
 
       <?php if (!$stage['payments']): ?>
         <p class="pay-panel__note">
-          <?= $stage['state'] === 'locked'
-              ? 'Opens for the applicant once the booking payment is verified.'
-              : 'Nothing uploaded yet for this payment.' ?>
+          <?php if ($stage['state'] !== 'locked'): ?>
+            Nothing uploaded yet for this payment.
+          <?php elseif ($payTotals['stages']['booking']['settled']): ?>
+            Behind the finance check: it opens for the applicant when the documents above are verified.
+          <?php else: ?>
+            Opens for the applicant once the booking payment is verified.
+          <?php endif; ?>
         </p>
       <?php else: ?>
         <ul class="pay-list">
@@ -98,6 +141,16 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
                      href="file.php?path=<?= e(rawurlencode((string) $payment['proof_path'])) ?>&amp;dir=payments">
                     <i class="bi bi-paperclip" aria-hidden="true"></i> Proof of payment
                   </a>
+                <?php elseif (($srcRow['sale_channel'] ?? 'online') === 'direct'): ?>
+                  <?php /* A partner collected this themselves and recorded it; there
+                           never was a receipt to upload, so "proof removed" read as
+                           though something had gone missing. */ ?>
+                  <span class="pay-item__proof pay-item__proof--gone">
+                    <i class="bi bi-person-check" aria-hidden="true"></i>
+                    paid to <?= e($payment['reference'] !== null && str_starts_with((string) $payment['reference'], 'Paid to ')
+                        ? substr((string) $payment['reference'], 8)
+                        : 'the partner') ?>
+                  </span>
                 <?php else: ?>
                   <span class="pay-item__proof pay-item__proof--gone">
                     <i class="bi bi-paperclip" aria-hidden="true"></i> proof removed
@@ -132,7 +185,7 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
                     <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
                     <label class="visually-hidden" for="reason-<?= (int) $payment['id'] ?>">Reason</label>
                     <input id="reason-<?= (int) $payment['id'] ?>" name="reason" type="text" maxlength="255"
-                           placeholder="Why? (goes in the email)">
+                           required placeholder="Why? (goes in the email)">
                     <button type="submit" class="btn btn--danger"><i class="bi bi-x-lg"></i> Reject</button>
                   </form>
                 </div>
@@ -144,6 +197,55 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
 
     </section>
   <?php endforeach; ?>
+
+  <?php /* what each partner has earned on this sale so far, tranche by tranche */ ?>
+  <?php $payLines = commission_lines_for($payId); ?>
+
+  <?php if ($payLines): ?>
+    <section class="pay-stage">
+      <header class="pay-stage__head">
+        <h4 class="pay-stage__title">Commission earned on this sale</h4>
+      </header>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Who</th>
+              <th>Tranche</th>
+              <th>Paid</th>
+              <th>Earned</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($payLines as $payLine): ?>
+              <?php
+                $payWho = $payLine['party_type'] === 'dealer'
+                    ? dealer_by_id((int) $payLine['party_id'])
+                    : distributor_by_id((int) $payLine['party_id']);
+              ?>
+              <tr>
+                <td>
+                  <div class="cell-stack">
+                    <strong><?= e($payWho['full_name'] ?? 'a deleted partner') ?></strong>
+                    <?php /* a percentage only where there was one: the flat amounts
+                             that replaced the rates leave the column at zero */ ?>
+                    <span class="cell-sub"><?= e(ucfirst((string) $payLine['party_type'])) ?><?php
+                      if ((float) $payLine['rate'] > 0): ?>
+                      · <?= e(rtrim(rtrim(number_format((float) $payLine['rate'], 2, '.', ''), '0'), '.')) ?>%<?php
+                      endif; ?></span>
+                  </div>
+                </td>
+                <td><?= e(tranche_label((string) $payLine['stage'])) ?></td>
+                <td class="td-amount stock-figure"><?= e(money((float) $payLine['paid_amount'])) ?></td>
+                <td class="td-amount stock-figure"><strong><?= e(money((float) $payLine['amount'])) ?></strong></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  <?php endif; ?>
 
   <div class="pay-panel__actions">
     <?php if ($payTotals['settled']): ?>

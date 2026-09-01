@@ -174,14 +174,14 @@ ul{list-style:none;margin:0;padding:0}
   font-weight:600;
   line-height:1;
   cursor:pointer;
-  transition:transform .2s ease,box-shadow .2s ease,background .2s ease;
+  transition:transform .2s ease,filter .2s ease,background .2s ease;
 }
+/* flat: the colour carries the button, nothing floats above the page */
 .btn--primary{
   background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
   color:#fff;
-  box-shadow:0 6px 18px rgba(35,190,175,.28);
 }
-.btn--primary:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(35,190,175,.36)}
+.btn--primary:hover{transform:translateY(-1px);filter:brightness(1.06)}
 .btn--ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
 .btn--ghost:hover{background:var(--tint)}
 .btn--block{width:100%;justify-content:center}
@@ -314,6 +314,9 @@ ul{list-style:none;margin:0;padding:0}
 .tile{display:flex;flex-direction:column}
 .tile .tile__stats{margin-top:auto}
 .tile{
+  /* the figure is sized against the card, not the viewport: a rupee total is
+     three times the width of a count and used to run past the card's edge */
+  container-type:inline-size;
   padding:22px 24px;
   border:1px solid var(--line);
   border-radius:var(--radius-lg);
@@ -323,7 +326,7 @@ ul{list-style:none;margin:0;padding:0}
 .tile > .eyebrow{display:block;margin-bottom:8px}
 .tile strong{
   display:block;
-  font-size:34px;
+  font-size:clamp(24px,16.7cqi,32px);
   font-weight:700;
   line-height:1.1;
   color:var(--ink);
@@ -334,7 +337,10 @@ ul{list-style:none;margin:0;padding:0}
    cell hanging under a divider it no longer belonged to */
 .tile__stats{
   display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
+  /* Two columns while two fit. The partner dashboards put a sentence and a
+     link in here, and half of a 217px card broke "Order more" into one word
+     per line. Below that the stats take the whole card, one to a row. */
+  grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
   row-gap:10px;
 }
 .tile__stat{
@@ -356,6 +362,10 @@ ul{list-style:none;margin:0;padding:0}
 }
 /* the left column starts flush with the card, so no rule in front of it */
 .tile__stat:nth-child(odd){padding-left:0;border-left:0}
+/* one column: every stat starts a row, so none of them wants a divider */
+@container (max-width:240px){
+  .tile__stat{padding-left:0;border-left:0}
+}
 .tile__stat b{font-weight:700;color:var(--ink-soft)}
 .tile__stat--new b{color:#2273a3}
 .tile__stat--pending b{color:var(--warn)}
@@ -483,7 +493,7 @@ ul{list-style:none;margin:0;padding:0}
 }
 .reward-form input[type="text"]:disabled{background:var(--tint);color:var(--muted)}
 .btn--sm{padding:8px 14px;font-size:13px}
-.btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;filter:none}
 
 /* ---------- filters ---------- */
 .filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px}
@@ -582,7 +592,12 @@ ul{list-style:none;margin:0;padding:0}
   max-width:70ch;
 }
 
-.table-wrap{overflow-x:auto}
+/* A scrolling table is also the containing block for anything positioned
+   inside it. Without that, the screen-reader labels in its cells — which are
+   position:absolute — resolve against the page instead, land at whatever
+   x-coordinate their cell scrolled to, and stretch the document sideways.
+   That was 45px of horizontal scroll on the dealers list. */
+.table-wrap{overflow-x:auto;position:relative}
 table{width:100%;border-collapse:collapse;min-width:760px}
 th,td{
   padding:16px 24px;
@@ -617,6 +632,14 @@ td strong{color:var(--ink);font-size:var(--t-sub)}
 /* ---------- click-to-cycle column filter ---------- */
 /* Fixed layout: the columns keep their widths whatever the header label says
    and however many rows are filtered out. */
+/* A list whose columns must not move when a filter changes: the widths come
+   from its colgroup, not from whatever the rows happen to hold, and it fits
+   the panel rather than scrolling inside it. */
+.table--fixed{table-layout:fixed;width:100%}
+.table--fixed th,
+.table--fixed td{overflow-wrap:anywhere}
+.table--fixed .td-actions{white-space:nowrap;overflow:visible}
+
 .data-table{table-layout:fixed;min-width:980px}
 .data-table th,
 .data-table td{overflow-wrap:anywhere}
@@ -748,6 +771,9 @@ a.th-filter{text-decoration:none}
   padding:0;margin:-1px;
   overflow:hidden;
   clip:rect(0 0 0 0);
+  /* clip is deprecated and ignored by newer engines; this is what actually
+     hides it there, and together they cover every browser in use */
+  clip-path:inset(50%);
   white-space:nowrap;
   border:0;
 }
@@ -756,7 +782,9 @@ a.th-filter{text-decoration:none}
 tr.is-flagged td{background:rgba(75,180,83,.09)}
 
 /* ---------- row actions: accept · contact · reject · delete ---------- */
-.row-actions{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+/* Five icons in a cell sized for three is a row that runs off its own column,
+   so they wrap onto a second line rather than out of the table. */
+.row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;row-gap:6px}
 .row-actions form{display:contents}
 
 .icon-btn{
@@ -854,10 +882,15 @@ tr.is-flagged td{background:rgba(75,180,83,.09)}
 }
 .drawer__close:hover{background:#eef4f9;color:var(--ink)}
 
+/* while a record is being fetched */
+.drawer__loading{padding:40px 0;text-align:center;color:var(--muted);font-size:var(--t-ui)}
+
 .drawer__body{
   flex:1 1 auto;
   overflow-y:auto;
-  padding:6px 32px 36px;
+  /* nothing above the sticky bar: six pixels of padding there was six pixels
+     of content showing over it before it stuck */
+  padding:0 32px 36px;
 }
 /* one section at a time; each label/value pair is one grid cell so they can
    never be split across columns */
@@ -990,7 +1023,8 @@ body.has-drawer{overflow:hidden}
   .main{padding:20px 16px 44px}
   .drawer__panel{width:100vw}
   .drawer__head{padding:20px 18px}
-  .drawer__body{padding:4px 18px 28px}
+  .drawer__body{padding:0 18px 28px}
+  .detail-tabs{margin:0 -18px 4px;padding:12px 18px 10px}
   .panel__head{flex-wrap:wrap;gap:10px;padding:18px 18px}
   .filters{gap:8px}
   .filters a{padding:8px 14px;font-size:var(--t-micro)}
@@ -1054,6 +1088,80 @@ body.has-drawer{overflow:hidden}
 .pay-stage--paid .pay-stage__state{color:#26743a}
 .pay-stage--checking .pay-stage__state{color:#0b7a74}
 .pay-stage--due .pay-stage__state{color:#8a5f1c}
+/* the documents stage carries a sentence and a button rather than a list, so
+   it sets its own rhythm: the note reads at the panel's size and the button
+   under it is not pinned against the edge of the card */
+/* a field the form will not accept, said against the field itself */
+.field--error input,
+.field--error select,
+.field--error textarea{
+  border-color:rgba(201,69,92,.55);
+  background:rgba(201,69,92,.04);
+}
+.field--error input:focus,
+.field--error select:focus,
+.field--error textarea:focus{
+  border-color:#c2445c;
+  box-shadow:0 0 0 3px rgba(201,69,92,.14);
+}
+.field--error label{color:#a8324a}
+.field-consent.field--error{color:#a8324a}
+.field-consent.field--error input[type="checkbox"]{accent-color:#c2445c}
+.field-consent .field-error{flex-basis:100%;margin:2px 0 0 32px}
+
+/* the reason, in words as well as colour */
+.field-error{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin:8px 0 0;
+  font-size:var(--t-ui);
+  line-height:1.5;
+  font-weight:600;
+  color:#a8324a;
+}
+.field-error i{flex:none;margin-top:1px;font-size:15px}
+
+/* nothing on the shelf: said once, in the middle of the page, with the way out */
+.nostock{
+  max-width:46ch;
+  margin:0 auto;
+  padding:48px 24px 52px;
+  text-align:center;
+}
+.nostock__icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:56px;
+  height:56px;
+  margin-bottom:18px;
+  border-radius:18px;
+  background:rgba(201,138,43,.14);
+  color:#a8720f;
+  font-size:24px;
+}
+.nostock h2{margin:0 0 10px;font-size:var(--t-h3);color:var(--ink)}
+.nostock p{margin:0;font-size:var(--t-ui);line-height:1.65;color:var(--muted)}
+.nostock__actions{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:10px;
+  margin-top:22px;
+}
+
+/* a column with nothing to show says so, rather than sitting empty */
+.cell-none{color:var(--muted);opacity:.7}
+
+.pay-stage__note{
+  max-width:70ch;
+  margin:12px 0 0;
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--muted);
+}
+.pay-stage__note + form{margin:14px 0 16px}
 .pay-stage .pay-list{margin-top:12px}
 
 .pay-panel__head{
@@ -1092,6 +1200,13 @@ body.has-drawer{overflow:hidden}
   padding-top:18px;
   border-top:1px solid var(--line);
 }
+/* the office recording a lender's payment: a form inside a payment stage,
+   sized like the stage it sits in rather than like a page form */
+.pay-panel__loan{margin-top:12px}
+.pay-panel__loan .form-grid{gap:0 16px}
+.pay-panel__loan .field{margin-bottom:12px}
+.pay-panel__loan .field-hint{display:block;margin-bottom:12px;max-width:70ch}
+
 .pay-panel__reject{display:flex;gap:10px;flex:1 1 320px;min-width:0}
 .pay-panel__reject input{
   flex:1 1 auto;
@@ -1195,16 +1310,39 @@ body.has-drawer{overflow:hidden}
 
 
 /* a verified payment has two artefacts: our receipt, and their proof */
+/* The one thing on this row somebody has to open before deciding, so it reads
+   as a control rather than as a note beside the amount. */
 .pay-item__proof{
   display:inline-flex;
   align-items:center;
-  gap:6px;
+  gap:8px;
+  padding:7px 14px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#fff;
   font-size:var(--t-ui);
-  color:var(--muted);
+  font-weight:600;
+  color:var(--accent-deep);
   white-space:nowrap;
+  transition:border-color .2s ease,background .2s ease,color .2s ease;
 }
-a.pay-item__proof:hover{color:var(--ink-soft);text-decoration:underline}
-.pay-item__proof--gone{opacity:.6;font-style:italic}
+.pay-item__proof i{font-size:15px}
+a.pay-item__proof:hover,
+a.pay-item__proof:focus-visible{
+  border-color:var(--accent);
+  background:rgba(75,180,83,.1);
+  color:var(--ink);
+}
+
+/* nothing to open: it says so quietly, and is not a button at all */
+.pay-item__proof--gone{
+  padding:0;
+  border:0;
+  background:none;
+  font-weight:500;
+  color:var(--muted);
+  font-style:italic;
+}
 
 /* ---------- section tabs inside the drawer ---------- */
 .detail-tabs{
@@ -1214,8 +1352,13 @@ a.pay-item__proof:hover{color:var(--ink-soft);text-decoration:underline}
   display:flex;
   gap:6px;
   overflow-x:auto;
-  padding:14px 0 12px;
-  margin-bottom:4px;
+  /* Full bleed. A sticky bar only covers its own content box, so the drawer's
+     32px of side padding was left uncovered and the rows underneath scrolled
+     up through the gutters either side of it. The negative margin takes the
+     background out to the edges and the matching padding puts the tabs back
+     where they were. */
+  margin:0 -32px 4px;
+  padding:14px 32px 12px;
   background:#fff;
   border-bottom:1px solid var(--line);
   scrollbar-width:thin;
@@ -1299,14 +1442,34 @@ a.pay-item__proof:hover{color:var(--ink-soft);text-decoration:underline}
   .icon-btn__text{transition:none}
 }
 
-/* the sidebar's own scrollbar, on the rare screen too short for it */
-/* a laptop in a small window: the column tightens rather than scrolling */
-@media (max-height:760px){
-  .sidebar{padding:14px 14px;gap:10px}
-  .sidebar__brand img{height:32px}
-  .sidebar__nav a{padding:7px 12px}
-  .sidebar__nav{margin-top:4px}
-  .sidebar__user{padding:9px 12px}
+/* A laptop in a small window — and, far more often, a desktop at 125% display
+   scaling, where a 1080p screen is 864 CSS pixels tall. The column tightens
+   rather than scrolling. */
+@media (max-height:900px){
+  .sidebar{padding:12px 14px;gap:8px}
+  .sidebar__brand img{height:30px}
+  .sidebar__label{padding-bottom:2px}
+  .sidebar__nav a{padding:6px 12px}
+  .sidebar__nav{margin-top:2px}
+  .sidebar__user{padding:8px 12px}
+}
+
+/* Whatever the height, the way out stays reachable: the brand holds the top of
+   the column and the account block holds the bottom, so a screen too short for
+   twelve links scrolls the links rather than pushing Sign out off the end. */
+.sidebar__brand{
+  position:sticky;
+  top:0;
+  z-index:2;
+  padding-bottom:8px;
+  background:var(--navy-800);
+}
+.sidebar__foot{
+  position:sticky;
+  bottom:0;
+  z-index:2;
+  padding-top:10px;
+  background:var(--navy-800);
 }
 
 .sidebar{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent}
@@ -1387,9 +1550,9 @@ body.has-modal{overflow:hidden}
   font-weight:700;
   color:#fff;
   cursor:pointer;
-  transition:transform .2s ease,box-shadow .2s ease;
+  transition:transform .2s ease,filter .2s ease;
 }
-.btn-add:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(35,190,175,.32)}
+.btn-add:hover{transform:translateY(-1px);filter:brightness(1.06)}
 .btn-add i{font-size:16px;line-height:1}
 
 
@@ -1822,30 +1985,28 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
 
 /* a tick the whole line is clickable for — the label is the target, so it is
    as easy to hit on a phone as on a desk */
+/* the same tick the customer sees on the public application form: a plain
+   line of text with a box beside it, not a card - the partner is reading the
+   declaration to somebody out of the same words */
 .field-consent{
   display:flex;
+  flex-wrap:wrap;
   align-items:flex-start;
   gap:12px;
   margin-bottom:12px;
-  padding:12px 14px;
-  border:1px solid var(--line);
-  border-radius:var(--radius-sm);
-  background:#fff;
   font-size:var(--t-ui);
-  line-height:1.5;
+  font-weight:400;
+  line-height:1.55;
   color:var(--body);
   cursor:pointer;
-  transition:border-color .2s ease,background .2s ease;
 }
-.field-consent:hover{border-color:var(--accent-2);background:var(--tint)}
 .field-consent input[type="checkbox"]{
   flex:none;
-  width:18px;height:18px;
-  margin-top:1px;
-  accent-color:var(--accent-2);
+  width:20px;height:20px;
+  margin-top:2px;
+  accent-color:var(--accent);
   cursor:pointer;
 }
-.field-consent:has(input:checked){border-color:var(--accent-2);background:rgba(23,176,166,.06)}
 
 /* the terms themselves: readable, scrolled rather than endless */
 .terms-scroll{
@@ -1863,6 +2024,250 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
 .terms-scroll ul{margin:0;padding-left:18px}
 .terms-scroll li{margin-bottom:8px}
 .terms-scroll li:last-child{margin-bottom:0}
+
+/* the one decision an application is waiting on, at the top of its drawer */
+.decide-bar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  flex-wrap:wrap;
+  margin:16px 0 4px;
+  padding:16px 18px;
+  border:1px solid rgba(201,138,43,.34);
+  border-left:3px solid var(--warn);
+  border-radius:var(--radius);
+  background:rgba(201,138,43,.07);
+}
+.decide-bar__text{min-width:0;flex:1 1 260px}
+.decide-bar__title{
+  margin:0 0 3px;
+  font-size:var(--t-sub);
+  font-weight:700;
+  color:var(--ink);
+}
+.decide-bar__note{margin:0;font-size:var(--t-ui);line-height:1.5;color:var(--body);max-width:60ch}
+.decide-bar__actions{display:flex;gap:10px;flex-wrap:wrap;flex:none}
+
+@media (max-width:639px){
+  .decide-bar{padding:14px}
+  .decide-bar__actions{width:100%}
+  .decide-bar__actions form,
+  .decide-bar__actions .btn{flex:1 1 auto;justify-content:center}
+}
+
+/* ---------- asking before something irreversible ----------
+   The browser's own confirm box announces the hostname and looks like nothing
+   else here, which is the wrong frame for "delete this permanently". Same
+   question, in the product's own voice. */
+.ask{
+  position:fixed;
+  inset:0;
+  z-index:1800;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  opacity:0;
+  transition:opacity .2s ease;
+}
+.ask.is-open{opacity:1}
+.ask__backdrop{position:absolute;inset:0;background:rgba(9,26,44,.55)}
+.ask__card{
+  position:relative;
+  z-index:1;
+  width:min(440px,100%);
+  padding:28px 26px 22px;
+  border-radius:var(--radius-lg);
+  background:#fff;
+  box-shadow:0 30px 80px rgba(9,26,44,.45);
+  text-align:center;
+  transform:translateY(10px) scale(.98);
+  transition:transform .2s ease;
+}
+.ask.is-open .ask__card{transform:none}
+.ask__icon{
+  display:block;
+  margin-bottom:12px;
+  font-size:30px;
+  color:var(--warn);
+}
+.ask__text{
+  margin:0 0 22px;
+  font-size:var(--t-sub);
+  line-height:1.55;
+  color:var(--ink);
+}
+.ask__copy{
+  width:100%;
+  margin:0 0 18px;
+  padding:12px 14px;
+  font-family:inherit;
+  font-size:var(--t-ui);
+  color:var(--ink);
+  background:var(--tint);
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+  text-align:center;
+}
+.ask__actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.ask__actions .btn{min-width:130px;justify-content:center}
+/* nothing behind it scrolls while it is up */
+body.has-ask{overflow:hidden}
+
+@media (max-width:639px){
+  .ask__card{padding:24px 20px 18px}
+  .ask__actions{flex-direction:column-reverse}
+  .ask__actions .btn{width:100%}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .ask,
+  .ask__card{transition:none}
+}
+
+/* ---------- what the last action did ----------
+   Over the page rather than in it: a confirmation should not move the table
+   somebody is reading. Bottom right, above everything, and out on its own.
+
+   Three things carry the meaning, never colour alone: an icon in a tinted
+   chip, a sentence in the product's own voice, and — where the message says
+   more than one thing — a quieter second line under it. A confirmation counts
+   itself out with a bar along the bottom; hovering or focusing it stops the
+   clock, because a message that vanishes while being read is worse than one
+   that stays. */
+.toast-stack{
+  position:fixed;
+  right:22px;
+  bottom:22px;
+  z-index:1700;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  width:min(420px,calc(100vw - 44px));
+  pointer-events:none;
+}
+
+.toast{
+  --toast-tone:#1f9d55;
+  --toast-tint:rgba(75,180,83,.12);
+
+  position:relative;
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+  padding:16px 16px 17px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 1px 2px rgba(9,26,44,.06), 0 16px 40px rgba(9,26,44,.18);
+  font-size:var(--t-ui);
+  line-height:1.5;
+  color:var(--body);
+  overflow:hidden;
+  pointer-events:auto;
+  animation:toastIn .22s cubic-bezier(.22,.61,.36,1) both;
+}
+.toast--error{--toast-tone:#c2445c;--toast-tint:rgba(201,69,92,.12)}
+.toast--warn{--toast-tone:#a8720f;--toast-tint:rgba(201,138,43,.14)}
+
+/* the icon has a shape of its own, so the tone reads before the words do */
+.toast__icon{
+  flex:none;
+  width:36px;
+  height:36px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:11px;
+  background:var(--toast-tint);
+  color:var(--toast-tone);
+  font-size:17px;
+}
+
+.toast__body{flex:1 1 auto;min-width:0;padding-top:2px}
+.toast__title{
+  margin:0;
+  font-size:var(--t-ui);
+  font-weight:600;
+  line-height:1.45;
+  color:var(--ink);
+  overflow-wrap:anywhere;
+}
+.toast__detail{
+  margin:4px 0 0;
+  font-size:13px;
+  line-height:1.55;
+  color:var(--muted);
+  overflow-wrap:anywhere;
+}
+.toast__title code,
+.toast__detail code{font-size:13px}
+.toast__title a,
+.toast__detail a{color:var(--toast-tone);font-weight:600}
+
+.toast__close{
+  position:relative;
+  flex:none;
+  width:30px;
+  height:30px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin:1px -2px 0 0;
+  border:0;
+  border-radius:50%;
+  background:none;
+  color:var(--ink-soft);
+  font-size:12px;
+  cursor:pointer;
+  transition:background .2s ease,color .2s ease;
+}
+/* a small button with a comfortable target around it */
+.toast__close::after{content:"";position:absolute;inset:-8px}
+.toast__close:hover{background:var(--tint);color:var(--ink)}
+.toast__close:focus-visible{outline:2px solid var(--toast-tone);outline-offset:2px}
+
+/* how long a confirmation has left, drawn rather than guessed at */
+.toast__timer{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:3px;
+  transform-origin:left center;
+  background:var(--toast-tone);
+  opacity:.5;
+  animation:toastTimer linear both;
+}
+.toast:hover .toast__timer,
+.toast:focus-within .toast__timer{animation-play-state:paused}
+
+.toast.is-going{animation:toastOut .14s ease-in both}
+
+@keyframes toastIn{
+  from{opacity:0;transform:translateY(14px) scale(.98)}
+  to{opacity:1;transform:none}
+}
+@keyframes toastOut{
+  from{opacity:1;transform:none}
+  to{opacity:0;transform:translateY(8px) scale(.98)}
+}
+@keyframes toastTimer{
+  from{transform:scaleX(1)}
+  to{transform:scaleX(0)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .toast{animation:toastFade .2s ease both}
+  .toast.is-going{animation:toastFade .14s ease reverse both}
+  .toast__timer{display:none}
+}
+@keyframes toastFade{from{opacity:0}to{opacity:1}}
+
+@media (max-width:640px){
+  .toast-stack{right:14px;left:14px;bottom:14px;width:auto}
+}
 
 /* ---------- a commission claim ----------
    One bundle is one document: who is claiming, what it is worth, who is inside
@@ -2325,3 +2730,15 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
 }
 /* the page behind does not scroll while a file is being read */
 body.has-viewer{overflow:hidden}
+
+/* ---------- number fields ----------
+   The arrows invite a click that changes a quantity by one, and the wheel does
+   the same by accident while somebody is scrolling past. Both are removed; the
+   value is typed. */
+input[type="number"]{-moz-appearance:textfield;appearance:textfield}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* An address is case blind: the box shows it the way it is written down. */
+input[type="email"],
+input[name*="email"]{text-transform:lowercase}

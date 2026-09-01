@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TukTuk Application — Hydrogen Conversion Kit | Manifold Clean Energy</title>
+<title>TukTuk Application - Hydrogen Conversion Kit | Manifold Clean Energy</title>
 <link rel="icon" type="image/png" href="assets/images/favicon.png">
 <meta name="description" content="Apply for the Manifold hydrogen conversion kit for auto rickshaws. Complete the application to reserve a technical assessment and installation slot.">
 
@@ -12,8 +12,8 @@
 <link rel="stylesheet" href="assets/vendor/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
 
-<link rel="stylesheet" href="assets/css/style.css">
-<link rel="stylesheet" href="assets/css/datepicker.css">
+<link rel="stylesheet" href="assets/css/style.css?v=1788264413">
+<link rel="stylesheet" href="assets/css/datepicker.css?v=1786429140">
 </head>
 <body>
 
@@ -26,8 +26,8 @@
     </a>
 
     <div class="top-bar__social" aria-label="Social media links">
-      <a href="#" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
-      <a href="#" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+      <a href="https://www.facebook.com/people/Manifold-Clean-Energy/61593136808932/" target="_blank" rel="noopener" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+      <a href="https://www.instagram.com/manifoldcleanenergy" target="_blank" rel="noopener" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
       <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
       <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
     </div>
@@ -37,30 +37,30 @@
 <!-- ============ HEADER / NAVBAR ============ -->
 <header class="site-header" id="siteHeader">
   <div class="nav-wrap">
-    <a class="brand" href="index.html" aria-label="Manifold Clean Energy home">
+    <a class="brand" href="./" aria-label="Manifold Clean Energy home">
       <img class="brand-logo" src="assets/images/manifold.webp" alt="Manifold Clean Energy Pvt. Ltd.">
     </a>
 
     <nav class="main-nav" id="mainNav" aria-label="Main">
-      <a href="index.html#products">Products</a>
-      <a href="technology.html">Technology</a>
-      <a href="index.html#about">About Us</a>
+      <a href="./#products">Products</a>
+      <a href="technology">Technology</a>
+      <a href="./#about">About Us</a>
       <details class="nav-dropdown">
         <summary>Apply Now <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
         <div class="nav-dropdown__menu">
-          <a href="apply-tuktuk.html" aria-current="page">TukTuk</a>
-          <a href="stove.html">Stove</a>
+          <a href="apply-tuktuk" aria-current="page">TukTuk</a>
+          <a href="apply-stove">Stove</a>
         </div>
       </details>
-      <a href="contact.html">Contact</a>
+      <a href="contact">Contact</a>
 
       <div class="nav-actions">
         <button type="button" class="btn-pill btn-pill--ghost nav-raffle-mobile"
                 data-raffle-open>
           <i class="bi bi-ticket-perforated" aria-hidden="true"></i> Gold Raffle
         </button>
-        <a href="contact.html" class="btn-pill btn-pill--white nav-cta-mobile">Get In touch</a>
-        <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login-mobile">Login</a>
+        <a href="contact" class="btn-pill btn-pill--white nav-cta-mobile">Get In touch</a>
+        <a href="portal/" class="btn-pill btn-pill--ghost nav-login-mobile">Login</a>
       </div>
     </nav>
 
@@ -69,8 +69,8 @@
               data-raffle-open aria-label="Gold raffle" title="Gold raffle">
         <i class="bi bi-ticket-perforated" aria-hidden="true"></i>
       </button>
-      <a href="contact.html" class="btn-pill btn-pill--white nav-cta">Get In touch</a>
-      <a href="portal/index.php" class="btn-pill btn-pill--ghost nav-login">Login</a>
+      <a href="contact" class="btn-pill btn-pill--white nav-cta">Get In touch</a>
+      <a href="portal/" class="btn-pill btn-pill--ghost nav-login">Login</a>
     </div>
 
     <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mainNav">
@@ -87,9 +87,9 @@
 
   <div class="container-x page-hero__inner">
     <nav class="breadcrumb-x" aria-label="Breadcrumb">
-      <a href="index.html">Home</a>
+      <a href="./">Home</a>
       <span aria-hidden="true">/</span>
-      <a href="tuktuk.html">TukTuk Conversion Kit</a>
+      <a href="tuktuk">TukTuk Conversion Kit</a>
       <span aria-hidden="true">/</span>
       <span aria-current="page">Application</span>
     </nav>
@@ -104,7 +104,7 @@
 
     <div class="page-hero__actions">
       <a href="#application" class="btn-pill btn-pill--white">Start the application <i class="bi bi-arrow-right"></i></a>
-      <a href="tuktuk.html" class="btn-pill btn-pill--ghost">Read the product page <i class="bi bi-arrow-right"></i></a>
+      <a href="tuktuk" class="btn-pill btn-pill--ghost">Read the product page <i class="bi bi-arrow-right"></i></a>
     </div>
   </div>
 </section>
@@ -136,18 +136,191 @@
           </div>
 
           <div class="field">
-            <label for="date_of_birth">Date of birth</label>
-            <input id="date_of_birth" name="date_of_birth" type="date" data-limit="past">
+            <label for="date_of_birth">Date of birth <span class="req" aria-hidden="true">*</span></label>
+            <input id="date_of_birth" name="date_of_birth" type="date" data-limit="past" required>
           </div>
 
           <div class="field">
-            <label for="nationality">Nationality</label>
-            <input id="nationality" name="nationality" type="text">
+            <label for="nationality">Nationality <span class="req" aria-hidden="true">*</span></label>
+            <select id="nationality" name="nationality" required>
+              <option value="Indian" data-dial="91" selected>Indian</option>
+              <option value="Afghan" data-dial="93">Afghan</option>
+              <option value="Albanian" data-dial="355">Albanian</option>
+              <option value="Algerian" data-dial="213">Algerian</option>
+              <option value="American" data-dial="1">American</option>
+              <option value="Andorran" data-dial="376">Andorran</option>
+              <option value="Angolan" data-dial="244">Angolan</option>
+              <option value="Argentine" data-dial="54">Argentine</option>
+              <option value="Armenian" data-dial="374">Armenian</option>
+              <option value="Australian" data-dial="61">Australian</option>
+              <option value="Austrian" data-dial="43">Austrian</option>
+              <option value="Azerbaijani" data-dial="994">Azerbaijani</option>
+              <option value="Bahamian" data-dial="1242">Bahamian</option>
+              <option value="Bahraini" data-dial="973">Bahraini</option>
+              <option value="Bangladeshi" data-dial="880">Bangladeshi</option>
+              <option value="Barbadian" data-dial="1246">Barbadian</option>
+              <option value="Belarusian" data-dial="375">Belarusian</option>
+              <option value="Belgian" data-dial="32">Belgian</option>
+              <option value="Belizean" data-dial="501">Belizean</option>
+              <option value="Beninese" data-dial="229">Beninese</option>
+              <option value="Bhutanese" data-dial="975">Bhutanese</option>
+              <option value="Bolivian" data-dial="591">Bolivian</option>
+              <option value="Bosnian" data-dial="387">Bosnian</option>
+              <option value="Botswanan" data-dial="267">Botswanan</option>
+              <option value="Brazilian" data-dial="55">Brazilian</option>
+              <option value="Bruneian" data-dial="673">Bruneian</option>
+              <option value="Bulgarian" data-dial="359">Bulgarian</option>
+              <option value="Burkinabe" data-dial="226">Burkinabe</option>
+              <option value="Burmese" data-dial="95">Burmese</option>
+              <option value="Burundian" data-dial="257">Burundian</option>
+              <option value="Cambodian" data-dial="855">Cambodian</option>
+              <option value="Cameroonian" data-dial="237">Cameroonian</option>
+              <option value="Canadian" data-dial="1">Canadian</option>
+              <option value="Cape Verdean" data-dial="238">Cape Verdean</option>
+              <option value="Chadian" data-dial="235">Chadian</option>
+              <option value="Chilean" data-dial="56">Chilean</option>
+              <option value="Chinese" data-dial="86">Chinese</option>
+              <option value="Colombian" data-dial="57">Colombian</option>
+              <option value="Comoran" data-dial="269">Comoran</option>
+              <option value="Congolese" data-dial="242">Congolese</option>
+              <option value="Costa Rican" data-dial="506">Costa Rican</option>
+              <option value="Croatian" data-dial="385">Croatian</option>
+              <option value="Cuban" data-dial="53">Cuban</option>
+              <option value="Cypriot" data-dial="357">Cypriot</option>
+              <option value="Czech" data-dial="420">Czech</option>
+              <option value="Danish" data-dial="45">Danish</option>
+              <option value="Djiboutian" data-dial="253">Djiboutian</option>
+              <option value="Dominican" data-dial="1809">Dominican</option>
+              <option value="Dutch" data-dial="31">Dutch</option>
+              <option value="Ecuadorean" data-dial="593">Ecuadorean</option>
+              <option value="Egyptian" data-dial="20">Egyptian</option>
+              <option value="Emirati" data-dial="971">Emirati</option>
+              <option value="Eritrean" data-dial="291">Eritrean</option>
+              <option value="Estonian" data-dial="372">Estonian</option>
+              <option value="Ethiopian" data-dial="251">Ethiopian</option>
+              <option value="Fijian" data-dial="679">Fijian</option>
+              <option value="Filipino" data-dial="63">Filipino</option>
+              <option value="Finnish" data-dial="358">Finnish</option>
+              <option value="French" data-dial="33">French</option>
+              <option value="Gabonese" data-dial="241">Gabonese</option>
+              <option value="Gambian" data-dial="220">Gambian</option>
+              <option value="Georgian" data-dial="995">Georgian</option>
+              <option value="German" data-dial="49">German</option>
+              <option value="Ghanaian" data-dial="233">Ghanaian</option>
+              <option value="Greek" data-dial="30">Greek</option>
+              <option value="Guatemalan" data-dial="502">Guatemalan</option>
+              <option value="Guinean" data-dial="224">Guinean</option>
+              <option value="Guyanese" data-dial="592">Guyanese</option>
+              <option value="Haitian" data-dial="509">Haitian</option>
+              <option value="Honduran" data-dial="504">Honduran</option>
+              <option value="Hungarian" data-dial="36">Hungarian</option>
+              <option value="Icelandic" data-dial="354">Icelandic</option>
+              <option value="Indonesian" data-dial="62">Indonesian</option>
+              <option value="Iranian" data-dial="98">Iranian</option>
+              <option value="Iraqi" data-dial="964">Iraqi</option>
+              <option value="Irish" data-dial="353">Irish</option>
+              <option value="Israeli" data-dial="972">Israeli</option>
+              <option value="Italian" data-dial="39">Italian</option>
+              <option value="Ivorian" data-dial="225">Ivorian</option>
+              <option value="Jamaican" data-dial="1876">Jamaican</option>
+              <option value="Japanese" data-dial="81">Japanese</option>
+              <option value="Jordanian" data-dial="962">Jordanian</option>
+              <option value="Kazakh" data-dial="7">Kazakh</option>
+              <option value="Kenyan" data-dial="254">Kenyan</option>
+              <option value="Kuwaiti" data-dial="965">Kuwaiti</option>
+              <option value="Kyrgyz" data-dial="996">Kyrgyz</option>
+              <option value="Laotian" data-dial="856">Laotian</option>
+              <option value="Latvian" data-dial="371">Latvian</option>
+              <option value="Lebanese" data-dial="961">Lebanese</option>
+              <option value="Liberian" data-dial="231">Liberian</option>
+              <option value="Libyan" data-dial="218">Libyan</option>
+              <option value="Lithuanian" data-dial="370">Lithuanian</option>
+              <option value="Luxembourgish" data-dial="352">Luxembourgish</option>
+              <option value="Macedonian" data-dial="389">Macedonian</option>
+              <option value="Malagasy" data-dial="261">Malagasy</option>
+              <option value="Malawian" data-dial="265">Malawian</option>
+              <option value="Malaysian" data-dial="60">Malaysian</option>
+              <option value="Maldivian" data-dial="960">Maldivian</option>
+              <option value="Malian" data-dial="223">Malian</option>
+              <option value="Maltese" data-dial="356">Maltese</option>
+              <option value="Mauritanian" data-dial="222">Mauritanian</option>
+              <option value="Mauritian" data-dial="230">Mauritian</option>
+              <option value="Mexican" data-dial="52">Mexican</option>
+              <option value="Moldovan" data-dial="373">Moldovan</option>
+              <option value="Mongolian" data-dial="976">Mongolian</option>
+              <option value="Montenegrin" data-dial="382">Montenegrin</option>
+              <option value="Moroccan" data-dial="212">Moroccan</option>
+              <option value="Mozambican" data-dial="258">Mozambican</option>
+              <option value="Namibian" data-dial="264">Namibian</option>
+              <option value="Nepali" data-dial="977">Nepali</option>
+              <option value="New Zealander" data-dial="64">New Zealander</option>
+              <option value="Nicaraguan" data-dial="505">Nicaraguan</option>
+              <option value="Nigerian" data-dial="234">Nigerian</option>
+              <option value="Nigerien" data-dial="227">Nigerien</option>
+              <option value="North Korean" data-dial="850">North Korean</option>
+              <option value="Norwegian" data-dial="47">Norwegian</option>
+              <option value="Omani" data-dial="968">Omani</option>
+              <option value="Pakistani" data-dial="92">Pakistani</option>
+              <option value="Palestinian" data-dial="970">Palestinian</option>
+              <option value="Panamanian" data-dial="507">Panamanian</option>
+              <option value="Papua New Guinean" data-dial="675">Papua New Guinean</option>
+              <option value="Paraguayan" data-dial="595">Paraguayan</option>
+              <option value="Peruvian" data-dial="51">Peruvian</option>
+              <option value="Polish" data-dial="48">Polish</option>
+              <option value="Portuguese" data-dial="351">Portuguese</option>
+              <option value="Puerto Rican" data-dial="1787">Puerto Rican</option>
+              <option value="Qatari" data-dial="974">Qatari</option>
+              <option value="Romanian" data-dial="40">Romanian</option>
+              <option value="Russian" data-dial="7">Russian</option>
+              <option value="Rwandan" data-dial="250">Rwandan</option>
+              <option value="Salvadoran" data-dial="503">Salvadoran</option>
+              <option value="Samoan" data-dial="685">Samoan</option>
+              <option value="Saudi" data-dial="966">Saudi</option>
+              <option value="Senegalese" data-dial="221">Senegalese</option>
+              <option value="Serbian" data-dial="381">Serbian</option>
+              <option value="Seychellois" data-dial="248">Seychellois</option>
+              <option value="Sierra Leonean" data-dial="232">Sierra Leonean</option>
+              <option value="Singaporean" data-dial="65">Singaporean</option>
+              <option value="Slovak" data-dial="421">Slovak</option>
+              <option value="Slovenian" data-dial="386">Slovenian</option>
+              <option value="Somali" data-dial="252">Somali</option>
+              <option value="South African" data-dial="27">South African</option>
+              <option value="South Korean" data-dial="82">South Korean</option>
+              <option value="South Sudanese" data-dial="211">South Sudanese</option>
+              <option value="Spanish" data-dial="34">Spanish</option>
+              <option value="Sri Lankan" data-dial="94">Sri Lankan</option>
+              <option value="Sudanese" data-dial="249">Sudanese</option>
+              <option value="Surinamese" data-dial="597">Surinamese</option>
+              <option value="Swazi" data-dial="268">Swazi</option>
+              <option value="Swedish" data-dial="46">Swedish</option>
+              <option value="Swiss" data-dial="41">Swiss</option>
+              <option value="Syrian" data-dial="963">Syrian</option>
+              <option value="Taiwanese" data-dial="886">Taiwanese</option>
+              <option value="Tajik" data-dial="992">Tajik</option>
+              <option value="Tanzanian" data-dial="255">Tanzanian</option>
+              <option value="Thai" data-dial="66">Thai</option>
+              <option value="Togolese" data-dial="228">Togolese</option>
+              <option value="Tongan" data-dial="676">Tongan</option>
+              <option value="Trinidadian" data-dial="1868">Trinidadian</option>
+              <option value="Tunisian" data-dial="216">Tunisian</option>
+              <option value="Turkish" data-dial="90">Turkish</option>
+              <option value="Turkmen" data-dial="993">Turkmen</option>
+              <option value="Ugandan" data-dial="256">Ugandan</option>
+              <option value="Ukrainian" data-dial="380">Ukrainian</option>
+              <option value="Uruguayan" data-dial="598">Uruguayan</option>
+              <option value="Uzbek" data-dial="998">Uzbek</option>
+              <option value="Venezuelan" data-dial="58">Venezuelan</option>
+              <option value="Vietnamese" data-dial="84">Vietnamese</option>
+              <option value="Yemeni" data-dial="967">Yemeni</option>
+              <option value="Zambian" data-dial="260">Zambian</option>
+              <option value="Zimbabwean" data-dial="263">Zimbabwean</option>
+              <option value="British" data-dial="44">British</option>
+            </select>
           </div>
 
           <div class="field">
-            <label for="gender">Gender</label>
-            <select id="gender" name="gender">
+            <label for="gender">Gender <span class="req" aria-hidden="true">*</span></label>
+            <select id="gender" name="gender" required>
               <option value="" selected>Select…</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
@@ -157,23 +330,378 @@
           </div>
 
           <div class="field">
-            <label for="occupation">Occupation</label>
-            <input id="occupation" name="occupation" type="text">
+            <label for="occupation">Occupation <span class="req" aria-hidden="true">*</span></label>
+            <input id="occupation" name="occupation" type="text" required>
           </div>
 
           <div class="field">
             <label for="mobile_number">Mobile number <span class="req" aria-hidden="true">*</span></label>
-            <input id="mobile_number" name="mobile_number" type="tel" autocomplete="tel" required>
+            <div class="tel-field">
+              <select id="mobile_code" name="mobile_code" aria-label="Country code">
+                <option value="1">+1</option>
+                <option value="7">+7</option>
+                <option value="20">+20</option>
+                <option value="27">+27</option>
+                <option value="30">+30</option>
+                <option value="31">+31</option>
+                <option value="32">+32</option>
+                <option value="33">+33</option>
+                <option value="34">+34</option>
+                <option value="36">+36</option>
+                <option value="39">+39</option>
+                <option value="40">+40</option>
+                <option value="41">+41</option>
+                <option value="43">+43</option>
+                <option value="44">+44</option>
+                <option value="45">+45</option>
+                <option value="46">+46</option>
+                <option value="47">+47</option>
+                <option value="48">+48</option>
+                <option value="49">+49</option>
+                <option value="51">+51</option>
+                <option value="52">+52</option>
+                <option value="53">+53</option>
+                <option value="54">+54</option>
+                <option value="55">+55</option>
+                <option value="56">+56</option>
+                <option value="57">+57</option>
+                <option value="58">+58</option>
+                <option value="60">+60</option>
+                <option value="61">+61</option>
+                <option value="62">+62</option>
+                <option value="63">+63</option>
+                <option value="64">+64</option>
+                <option value="65">+65</option>
+                <option value="66">+66</option>
+                <option value="81">+81</option>
+                <option value="82">+82</option>
+                <option value="84">+84</option>
+                <option value="86">+86</option>
+                <option value="90">+90</option>
+                <option value="91" selected>+91</option>
+                <option value="92">+92</option>
+                <option value="93">+93</option>
+                <option value="94">+94</option>
+                <option value="95">+95</option>
+                <option value="98">+98</option>
+                <option value="211">+211</option>
+                <option value="212">+212</option>
+                <option value="213">+213</option>
+                <option value="216">+216</option>
+                <option value="218">+218</option>
+                <option value="220">+220</option>
+                <option value="221">+221</option>
+                <option value="222">+222</option>
+                <option value="223">+223</option>
+                <option value="224">+224</option>
+                <option value="225">+225</option>
+                <option value="226">+226</option>
+                <option value="227">+227</option>
+                <option value="228">+228</option>
+                <option value="229">+229</option>
+                <option value="230">+230</option>
+                <option value="231">+231</option>
+                <option value="232">+232</option>
+                <option value="233">+233</option>
+                <option value="234">+234</option>
+                <option value="235">+235</option>
+                <option value="237">+237</option>
+                <option value="238">+238</option>
+                <option value="241">+241</option>
+                <option value="242">+242</option>
+                <option value="244">+244</option>
+                <option value="248">+248</option>
+                <option value="249">+249</option>
+                <option value="250">+250</option>
+                <option value="251">+251</option>
+                <option value="252">+252</option>
+                <option value="253">+253</option>
+                <option value="254">+254</option>
+                <option value="255">+255</option>
+                <option value="256">+256</option>
+                <option value="257">+257</option>
+                <option value="258">+258</option>
+                <option value="260">+260</option>
+                <option value="261">+261</option>
+                <option value="263">+263</option>
+                <option value="264">+264</option>
+                <option value="265">+265</option>
+                <option value="267">+267</option>
+                <option value="268">+268</option>
+                <option value="269">+269</option>
+                <option value="291">+291</option>
+                <option value="351">+351</option>
+                <option value="352">+352</option>
+                <option value="353">+353</option>
+                <option value="354">+354</option>
+                <option value="355">+355</option>
+                <option value="356">+356</option>
+                <option value="357">+357</option>
+                <option value="358">+358</option>
+                <option value="359">+359</option>
+                <option value="370">+370</option>
+                <option value="371">+371</option>
+                <option value="372">+372</option>
+                <option value="373">+373</option>
+                <option value="374">+374</option>
+                <option value="375">+375</option>
+                <option value="376">+376</option>
+                <option value="380">+380</option>
+                <option value="381">+381</option>
+                <option value="382">+382</option>
+                <option value="385">+385</option>
+                <option value="386">+386</option>
+                <option value="387">+387</option>
+                <option value="389">+389</option>
+                <option value="420">+420</option>
+                <option value="421">+421</option>
+                <option value="501">+501</option>
+                <option value="502">+502</option>
+                <option value="503">+503</option>
+                <option value="504">+504</option>
+                <option value="505">+505</option>
+                <option value="506">+506</option>
+                <option value="507">+507</option>
+                <option value="509">+509</option>
+                <option value="591">+591</option>
+                <option value="592">+592</option>
+                <option value="593">+593</option>
+                <option value="595">+595</option>
+                <option value="597">+597</option>
+                <option value="598">+598</option>
+                <option value="673">+673</option>
+                <option value="675">+675</option>
+                <option value="676">+676</option>
+                <option value="679">+679</option>
+                <option value="685">+685</option>
+                <option value="850">+850</option>
+                <option value="855">+855</option>
+                <option value="856">+856</option>
+                <option value="880">+880</option>
+                <option value="886">+886</option>
+                <option value="960">+960</option>
+                <option value="961">+961</option>
+                <option value="962">+962</option>
+                <option value="963">+963</option>
+                <option value="964">+964</option>
+                <option value="965">+965</option>
+                <option value="966">+966</option>
+                <option value="967">+967</option>
+                <option value="968">+968</option>
+                <option value="970">+970</option>
+                <option value="971">+971</option>
+                <option value="972">+972</option>
+                <option value="973">+973</option>
+                <option value="974">+974</option>
+                <option value="975">+975</option>
+                <option value="976">+976</option>
+                <option value="977">+977</option>
+                <option value="992">+992</option>
+                <option value="993">+993</option>
+                <option value="994">+994</option>
+                <option value="995">+995</option>
+                <option value="996">+996</option>
+                <option value="998">+998</option>
+                <option value="1242">+1242</option>
+                <option value="1246">+1246</option>
+                <option value="1787">+1787</option>
+                <option value="1809">+1809</option>
+                <option value="1868">+1868</option>
+                <option value="1876">+1876</option>
+              </select>
+              <input id="mobile_number" name="mobile_number" type="tel" autocomplete="tel"
+                     inputmode="numeric" pattern="[0-9]{10}" maxlength="10"
+                     title="Ten digits, no spaces or country code" required>
+            </div>
+            <span class="field-hint">The code follows your nationality — change it if it should not.</span>
           </div>
 
           <div class="field">
             <label for="alt_mobile_number">Alternative mobile number</label>
-            <input id="alt_mobile_number" name="alt_mobile_number" type="tel">
+            <div class="tel-field">
+              <select id="alt_mobile_code" name="alt_mobile_code" aria-label="Country code">
+                <option value="1">+1</option>
+                <option value="7">+7</option>
+                <option value="20">+20</option>
+                <option value="27">+27</option>
+                <option value="30">+30</option>
+                <option value="31">+31</option>
+                <option value="32">+32</option>
+                <option value="33">+33</option>
+                <option value="34">+34</option>
+                <option value="36">+36</option>
+                <option value="39">+39</option>
+                <option value="40">+40</option>
+                <option value="41">+41</option>
+                <option value="43">+43</option>
+                <option value="44">+44</option>
+                <option value="45">+45</option>
+                <option value="46">+46</option>
+                <option value="47">+47</option>
+                <option value="48">+48</option>
+                <option value="49">+49</option>
+                <option value="51">+51</option>
+                <option value="52">+52</option>
+                <option value="53">+53</option>
+                <option value="54">+54</option>
+                <option value="55">+55</option>
+                <option value="56">+56</option>
+                <option value="57">+57</option>
+                <option value="58">+58</option>
+                <option value="60">+60</option>
+                <option value="61">+61</option>
+                <option value="62">+62</option>
+                <option value="63">+63</option>
+                <option value="64">+64</option>
+                <option value="65">+65</option>
+                <option value="66">+66</option>
+                <option value="81">+81</option>
+                <option value="82">+82</option>
+                <option value="84">+84</option>
+                <option value="86">+86</option>
+                <option value="90">+90</option>
+                <option value="91" selected>+91</option>
+                <option value="92">+92</option>
+                <option value="93">+93</option>
+                <option value="94">+94</option>
+                <option value="95">+95</option>
+                <option value="98">+98</option>
+                <option value="211">+211</option>
+                <option value="212">+212</option>
+                <option value="213">+213</option>
+                <option value="216">+216</option>
+                <option value="218">+218</option>
+                <option value="220">+220</option>
+                <option value="221">+221</option>
+                <option value="222">+222</option>
+                <option value="223">+223</option>
+                <option value="224">+224</option>
+                <option value="225">+225</option>
+                <option value="226">+226</option>
+                <option value="227">+227</option>
+                <option value="228">+228</option>
+                <option value="229">+229</option>
+                <option value="230">+230</option>
+                <option value="231">+231</option>
+                <option value="232">+232</option>
+                <option value="233">+233</option>
+                <option value="234">+234</option>
+                <option value="235">+235</option>
+                <option value="237">+237</option>
+                <option value="238">+238</option>
+                <option value="241">+241</option>
+                <option value="242">+242</option>
+                <option value="244">+244</option>
+                <option value="248">+248</option>
+                <option value="249">+249</option>
+                <option value="250">+250</option>
+                <option value="251">+251</option>
+                <option value="252">+252</option>
+                <option value="253">+253</option>
+                <option value="254">+254</option>
+                <option value="255">+255</option>
+                <option value="256">+256</option>
+                <option value="257">+257</option>
+                <option value="258">+258</option>
+                <option value="260">+260</option>
+                <option value="261">+261</option>
+                <option value="263">+263</option>
+                <option value="264">+264</option>
+                <option value="265">+265</option>
+                <option value="267">+267</option>
+                <option value="268">+268</option>
+                <option value="269">+269</option>
+                <option value="291">+291</option>
+                <option value="351">+351</option>
+                <option value="352">+352</option>
+                <option value="353">+353</option>
+                <option value="354">+354</option>
+                <option value="355">+355</option>
+                <option value="356">+356</option>
+                <option value="357">+357</option>
+                <option value="358">+358</option>
+                <option value="359">+359</option>
+                <option value="370">+370</option>
+                <option value="371">+371</option>
+                <option value="372">+372</option>
+                <option value="373">+373</option>
+                <option value="374">+374</option>
+                <option value="375">+375</option>
+                <option value="376">+376</option>
+                <option value="380">+380</option>
+                <option value="381">+381</option>
+                <option value="382">+382</option>
+                <option value="385">+385</option>
+                <option value="386">+386</option>
+                <option value="387">+387</option>
+                <option value="389">+389</option>
+                <option value="420">+420</option>
+                <option value="421">+421</option>
+                <option value="501">+501</option>
+                <option value="502">+502</option>
+                <option value="503">+503</option>
+                <option value="504">+504</option>
+                <option value="505">+505</option>
+                <option value="506">+506</option>
+                <option value="507">+507</option>
+                <option value="509">+509</option>
+                <option value="591">+591</option>
+                <option value="592">+592</option>
+                <option value="593">+593</option>
+                <option value="595">+595</option>
+                <option value="597">+597</option>
+                <option value="598">+598</option>
+                <option value="673">+673</option>
+                <option value="675">+675</option>
+                <option value="676">+676</option>
+                <option value="679">+679</option>
+                <option value="685">+685</option>
+                <option value="850">+850</option>
+                <option value="855">+855</option>
+                <option value="856">+856</option>
+                <option value="880">+880</option>
+                <option value="886">+886</option>
+                <option value="960">+960</option>
+                <option value="961">+961</option>
+                <option value="962">+962</option>
+                <option value="963">+963</option>
+                <option value="964">+964</option>
+                <option value="965">+965</option>
+                <option value="966">+966</option>
+                <option value="967">+967</option>
+                <option value="968">+968</option>
+                <option value="970">+970</option>
+                <option value="971">+971</option>
+                <option value="972">+972</option>
+                <option value="973">+973</option>
+                <option value="974">+974</option>
+                <option value="975">+975</option>
+                <option value="976">+976</option>
+                <option value="977">+977</option>
+                <option value="992">+992</option>
+                <option value="993">+993</option>
+                <option value="994">+994</option>
+                <option value="995">+995</option>
+                <option value="996">+996</option>
+                <option value="998">+998</option>
+                <option value="1242">+1242</option>
+                <option value="1246">+1246</option>
+                <option value="1787">+1787</option>
+                <option value="1809">+1809</option>
+                <option value="1868">+1868</option>
+                <option value="1876">+1876</option>
+              </select>
+              <input id="alt_mobile_number" name="alt_mobile_number" type="tel"
+                     inputmode="numeric" pattern="[0-9]{10}" maxlength="10"
+                     title="Ten digits, no spaces or country code">
+            </div>
           </div>
 
           <div class="field">
             <label for="email">Email <span class="req" aria-hidden="true">*</span></label>
-            <input id="email" name="email" type="email" autocomplete="email" required>
+            <input id="email" name="email" type="email" autocomplete="email" maxlength="190"
+                   pattern="[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}"
+                   title="Something like name@example.com" required>
           </div>
         </div>
       </section>
@@ -187,32 +715,34 @@
 
         <div class="field-grid">
           <div class="field">
-            <label for="id_number">National ID / Passport number</label>
-            <input id="id_number" name="id_number" type="text">
+            <label for="id_number">National ID / Passport number <span class="req" aria-hidden="true">*</span></label>
+            <input id="id_number" name="id_number" type="text" maxlength="20"
+                   pattern="[A-Za-z0-9\-\/]{4,20}"
+                   title="The number as printed, letters and digits only" required>
           </div>
 
           <div class="field">
-            <label for="id_document_file">Upload copy of ID</label>
+            <label for="id_document_file">Upload copy of ID <span class="req" aria-hidden="true">*</span></label>
             <label class="upload" for="id_document_file">
               <i class="bi bi-upload" aria-hidden="true"></i>
               <span class="upload__name" data-file-label>Choose file…</span>
-              <input id="id_document_file" name="id_document_file" type="file" accept="image/*,application/pdf">
+              <input id="id_document_file" name="id_document_file" type="file" accept="image/*,application/pdf" required>
             </label>
             <span class="field-hint">JPG, PNG or PDF, max 10 MB</span>
           </div>
 
           <div class="field">
-            <label for="residence_proof_file">Residence proof / Auto RC</label>
+            <label for="residence_proof_file">Residence proof / Auto RC <span class="req" aria-hidden="true">*</span></label>
             <label class="upload" for="residence_proof_file">
               <i class="bi bi-upload" aria-hidden="true"></i>
               <span class="upload__name" data-file-label>Choose file…</span>
-              <input id="residence_proof_file" name="residence_proof_file" type="file" accept="image/*,application/pdf">
+              <input id="residence_proof_file" name="residence_proof_file" type="file" accept="image/*,application/pdf" required>
             </label>
             <span class="field-hint">Utility bill, tenancy contract or vehicle registration</span>
           </div>
         </div>
 
-        <p class="form-info">Uploads are optional but speed up verification. Files are stored securely and are only visible to our review team.</p>
+        <p class="form-info">Both uploads are required. Files are stored securely and are only visible to our review team.</p>
       </section>
 
       <!-- 3. Residential address -->
@@ -224,33 +754,35 @@
 
         <div class="field-grid">
           <div class="field">
-            <label for="house_number">House / Villa / Apartment number</label>
-            <input id="house_number" name="house_number" type="text">
+            <label for="house_number">House / Villa / Apartment number <span class="req" aria-hidden="true">*</span></label>
+            <input id="house_number" name="house_number" type="text" required>
           </div>
 
           <div class="field">
-            <label for="street">Street name</label>
-            <input id="street" name="street" type="text">
+            <label for="street">Street name <span class="req" aria-hidden="true">*</span></label>
+            <input id="street" name="street" type="text" required>
           </div>
 
           <div class="field">
-            <label for="city">City</label>
-            <input id="city" name="city" type="text" autocomplete="address-level2">
+            <label for="city">City <span class="req" aria-hidden="true">*</span></label>
+            <input id="city" name="city" type="text" autocomplete="address-level2" required>
           </div>
 
           <div class="field">
-            <label for="state">State</label>
-            <input id="state" name="state" type="text" autocomplete="address-level1">
+            <label for="state">State <span class="req" aria-hidden="true">*</span></label>
+            <input id="state" name="state" type="text" autocomplete="address-level1" required>
           </div>
 
           <div class="field">
-            <label for="country">Country</label>
-            <input id="country" name="country" type="text" autocomplete="country-name">
+            <label for="country">Country <span class="req" aria-hidden="true">*</span></label>
+            <input id="country" name="country" type="text" autocomplete="country-name" required>
           </div>
 
           <div class="field">
-            <label for="pin_code">Pin code</label>
-            <input id="pin_code" name="pin_code" type="text" autocomplete="postal-code">
+            <label for="pin_code">Pin code <span class="req" aria-hidden="true">*</span></label>
+            <input id="pin_code" name="pin_code" type="text" autocomplete="postal-code"
+                   inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                   title="Six digits" required>
           </div>
         </div>
       </section>
@@ -294,7 +826,8 @@
 
           <div class="field">
             <label for="household_members">Number of household members</label>
-            <input id="household_members" name="household_members" type="number" min="0">
+            <input id="household_members" name="household_members" type="number"
+                   min="0" max="99" step="1" inputmode="numeric">
           </div>
 
           <div class="field">
@@ -328,7 +861,8 @@
         <div class="field-grid">
           <div class="field">
             <label for="units_required">Number of conversion kits required</label>
-            <input id="units_required" name="units_required" type="number" min="1">
+            <input id="units_required" name="units_required" type="number"
+                   min="1" max="99" step="1" inputmode="numeric">
           </div>
 
           <div class="field">
@@ -348,7 +882,9 @@
 
           <div class="field">
             <label for="preferred_install_date">Preferred installation date</label>
-            <input id="preferred_install_date" name="preferred_install_date" type="date" data-limit="future">
+            <input id="preferred_install_date" name="preferred_install_date" type="date"
+                   data-limit="future" min="2027-01-01"
+                   title="Choose a date on or after 1 January 2027.">
           </div>
         </div>
       </section>
@@ -569,14 +1105,14 @@
             <li>The applicant authorises the Company to conduct verification, technical assessment and site inspection where required.</li>
             <li>Any false or misleading information may result in immediate rejection of the application.</li>
             <li>Installation timelines are estimates and may vary depending on location, product availability and regulatory approvals.</li>
-            <li>Any application processing fee paid is non-refundable unless otherwise stated in writing by the Company.</li>
+            <li>If the financing application is rejected, any amount already paid towards the order is refunded in full.</li>
             <li>Product specifications, performance figures and operating requirements are subject to change without prior notice.</li>
             <li>The Company shall not be liable for delays caused by force majeure, government restrictions, utility interruptions or circumstances beyond its control.</li>
             <li>The applicant consents to the collection and processing of personal information for application review, installation, customer support and warranty administration.</li>
             <li>Financing approvals, where applicable, remain subject to the independent review of the financing institution.</li>
             <li>Warranty terms shall be governed by the official Warranty Certificate supplied with the kit upon installation.</li>
           </ul>
-          <p><strong>Processing fee:</strong> A non-refundable application processing fee may apply. It covers administrative review, technical assessment, verification and site inspection. Payment of the processing fee does not guarantee approval, allocation, financing or installation.</p>
+          <p><strong>Processing fee:</strong> An application processing fee may apply. It covers administrative review, technical assessment, verification and site inspection. Payment of it does not guarantee approval, allocation, financing or installation — and if the financing application is rejected, any amount already paid is refunded in full.</p>
         </div>
 
         <label class="field-consent" for="terms_accepted">
@@ -651,7 +1187,7 @@
 
     <div class="footer-top">
       <div class="footer-intro">
-        <a class="footer-brand" href="index.html" aria-label="Manifold Clean Energy home">
+        <a class="footer-brand" href="./" aria-label="Manifold Clean Energy home">
           <img src="assets/images/manifold.webp" alt="Manifold Clean Energy Pvt. Ltd.">
         </a>
         <p class="footer-blurb">Manifold Clean Energy builds hydrogen-powered products for everyday life — clean cooking and zero-emission mobility, made in India.</p>
@@ -669,9 +1205,9 @@
         </form>
 
         <div class="footer-social" aria-label="Social media links">
-          <a href="#" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+          <a href="https://www.instagram.com/manifoldcleanenergy" target="_blank" rel="noopener" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
           <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
-          <a href="#" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+          <a href="https://www.facebook.com/people/Manifold-Clean-Energy/61593136808932/" target="_blank" rel="noopener" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
           <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
           <a href="#" aria-label="X"><i class="bi bi-twitter-x"></i></a>
           <a href="#" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>
@@ -684,65 +1220,65 @@
       <div class="footer-col">
         <h4>Company</h4>
         <ul class="footer-links">
-          <li><a href="index.html#about">About Manifold</a></li>
-          <li><a href="coming-soon.html">Our Team</a></li>
-          <li><a href="coming-soon.html">Milestones</a></li>
-          <li><a href="coming-soon.html">Partners</a></li>
-          <li><a href="contact.html">Contact Us</a></li>
+          <li><a href="./#about">About Manifold</a></li>
+          <li><a href="coming-soon">Our Team</a></li>
+          <li><a href="coming-soon">Milestones</a></li>
+          <li><a href="coming-soon">Partners</a></li>
+          <li><a href="contact">Contact Us</a></li>
         </ul>
       </div>
 
       <div class="footer-col">
         <h4>Products</h4>
         <ul class="footer-links">
-          <li><a href="stove.html">Kinetic Hydrogen Stove</a></li>
-          <li><a href="tuktuk.html">TukTuk Conversion Kit</a></li>
-          <li><a href="apply-tuktuk.html">Apply: TukTuk Kit</a></li>
-          <li><a href="index.html#products">Spares &amp; Accessories</a></li>
-          <li><a href="index.html#products">All Products</a></li>
+          <li><a href="stove">Kinetic Hydrogen Stove</a></li>
+          <li><a href="tuktuk">TukTuk Conversion Kit</a></li>
+          <li><a href="apply-tuktuk">Apply: TukTuk Kit</a></li>
+          <li><a href="./#products">Spares &amp; Accessories</a></li>
+          <li><a href="./#products">All Products</a></li>
         </ul>
       </div>
 
       <div class="footer-col">
         <h4>Technology</h4>
         <ul class="footer-links">
-          <li><a href="technology.html">How It Works</a></li>
-          <li><a href="technology.html#numbers">On-demand Generation</a></li>
-          <li><a href="technology.html#safety">Safety by Design</a></li>
-          <li><a href="tuktuk.html#specifications">Specifications</a></li>
-          <li><a href="index.html#technology">Research &amp; Development</a></li>
+          <li><a href="technology">How It Works</a></li>
+          <li><a href="technology#numbers">On-demand Generation</a></li>
+          <li><a href="technology#safety">Safety by Design</a></li>
+          <li><a href="tuktuk#specifications">Specifications</a></li>
+          <li><a href="./#technology">Research &amp; Development</a></li>
         </ul>
       </div>
 
       <div class="footer-col">
         <h4>Applications</h4>
         <ul class="footer-links">
-          <li><a href="index.html#applications">Clean Cooking</a></li>
-          <li><a href="index.html#applications">Zero Emission Mobility</a></li>
-          <li><a href="index.html#applications">Commercial Kitchens</a></li>
-          <li><a href="index.html#applications">Industrial Heat</a></li>
+          <li><a href="./#applications">Clean Cooking</a></li>
+          <li><a href="./#applications">Zero Emission Mobility</a></li>
+          <li><a href="./#applications">Commercial Kitchens</a></li>
+          <li><a href="./#applications">Industrial Heat</a></li>
         </ul>
       </div>
 
       <div class="footer-col">
         <h4>Resources</h4>
         <ul class="footer-links">
-          <li><a href="blog.html">Blog</a></li>
-          <li><a href="coming-soon.html">Newsroom</a></li>
-          <li><a href="coming-soon.html">Case Studies</a></li>
-          <li><a href="coming-soon.html">Downloads</a></li>
-          <li><a href="coming-soon.html">FAQs</a></li>
+          <li><a href="blog">Blog</a></li>
+          <li><a href="coming-soon">Newsroom</a></li>
+          <li><a href="coming-soon">Case Studies</a></li>
+          <li><a href="coming-soon">Downloads</a></li>
+          <li><a href="coming-soon">FAQs</a></li>
         </ul>
       </div>
 
       <div class="footer-col">
         <h4>Support</h4>
         <ul class="footer-links">
-          <li><a href="contact.html">Contact Support</a></li>
-          <li><a href="coming-soon.html">Service Centres</a></li>
-          <li><a href="coming-soon.html">Warranty</a></li>
-          <li><a href="coming-soon.html">Report an Issue</a></li>
-          <li><a href="coming-soon.html">Sitemap</a></li>
+          <li><a href="contact">Contact Support</a></li>
+          <li><a href="coming-soon">Service Centres</a></li>
+          <li><a href="coming-soon">Warranty</a></li>
+          <li><a href="coming-soon">Report an Issue</a></li>
+          <li><a href="coming-soon">Sitemap</a></li>
         </ul>
       </div>
 
@@ -752,13 +1288,13 @@
       <p class="footer-legal">&copy; 2026 Manifold Clean Energy Pvt. Ltd. All rights reserved.</p>
 
       <nav class="footer-policy" aria-label="Legal">
-        <a href="privacy-policy.html#privacy-policy">Privacy Policy</a>
-        <a href="privacy-policy.html#terms-of-service">Terms of Service</a>
-        <a href="privacy-policy.html#website-terms">Website Terms</a>
-        <a href="privacy-policy.html#refund-policy">Refund Policy</a>
-        <a href="privacy-policy.html#data-deletion">Data Deletion</a>
-        <a href="privacy-policy.html#disclosure-policy">Disclosure Policy</a>
-        <a href="privacy-policy.html#cookies">Cookies</a>
+        <a href="privacy-policy#privacy-policy">Privacy Policy</a>
+        <a href="privacy-policy#terms-of-service">Terms of Service</a>
+        <a href="privacy-policy#website-terms">Website Terms</a>
+        <a href="privacy-policy#refund-policy">Refund Policy</a>
+        <a href="privacy-policy#data-deletion">Data Deletion</a>
+        <a href="privacy-policy#disclosure-policy">Disclosure Policy</a>
+        <a href="privacy-policy#cookies">Cookies</a>
       </nav>
 
 
@@ -775,8 +1311,8 @@
 </footer>
 
 <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/js/datepicker.js"></script>
-<script src="assets/js/main.js"></script>
-<script src="assets/js/apply.js"></script>
+<script src="assets/js/datepicker.js?v=1788247424"></script>
+<script src="assets/js/main.js?v=1788265946"></script>
+<script src="assets/js/apply.js?v=1788262418"></script>
 </body>
 </html>

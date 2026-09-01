@@ -28,7 +28,7 @@ function stock_done(string $message): void
 {
     $_SESSION['stock_flash'] = $message;
 
-    header('Location: stock.php');
+    header('Location: stock');
     exit;
 }
 
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $orderId = (int) ($_POST['order_id'] ?? 0);
     $order   = stock_order($orderId);
 
-    if (!$order) {
+    if (!$order && in_array($action, ['approve', 'reject'], true)) {
         $error = 'That order no longer exists.';
     } elseif ($action === 'approve') {
         $error = stock_order_approve($orderId, (int) $user['id']);
@@ -56,39 +56,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($error === '') {
             stock_done('Order turned down. No stock has moved.');
-        }
-    } elseif ($action === 'adjust') {
-        /* The office correcting a count — a unit written off, or one that was
-           never delivered. Recorded as its own reason so it never looks like a
-           sale in the history. */
-        $distId  = (int) ($_POST['distributor_id'] ?? 0);
-        $product = (string) ($_POST['product'] ?? '');
-        $units   = (int) ($_POST['units'] ?? 0);
-        $dist    = distributor_by_id($distId);
-
-        if (!$dist) {
-            $error = 'Pick a distributor to adjust.';
-        } elseif (!in_array($product, ['stove', 'tuktuk'], true)) {
-            $error = 'Pick which product to adjust.';
-        } elseif ($units === 0) {
-            $error = 'Enter how many units to add or take away — a negative number takes them away.';
-        } else {
-            $cost = stock_unit_cost('distributor', $distId, $product);
-
-            stock_move(
-                'distributor',
-                $distId,
-                $product,
-                $units,
-                round($cost * $units, 2),
-                'adjustment',
-                null,
-                null,
-                mb_substr(trim((string) ($_POST['note'] ?? '')), 0, 255) ?: null
-            );
-
-            stock_done($dist['full_name'] . ' adjusted by ' . ($units > 0 ? '+' : '') . $units . ' '
-                . product_label($product) . '.');
         }
     } else {
         $error = 'Unknown action.';
@@ -146,14 +113,14 @@ require __DIR__ . '/partials/layout-top.php';
   </span>
   <span class="tile">
     <span class="eyebrow">Value of that stock</span>
-    <strong><?= e(money($outValue)) ?></strong>
+    <strong><?= e(money_short($outValue)) ?></strong>
     <span class="tile__stats">
       <span class="tile__stat">at what they paid for it</span>
     </span>
   </span>
   <span class="tile">
     <span class="eyebrow">Taken in for stock</span>
-    <strong><?= e(money($takenValue)) ?></strong>
+    <strong><?= e(money_short($takenValue)) ?></strong>
     <span class="tile__stats">
       <span class="tile__stat">across every order released</span>
     </span>
@@ -325,67 +292,6 @@ require __DIR__ . '/partials/layout-top.php';
     </table>
   </div>
 
-</div>
-
-<?php /* Its own panel, not a form tacked onto the table above: correcting a
-         count is a different job from reading one, and run together they read
-         as though the form belonged to the row somebody was looking at. */ ?>
-<div class="panel">
-  <div class="panel__head">
-    <div class="panel__head-text">
-      <h2>Correct a count</h2>
-      <span class="eyebrow">For a unit written off, or one that never arrived</span>
-    </div>
-  </div>
-
-  <form method="post" class="panel__body">
-    <?= csrf_field() ?>
-    <input type="hidden" name="action" value="adjust">
-
-    <div class="form-grid">
-      <div class="field">
-        <label for="adjust_distributor">
-          Whose count<span class="field__req" aria-hidden="true">*</span>
-        </label>
-        <?php /* an empty placeholder rather than a zero: the browser stops the
-                 submit instead of the server answering "pick a distributor" */ ?>
-        <select id="adjust_distributor" name="distributor_id" required>
-          <option value="" selected disabled>Pick a distributor</option>
-          <?php foreach ($holders as $holder): ?>
-            <option value="<?= (int) $holder['id'] ?>">
-              <?= e($holder['full_name']) ?> · <?= e($holder['distributor_code']) ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-
-      <div class="field">
-        <label for="adjust_product">Product</label>
-        <select id="adjust_product" name="product">
-          <option value="stove">Stove</option>
-          <option value="tuktuk">TukTuk kit</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label for="adjust_units">
-          Units<span class="field__req" aria-hidden="true">*</span>
-        </label>
-        <input id="adjust_units" name="units" type="number" step="1" value="0" required>
-        <span class="field-hint">A negative number takes them away.</span>
-      </div>
-
-      <div class="field">
-        <label for="adjust_note">Why</label>
-        <input id="adjust_note" name="note" type="text" maxlength="255" placeholder="Damaged in transit">
-        <span class="field-hint">Shows in their history. Worth writing.</span>
-      </div>
-    </div>
-
-    <div class="direct-sale__foot">
-      <button type="submit" class="btn btn--ghost">Adjust the count</button>
-    </div>
-  </form>
 </div>
 
 <?php require __DIR__ . '/partials/layout-bottom.php'; ?>

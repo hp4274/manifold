@@ -86,9 +86,16 @@ const ADMIN_NOTIFY_EMAIL = 'info@manifoldcleanenergy.co.in';
 
 /**
  * Absolute base URL of the site, used for links inside emails.
- * Leave blank to have it worked out from the current request.
+ *
+ * This has to be set. Left blank it is worked out from the request, and the
+ * Friday voucher run has no request — from the command line every link in a
+ * commission email came out as http://localhost. and went nowhere. A blank
+ * value also leaves the address in a live email at the mercy of whatever Host
+ * header the request arrived with.
+ *
+ * Change this to the real address when the site is deployed.
  */
-const PUBLIC_BASE_URL = '';
+const PUBLIC_BASE_URL = 'http://localhost/manifold';
 
 /**
  * The public site, and the mark the emails show at the top.
@@ -156,17 +163,21 @@ function payment_plan(string $product): array
 const REFERRAL_REWARD_DEFAULT = 500;
 
 /**
- * Commission, as whole percentages of what a sale is worth.
+ * Commission, in rupees per sale, per product.
  *
- *   a dealer sells        dealer 15%, their distributor 5%
- *   a distributor sells   distributor 15%, no dealer involved
+ *   a dealer sells        the dealer's figure, and the override to their distributor
+ *   a distributor sells   the direct figure, and no dealer is involved
  *
- * Starting values only — the live figures live in the `settings` table and are
- * edited from Settings. Nothing is earned until the sale is complete.
+ * A flat amount, not a share: a stove and a kit are different sales and pay
+ * different money. Starting values only — the live figures live in the
+ * `settings` table and are edited from Settings, by the office or by R&F.
+ * The whole amount is earned when the delivery payment is verified.
  */
-const DEALER_RATE_DEFAULT                = 15;
-const DISTRIBUTOR_OVERRIDE_RATE_DEFAULT  = 5;
-const DISTRIBUTOR_DIRECT_RATE_DEFAULT    = 15;
+const COMMISSION_DEFAULTS = [
+    'dealer'   => ['stove' => 3000, 'tuktuk' => 4500],
+    'override' => ['stove' => 1000, 'tuktuk' => 1500],
+    'direct'   => ['stove' => 3000, 'tuktuk' => 4500],
+];
 
 /**
  * How many dealers one distributor may hold, counting the ones still waiting
@@ -174,11 +185,37 @@ const DISTRIBUTOR_DIRECT_RATE_DEFAULT    = 15;
  * in the `settings` table and is edited from Settings.
  */
 const DEALER_LIMIT_DEFAULT = 10;
+/**
+ * The earliest day an installation can be booked for.
+ *
+ * The first units are built for 2027, so a date before this is a promise
+ * nobody can keep. The forms carry it as a `min`; the server keeps the same
+ * rule for a request that never went through one.
+ */
+/** The dial code a number is stored with when the form did not say. */
+const DEFAULT_DIAL_CODE = '91';
+
+const INSTALL_FROM = '2027-01-01';
+
 const PAYMENT_CURRENCY = '₹';
 
 function money(float $amount): string
 {
     return PAYMENT_CURRENCY . number_format($amount, 2);
+}
+
+/**
+ * The same amount for a headline figure, where the paise are noise: a whole
+ * number of rupees loses its ".00" so a crore still fits inside its card.
+ * Anything with paise keeps them — a total is never rounded away.
+ */
+function money_short(float $amount): string
+{
+    if (abs($amount - round($amount)) < 0.005) {
+        return PAYMENT_CURRENCY . number_format($amount, 0);
+    }
+
+    return money($amount);
 }
 
 /** Where payment proofs are stored. */

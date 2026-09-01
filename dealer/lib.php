@@ -26,8 +26,10 @@ function dealer_user(): ?array
 
     $dealer = dealer_by_id($id);
 
-    /* switched off while they were signed in: the session stops meaning anything */
-    if (!$dealer || !$dealer['is_active']) {
+    /* Switched off — or turned down, or still waiting — while they were signed
+       in: the session stops meaning anything. A dealer without the office's yes
+       has no code, so there is nothing for this panel to show them. */
+    if (!$dealer || !$dealer['is_active'] || $dealer['approval_status'] !== 'approved') {
         unset($_SESSION['dealer_id']);
 
         return null;
@@ -43,7 +45,7 @@ function require_dealer(): array
 
     if (!$dealer) {
         /* one sign-in for everybody: the address decides the role */
-        header('Location: ../portal/index.php');
+        header('Location: ../portal/');
         exit;
     }
 

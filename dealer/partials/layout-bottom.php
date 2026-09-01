@@ -2,7 +2,7 @@
 
 </div>
 
-<script src="../admin/assets/admin.js"></script>
+<script src="../admin/<?= asset_url('assets/admin.js') ?>"></script>
 
 </body>
 </html>

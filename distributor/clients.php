@@ -184,7 +184,7 @@ require __DIR__ . '/partials/layout-top.php';
       $pagerTotal = $paging['total'];
       $pagerFrom  = $paging['from'];
       $pagerTo    = $paging['to'];
-      $pagerBase  = 'clients.php';
+      $pagerBase  = 'clients';
       require __DIR__ . '/../admin/partials/pager.php';
     ?>
   <?php endif; ?>

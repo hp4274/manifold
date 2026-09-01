@@ -41,7 +41,8 @@ $sv = $saleValues ?? [];
 
       <div class="field">
         <label for="sale_mobile">Mobile<span class="field__req" aria-hidden="true">*</span></label>
-        <input id="sale_mobile" name="mobile_number" type="text" maxlength="30" required
+        <input id="sale_mobile" name="mobile_number" type="tel" inputmode="numeric"
+               pattern="[0-9]{10}" maxlength="10" title="Ten digits, no spaces or country code" required
                value="<?= e($sv['mobile_number'] ?? '') ?>">
       </div>
     </div>
@@ -67,7 +68,8 @@ $sv = $saleValues ?? [];
 
       <div class="field">
         <label for="sale_units">Units</label>
-        <input id="sale_units" name="units_required" type="number" min="1" step="1"
+        <input id="sale_units" name="units_required" type="number" min="1" max="99" step="1"
+               inputmode="numeric"
                value="<?= (int) ($sv['units_required'] ?? 1) ?>">
       </div>
     </div>
@@ -98,7 +100,8 @@ $sv = $saleValues ?? [];
 
       <div class="field">
         <label for="sale_pin">Pin code</label>
-        <input id="sale_pin" name="pin_code" type="text" maxlength="20" value="<?= e($sv['pin_code'] ?? '') ?>">
+        <input id="sale_pin" name="pin_code" type="text" inputmode="numeric" pattern="[0-9]{6}"
+               maxlength="6" title="Six digits" value="<?= e($sv['pin_code'] ?? '') ?>">
       </div>
 
       <div class="field field--wide">
@@ -185,7 +188,7 @@ $sv = $saleValues ?? [];
         <li>The applicant authorises the Company to carry out verification, technical assessment and site inspection where required.</li>
         <li>False or misleading information may result in immediate rejection.</li>
         <li>Installation timelines are estimates and vary with location, product availability and regulatory approvals.</li>
-        <li>Any processing fee paid is non-refundable unless stated otherwise in writing by the Company.</li>
+        <li>If the financing application is rejected, any amount already paid towards the order is refunded in full.</li>
         <li>Specifications, performance figures and operating requirements may change without prior notice.</li>
         <li>The Company is not liable for delays caused by force majeure, government restrictions, utility interruptions or circumstances beyond its control.</li>
         <li>The applicant consents to their personal information being processed for application review, installation, support and warranty administration.</li>

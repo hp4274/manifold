@@ -194,7 +194,21 @@
   var siteRoot = rootLink ? rootLink.getAttribute('href').split('assets/vendor/')[0] : '';
 
   /* which page this is, used by the apply-form prefill and the promo popup */
-  var page = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  /* Addresses carry no file name — /stove, not /stove.html — and the home page
+     is the site root itself. A bare folder is only the home page when it IS the
+     root: /manifold/ is home, /manifold/portal/ is the sign-in and must never be
+     mistaken for it, or the welcome popup lands on top of the form. */
+  var page = (window.location.pathname.split('/').pop() || '')
+    .toLowerCase()
+    .replace(/\.(html|php)$/, '');
+
+  if (page === '') {
+    /* siteRoot is what a page has to prepend to reach the site root: '' on a
+       page that already sits there, '../' inside /portal, /dealer, /rf. So an
+       address ending in a slash is the home page only when that prefix is
+       empty. */
+    page = siteRoot === '' ? 'index' : 'folder';
+  }
 
   /* asked for once and shared — the header menu and the promo popup both
      need to know who is signed in */
@@ -225,11 +239,11 @@
             '</button>' +
             '<div class="nav-account__menu" id="' + menuId + '" hidden>' +
               '<p class="nav-account__who"><strong></strong><span></span></p>' +
-              '<a href="' + siteRoot + 'portal/status.php"><i class="bi bi-clipboard-check" aria-hidden="true"></i> View status</a>' +
+              '<a href="' + siteRoot + 'portal/status"><i class="bi bi-clipboard-check" aria-hidden="true"></i> View status</a>' +
               (session.canRefer
-                ? '<a href="' + siteRoot + 'portal/status.php#referral"><i class="bi bi-people" aria-hidden="true"></i> Refer someone</a>'
+                ? '<a href="' + siteRoot + 'portal/status#referral"><i class="bi bi-people" aria-hidden="true"></i> Refer someone</a>'
                 : '') +
-              '<a class="nav-account__out" href="' + siteRoot + 'portal/logout.php"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out</a>' +
+              '<a class="nav-account__out" href="' + siteRoot + 'portal/logout"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out</a>' +
             '</div>';
 
           /* names go in as text, never as markup */
@@ -283,7 +297,7 @@
     };
 
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(value).then(done, function () { window.prompt('Copy this:', value); });
+      navigator.clipboard.writeText(value).then(done, function () { copyFallback(value); });
       return;
     }
 
@@ -295,7 +309,7 @@
     document.body.appendChild(scratch);
     scratch.select();
 
-    try { document.execCommand('copy'); done(); } catch (err) { window.prompt('Copy this:', value); }
+    try { document.execCommand('copy'); done(); } catch (err) { copyFallback(value); }
 
     scratch.remove();
   });
@@ -341,43 +355,68 @@
     var root = vendorLink ? vendorLink.getAttribute('href').split('assets/vendor/')[0] : '';
 
     var bar = document.createElement('aside');
-    bar.className = 'cookie-bar';
+    bar.className = 'consent-bar';
     bar.setAttribute('role', 'region');
     bar.setAttribute('aria-label', 'Cookie notice');
     bar.innerHTML =
-      '<div class="container-x cookie-bar__inner">' +
-        '<p class="cookie-bar__text">' +
-          '<svg class="cookie-bar__icon" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true">' +
+      '<div class="container-x consent-bar__inner">' +
+        '<p class="consent-bar__text">' +
+          '<svg class="consent-bar__icon" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true">' +
             '<path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-75 29-147t81-128.5q52-56.5 125-91T475-881q21 0 43 2t45 7q-9 45 6 85t45 66.5q30 26.5 71.5 36.5t85.5-5q-26 59 7.5 113t99.5 56q1 11 1.5 20.5t.5 20.5q0 82-31.5 154.5t-85.5 127q-54 54.5-127 86T480-80Zm-60-480q25 0 42.5-17.5T480-620q0-25-17.5-42.5T420-680q-25 0-42.5 17.5T360-620q0 25 17.5 42.5T420-560Zm-80 200q25 0 42.5-17.5T400-420q0-25-17.5-42.5T340-480q-25 0-42.5 17.5T280-420q0 25 17.5 42.5T340-360Zm260 40q17 0 28.5-11.5T640-360q0-17-11.5-28.5T600-400q-17 0-28.5 11.5T560-360q0 17 11.5 28.5T600-320ZM480-160q122 0 216.5-84T800-458q-50-22-78.5-60T683-603q-77-11-132-66t-68-132q-80-2-140.5 29t-101 79.5Q201-644 180.5-587T160-480q0 133 93.5 226.5T480-160Z"/>' +
           '</svg>' +
           'We use cookies to keep the site working and to understand how it is used. ' +
-          'Read the <a href="' + root + 'privacy-policy.html">privacy policy</a> for the detail.' +
+          'Read the <a href="' + root + 'privacy-policy">privacy policy</a> for the detail.' +
         '</p>' +
-        '<div class="cookie-bar__actions">' +
-          '<button type="button" class="cookie-btn cookie-btn--decline" data-consent="declined">Decline</button>' +
-          '<button type="button" class="cookie-btn cookie-btn--accept" data-consent="accepted">Accept</button>' +
+        '<div class="consent-bar__actions">' +
+          '<button type="button" class="consent-btn consent-btn--decline" data-consent="declined">Decline</button>' +
+          '<button type="button" class="consent-btn consent-btn--accept" data-consent="accepted">Accept</button>' +
         '</div>' +
       '</div>';
 
     var scrim = document.createElement('div');
-    scrim.className = 'cookie-scrim';
+    scrim.className = 'consent-scrim';
 
     document.body.appendChild(scrim);
     document.body.appendChild(bar);
-    document.body.classList.add('has-cookie-bar', 'is-cookie-gated');
-    document.documentElement.style.setProperty('--cookie-h', bar.offsetHeight + 'px');
+    document.body.classList.add('has-consent-bar', 'is-consent-gated');
+    document.documentElement.style.setProperty('--consent-h', bar.offsetHeight + 'px');
     requestAnimationFrame(function () {
       bar.classList.add('is-visible');
       scrim.classList.add('is-visible');
     });
 
+    /* A browser shield or an extension can hide the bar without telling us —
+       and a hidden question in front of a scrim nobody can dismiss is a site
+       that does not work. If the bar has no box a moment after it went in, the
+       gate opens: nothing is stored, nothing is assumed, and the visitor gets
+       the site. They are asked again next time. */
+    setTimeout(function () {
+      if (!bar.isConnected) return;
+
+      var box     = bar.getBoundingClientRect();
+      var style   = window.getComputedStyle(bar);
+      var visible = box.height > 0 && box.width > 0
+        && style.display !== 'none' && style.visibility !== 'hidden';
+
+      if (visible) return;
+
+      scrim.remove();
+      bar.remove();
+      document.body.classList.remove('has-consent-bar', 'is-consent-gated');
+      document.removeEventListener('keydown', trapFocus);
+
+      /* whatever was waiting on an answer goes ahead — the welcome popup would
+         otherwise never appear on a browser that hides the bar */
+      consentWaiting.splice(0).forEach(function (waiting) { waiting(); });
+    }, 600);
+
     /* the choice is the only thing on the page that can be reached */
-    bar.querySelector('.cookie-btn--accept').focus();
+    bar.querySelector('.consent-btn--accept').focus();
 
     function trapFocus(e) {
       if (e.key !== 'Tab' || !bar.isConnected) return;
 
-      var buttons = bar.querySelectorAll('.cookie-btn, .cookie-bar__text a');
+      var buttons = bar.querySelectorAll('.consent-btn, .consent-bar__text a');
       var first = buttons[0];
       var last = buttons[buttons.length - 1];
 
@@ -397,7 +436,7 @@
 
     window.addEventListener('resize', function () {
       if (bar.isConnected) {
-        document.documentElement.style.setProperty('--cookie-h', bar.offsetHeight + 'px');
+        document.documentElement.style.setProperty('--consent-h', bar.offsetHeight + 'px');
       }
     });
 
@@ -408,7 +447,7 @@
       storeConsent(button.dataset.consent);
       bar.classList.remove('is-visible');
       scrim.classList.remove('is-visible');
-      document.body.classList.remove('has-cookie-bar', 'is-cookie-gated');
+      document.body.classList.remove('has-consent-bar', 'is-consent-gated');
       document.removeEventListener('keydown', trapFocus);
 
       setTimeout(function () {
@@ -481,8 +520,47 @@
   }
 
   /* ---------- Welcome popup ----------
-     A short introduction to the company and the two products, shown on every
-     visit to the home page. Anything with data-promo-open reopens it. */
+     A short introduction to the company and the two products, shown on arriving
+     at the home page. Anything with data-promo-open reopens it.
+
+     Closing it is an answer, and asking the same question again on the next
+     page load is not listening. So a dismissal buys five minutes of quiet: long
+     enough to read the site without being interrupted again, short enough that
+     somebody coming back later still meets the introduction.
+
+     Only the automatic opening is silenced. A footer link asking for it is a
+     request, and a request is always honoured. */
+  var PROMO_QUIET_MS = 5 * 60 * 1000;
+  var PROMO_KEY      = 'manifold:promo-closed-at';
+
+  /* Storage throws outright in some privacy modes rather than returning null,
+     so every touch of it is wrapped: a browser that refuses to remember simply
+     sees the popup each time, which is the behaviour we had before. */
+  function promoIsQuiet() {
+    try {
+      var closedAt = parseInt(window.localStorage.getItem(PROMO_KEY), 10);
+
+      if (isNaN(closedAt)) return false;
+
+      /* A stamp in the future means a clock that moved or a value somebody
+         edited. Left alone the subtraction goes negative and the popup is
+         silenced for good, so anything but a sane elapsed time reopens it. */
+      var since = Date.now() - closedAt;
+
+      return since >= 0 && since < PROMO_QUIET_MS;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function rememberPromoClosed() {
+    try {
+      window.localStorage.setItem(PROMO_KEY, String(Date.now()));
+    } catch (err) {
+      /* nothing to do: it opens next time, as it always did */
+    }
+  }
+
   function openPromo() {
     if (document.querySelector('.promo')) return;
 
@@ -514,7 +592,7 @@
           '</li>' +
         '</ul>' +
         '<div class="promo__actions">' +
-          '<a class="btn-pill btn-pill--accent" href="' + (page === 'index.html' ? '#products' : siteRoot + 'index.html#products') + '">' +
+          '<a class="btn-pill btn-pill--accent" href="' + (page === 'index' ? '#products' : siteRoot + '#products') + '">' +
             'See our products <i class="bi bi-arrow-right"></i></a>' +
         '</div>' +
       '</div>';
@@ -522,6 +600,8 @@
     var opener = document.activeElement;
 
     function closePromo() {
+      rememberPromoClosed();
+
       promo.classList.remove('is-open');
       setTimeout(function () { promo.remove(); }, 300);
       if (opener && opener.focus) opener.focus();
@@ -554,9 +634,12 @@
     openPromo();
   });
 
-  if (page === 'index.html') {
-    /* never on top of the cookie gate — it waits its turn */
-    afterConsent(openPromo);
+  if (page === 'index') {
+    /* never on top of the cookie gate — it waits its turn, and then only if it
+       was not closed in the last five minutes */
+    afterConsent(function () {
+      if (!promoIsQuiet()) openPromo();
+    });
   }
 
   /* ---------- Blog ----------
@@ -566,7 +649,7 @@
   var blogGrid = document.getElementById('blogGrid');
 
   /* the home page is a taste of four; the blog page is the whole thing */
-  var blogIsTeaser = page !== 'blog.html';
+  var blogIsTeaser = page !== 'blog';
 
   if (blogGrid) {
     fetch(siteRoot + 'blog.php?limit=' + (blogIsTeaser ? 4 : 12))
@@ -624,7 +707,7 @@
           var more = document.createElement('div');
           more.className = 'blog-more';
           more.innerHTML =
-            '<a class="blog-more__link" href="' + siteRoot + 'blog.html">' +
+            '<a class="blog-more__link" href="' + siteRoot + 'blog">' +
               'View more <i class="bi bi-arrow-right" aria-hidden="true"></i></a>';
 
           blogGrid.parentNode.appendChild(more);
@@ -987,7 +1070,7 @@
       }
 
       /* how many are in the hat, and the way in for anybody who is not */
-      var applyHref = page === 'index.html' ? '#products' : siteRoot + 'index.html#products';
+      var applyHref = page === 'index' ? '#products' : siteRoot + '#products';
 
       foot.innerHTML = '<p class="raffle__pool"></p>' +
         '<a class="btn-pill btn-pill--accent" href="' + applyHref + '">Apply and be entered ' +
@@ -1016,6 +1099,121 @@
 
     openRaffle();
   });
+
+  /* ---------- FAQ ----------
+     One answer at a time, and the change of height is animated rather than
+     snapped. The picture beside the list is as tall as the list, so an instant
+     jump made it flash on every click; growing the box over 260ms takes the
+     image with it.
+
+     `<details>` cannot be transitioned on its own — the browser shows or hides
+     the content in one frame — so the height is animated here and the element
+     is only closed once the animation has finished. */
+  var faqMotion = !window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function faqHeight(item) {
+    return item.getBoundingClientRect().height;
+  }
+
+  function faqAnimate(item, from, to, done) {
+    if (!faqMotion || !item.animate || from === to) {
+      if (done) done();
+      return;
+    }
+
+    /* the box is fixed at each end of the run, so nothing reflows underneath */
+    var run = item.animate(
+      [{ height: from + 'px' }, { height: to + 'px' }],
+      { duration: 260, easing: 'cubic-bezier(.22,.61,.36,1)' }
+    );
+
+    run.onfinish = run.oncancel = function () {
+      if (done) done();
+    };
+  }
+
+  function faqClose(item) {
+    if (!item.open || item.dataset.folding === '1') return;
+
+    var from = faqHeight(item);
+
+    item.dataset.folding = '1';
+    item.classList.add('is-folding');
+    item.open = false;                       /* measure where it lands */
+    var to = faqHeight(item);
+    item.open = true;                        /* and put it back to run there */
+
+    faqAnimate(item, from, to, function () {
+      item.open = false;
+      item.classList.remove('is-folding');
+      delete item.dataset.folding;
+    });
+  }
+
+  function faqOpen(item) {
+    var from = faqHeight(item);
+
+    item.open = true;
+
+    faqAnimate(item, from, faqHeight(item));
+  }
+
+  document.addEventListener('click', function (e) {
+    var summary = e.target.closest ? e.target.closest('.faq-item > summary') : null;
+
+    if (!summary) return;
+
+    var item = summary.parentElement;
+
+    /* the browser would toggle it in one frame; this does it over a quarter of
+       a second instead */
+    e.preventDefault();
+
+    if (item.open) {
+      faqClose(item);
+
+      return;
+    }
+
+    /* only within the same list — two FAQ blocks on a page stay independent */
+    var scope = item.closest('.faq-grid') || document;
+
+    Array.prototype.forEach.call(scope.querySelectorAll('details.faq-item[open]'), function (other) {
+      if (other !== item) faqClose(other);
+    });
+
+    faqOpen(item);
+  });
+
+  /* Enter and Space on a focused question reach `toggle`, not the click above.
+     Whatever opened it, everything else in the list closes. */
+  document.addEventListener('toggle', function (e) {
+    var item = e.target;
+
+    if (!item.matches || !item.matches('details.faq-item') || !item.open) return;
+
+    /* faqClose() opens the box again for a moment to measure where it lands,
+       and that fires this. An answer on its way out is not a new answer. */
+    if (item.dataset.folding === '1') return;
+
+    var scope = item.closest('.faq-grid') || document;
+
+    Array.prototype.forEach.call(scope.querySelectorAll('details.faq-item[open]'), function (other) {
+      if (other !== item) faqClose(other);
+    });
+  }, true);
+
+  /* ---------- number fields ----------
+     A wheel over a focused number field changes it, so scrolling past a form
+     quietly edits a quantity somebody already set. The page scrolls instead. */
+  document.addEventListener('wheel', function (e) {
+    var field = e.target;
+
+    if (!field.matches || !field.matches('input[type="number"]')) return;
+    if (document.activeElement !== field) return;
+
+    field.blur();
+  }, { passive: true });
 
   /* ---------- Active nav link ---------- */
   var sections = document.querySelectorAll('main section[id]');
@@ -1164,4 +1362,193 @@
   }
 
   Array.prototype.forEach.call(document.querySelectorAll('form'), lockUntilAccepted);
+
+  /* One place raises a popup, and anything on the site may use it — the apply
+     form does, instead of the browser's alert box. Kept on `window` because
+     apply.js is a separate file that loads alongside this one. */
+  /* When the browser will not take it, put it where it can be copied by hand
+     rather than in a prompt box that says the hostname first. */
+  function copyFallback(value) {
+    raiseToast('Your browser would not copy that automatically: ' + value, 'warn');
+  }
+
+  function raiseToast(message, kind) {
+    var stack = document.querySelector('.toast-stack');
+
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.className = 'toast-stack';
+      stack.setAttribute('aria-live', 'polite');
+      document.body.appendChild(stack);
+    }
+
+    var toast = document.createElement('div');
+    toast.className = 'toast toast--' + (kind || 'ok');
+    toast.setAttribute('role', kind === 'ok' ? 'status' : 'alert');
+
+    var icon = document.createElement('i');
+    icon.className = 'bi ' + (kind === 'ok' ? 'bi-check-circle' : 'bi-exclamation-circle');
+    icon.setAttribute('aria-hidden', 'true');
+
+    var body = document.createElement('div');
+    body.className = 'toast__body';
+    body.textContent = message;
+
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast__close';
+    close.setAttribute('aria-label', 'Dismiss');
+    close.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+
+    var go = function () {
+      if (toast.dataset.going) return;
+
+      toast.dataset.going = '1';
+      toast.classList.add('is-going');
+      setTimeout(function () { toast.remove(); }, 260);
+    };
+
+    close.addEventListener('click', go);
+
+    toast.appendChild(icon);
+    toast.appendChild(body);
+    toast.appendChild(close);
+    stack.appendChild(toast);
+
+    if (kind === 'ok') setTimeout(go, 5000);
+  }
+
+  window.manifoldToast = raiseToast;
+
+  /* ---------- what the last action did ----------
+     The portal answers an upload or a sign-in with a line at the top of the
+     page. That is news about what just happened, not part of the page, so it
+     is lifted out and shown as a popup in the corner instead.
+
+     Only the page-level ones. A message that belongs to an application — the
+     reason a receipt was turned down, or why an order is not going ahead — is
+     part of that card and stays in it, which is what the .portal-app /
+     .portal-card test below decides.
+
+     Without this script every one of them renders where it always did. */
+  var flashes = Array.prototype.filter.call(
+    document.querySelectorAll('.portal-alert'),
+    function (alert) {
+      return !alert.closest('.portal-app') && !alert.closest('.portal-card');
+    }
+  );
+
+  if (flashes.length) {
+    var stack = document.createElement('div');
+    stack.className = 'toast-stack';
+    stack.setAttribute('aria-live', 'polite');
+    document.body.appendChild(stack);
+
+    var dismissToast = function (toast) {
+      if (toast.dataset.going) return;
+
+      toast.dataset.going = '1';
+      toast.classList.add('is-going');
+      setTimeout(function () { toast.remove(); }, 260);
+    };
+
+    flashes.forEach(function (alert) {
+      var isError = alert.classList.contains('portal-alert--error');
+      var isWarn  = alert.classList.contains('portal-alert--warn');
+      var kind    = isError ? 'error' : (isWarn ? 'warn' : 'ok');
+
+      var toast = document.createElement('div');
+      toast.className = 'toast toast--' + kind;
+      toast.setAttribute('role', isError ? 'alert' : 'status');
+
+      var icon = document.createElement('i');
+      icon.className = 'bi ' + (kind === 'ok' ? 'bi-check-circle' : 'bi-exclamation-circle');
+      icon.setAttribute('aria-hidden', 'true');
+
+      var body = document.createElement('div');
+      body.className = 'toast__body';
+      body.innerHTML = alert.innerHTML;
+
+      var close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'toast__close';
+      close.setAttribute('aria-label', 'Dismiss');
+      close.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+      close.addEventListener('click', function () { dismissToast(toast); });
+
+      toast.appendChild(icon);
+      toast.appendChild(body);
+      toast.appendChild(close);
+      stack.appendChild(toast);
+
+      alert.remove();
+
+      /* a confirmation goes on its own; anything gone wrong waits to be read */
+      if (kind === 'ok') {
+        setTimeout(function () { dismissToast(toast); }, 5000);
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+
+      Array.prototype.forEach.call(stack.querySelectorAll('.toast'), dismissToast);
+    });
+  }
+
+  /* ---------- an email box takes no spaces ----------
+     The space key does nothing in an email field, so there is never a space to
+     take back out. Paste is cleaned on arrival, since that is the other way
+     whitespace gets in. */
+  function isEmailBox(el) {
+    if (!el || el.tagName !== 'INPUT') return false;
+
+    return el.type === 'email' || /email/i.test((el.getAttribute('name') || '') + ' ' + (el.id || ''));
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === ' ' && isEmailBox(e.target)) e.preventDefault();
+  });
+
+  document.addEventListener('input', function (e) {
+    if (!isEmailBox(e.target)) return;
+
+    var clean = e.target.value.replace(/\s+/g, '');
+    if (clean !== e.target.value) e.target.value = clean;
+  });
+
+  /* The box reads lower case as it is typed (CSS), and the value itself is put
+     into lower case on the way out of the field - doing it on every keystroke
+     would drag the caret to the end of an input[type=email], which cannot be
+     put back. */
+  document.addEventListener('change', function (e) {
+    if (!isEmailBox(e.target)) return;
+
+    e.target.value = e.target.value.toLowerCase();
+  });
+
+  /* ---------- a mobile box takes digits ----------
+     A letter in a phone number is never meant, so the key does nothing rather
+     than being typed and then complained about. Paste is cleaned on arrival. */
+  function isPhoneBox(el) {
+    if (!el || el.tagName !== 'INPUT') return false;
+
+    return el.type === 'tel'
+      || /mobile|phone/i.test((el.getAttribute('name') || '') + ' ' + (el.id || ''));
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (!isPhoneBox(e.target)) return;
+    /* shortcuts, arrows, backspace and tab all report more than one character */
+    if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+
+    if (!/[0-9]/.test(e.key)) e.preventDefault();
+  });
+
+  document.addEventListener('input', function (e) {
+    if (!isPhoneBox(e.target)) return;
+
+    var digitsOnly = e.target.value.replace(/[^0-9]/g, '');
+    if (digitsOnly !== e.target.value) e.target.value = digitsOnly;
+  });
 })();

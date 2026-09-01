@@ -13,7 +13,11 @@ $srcDistId  = (int) $srcDist['id'];
 $srcDealers = $srcDist['dealers'] ?? distributor_dealers($srcDistId);
 $srcTotals  = $srcDist['totals'] ?? distributor_totals($srcDistId);
 $srcClients = distributor_clients($srcDistId);
+$srcClientAll = partner_client_count('distributor', $srcDistId);
 $srcPays    = distributor_payouts($srcDistId);
+$srcStock   = stock_balance('distributor', $srcDistId);
+$srcMoves   = stock_history('distributor', $srcDistId);
+$srcOrders  = stock_orders_for('distributor', $srcDistId);
 $srcWaiting = array_values(array_filter(
     $srcDealers,
     static fn (array $d): bool => $d['approval_status'] === 'pending'
@@ -31,10 +35,13 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
         <?= count($srcWaiting) ?> new</span><?php endif; ?>
     </button>
     <button type="button" class="detail-tab" data-tab="2" role="tab" aria-selected="false">
-      Clients <span class="detail-tab__count"><?= count($srcClients) ?></span>
+      Clients <span class="detail-tab__count"><?= (int) $srcClientAll ?></span>
     </button>
     <button type="button" class="detail-tab" data-tab="3" role="tab" aria-selected="false">
       Payouts <span class="detail-tab__count"><?= count($srcPays) ?></span>
+    </button>
+    <button type="button" class="detail-tab" data-tab="4" role="tab" aria-selected="false">
+      Stock <span class="detail-tab__count"><?= (int) $srcStock['units'] ?></span>
     </button>
   </nav>
 
@@ -64,9 +71,15 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
             <dd><strong><?= e(money($srcTotals['remaining'])) ?></strong></dd>
           </div>
         </dl>
+        <span class="field-hint">
+          Commission is paid against a voucher, not from here: they bundle their own claim with their
+          dealers' approved ones, R&amp;F presents it and pays it once the office funds it. What lands
+          that way is listed under Payouts.
+        </span>
+
         <div class="drawer-actions">
-          <button type="button" class="btn btn--primary btn--sm" data-tab-go="3">Record a payout</button>
-          <a class="btn btn--ghost btn--sm" href="distributors.php?edit=<?= $srcDistId ?>">Edit distributor</a>
+          <a class="btn btn--ghost btn--sm" href="vouchers">Open the claims</a>
+          <a class="btn btn--ghost btn--sm" href="distributors?edit=<?= $srcDistId ?>">Edit distributor</a>
         </div>
       </div>
 
@@ -135,7 +148,15 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
                         <span class="cell-sub"><?= e($srcDealer['email'] ?: 'no email') ?></span>
                       </div>
                     </td>
-                    <td><span class="drawer__code"><?= e($srcDealer['dealer_code']) ?></span></td>
+                    <td>
+                      <?php if ($srcDealer['dealer_code']): ?>
+                        <span class="drawer__code"><?= e((string) $srcDealer['dealer_code']) ?></span>
+                      <?php elseif ($srcDealer['approval_status'] === 'pending'): ?>
+                        <span class="cell-sub">on approval</span>
+                      <?php else: ?>
+                        <span class="cell-none">-</span>
+                      <?php endif; ?>
+                    </td>
                     <td>
                       <?php if ($srcDealer['approval_status'] !== 'approved'): ?>
                         <?php /* their code books nothing until the office decides */ ?>
@@ -151,32 +172,62 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
                     </td>
                     <td class="td-amount"><?= e(money($srcDealerTotals['remaining'])) ?></td>
                     <td class="td-actions">
-                      <?php if ($srcDealer['approval_status'] === 'pending'): ?>
-                        <div class="row-actions">
+                      <div class="row-actions">
+                        <?php if ($srcDealer['approval_status'] === 'pending'): ?>
+                          <?php /* icons, so the decision and Details sit on one
+                                   line rather than wrapping under each other */ ?>
                           <form method="post">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="approve_dealer">
                             <input type="hidden" name="id" value="<?= $srcDistId ?>">
                             <input type="hidden" name="dealer_id" value="<?= (int) $srcDealer['id'] ?>">
-                            <button type="submit" class="btn btn--primary btn--sm">Approve</button>
+                            <button type="submit" class="icon-btn is-accept"
+                                    title="Approve <?= e($srcDealer['full_name']) ?>">
+                              <i class="bi bi-check-lg" aria-hidden="true"></i>
+                              <span class="visually-hidden">Approve <?= e($srcDealer['full_name']) ?></span>
+                            </button>
                           </form>
                           <form method="post"
-                                data-confirm="Turn down <?= e($srcDealer['full_name']) ?>? Their code stays dead.">
+                                data-confirm="Turn down <?= e($srcDealer['full_name']) ?>? No code is issued.">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="reject_dealer">
                             <input type="hidden" name="id" value="<?= $srcDistId ?>">
                             <input type="hidden" name="dealer_id" value="<?= (int) $srcDealer['id'] ?>">
-                            <button type="submit" class="btn btn--ghost btn--sm">Turn down</button>
+                            <button type="submit" class="icon-btn is-reject"
+                                    title="Turn down <?= e($srcDealer['full_name']) ?>">
+                              <i class="bi bi-x-lg" aria-hidden="true"></i>
+                              <span class="visually-hidden">Turn down <?= e($srcDealer['full_name']) ?></span>
+                            </button>
                           </form>
-                        </div>
-                      <?php else: ?>
-                        <?php /* no unassigning: a dealer answers to a distributor
-                                 always, so moving them is a change of distributor
-                                 under Dealers, not a removal of one */ ?>
-                        <a class="btn btn--ghost btn--sm" href="dealers.php?edit=<?= (int) $srcDealer['id'] ?>">
-                          Move
-                        </a>
-                      <?php endif; ?>
+                        <?php else: ?>
+                          <?php /* no unassigning: a dealer answers to a distributor
+                                   always, so moving them is a change of distributor
+                                   under Dealers, not a removal of one */ ?>
+                          <a class="btn btn--ghost btn--sm" href="dealers?edit=<?= (int) $srcDealer['id'] ?>">
+                            Move
+                          </a>
+                        <?php endif; ?>
+
+                        <?php /* The same drawer the Dealers page opens, from here:
+                                 the office should not have to go and find them in
+                                 another list to read their details. */ ?>
+                        <button type="button" class="btn btn--ghost btn--sm"
+                                data-drawer="detail-dealer-<?= (int) $srcDealer['id'] ?>"
+                                data-drawer-url="drawer.php?kind=dealer&amp;id=<?= (int) $srcDealer['id'] ?>"
+                                data-title="<?= e($srcDealer['full_name']) ?>"
+                                data-code="<?= e((string) $srcDealer['dealer_code']) ?>"
+                                data-meta="Dealer · under <?= e($srcDist['full_name']) ?>"
+                                data-status="<?= $srcDealer['approval_status'] === 'pending'
+                                    ? 'pending'
+                                    : ($srcDealer['approval_status'] === 'rejected'
+                                        ? 'rejected'
+                                        : ($srcDealer['is_active'] ? 'accepted' : 'rejected')) ?>"
+                                data-status-label="<?= $srcDealer['approval_status'] === 'approved'
+                                    ? ($srcDealer['is_active'] ? 'Active' : 'Stopped')
+                                    : e(approval_label((string) $srcDealer['approval_status'])) ?>">
+                          Details <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 <?php endforeach; ?>
@@ -195,17 +246,17 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
         <?php if (!$srcRoom): ?>
           <p class="empty">
             <?= e($srcDist['full_name']) ?> already holds <?= (int) $srcHeld ?> dealers, which is the limit.
-            Raise it under <a href="settings.php">Settings</a>, or take one out first.
+            Raise it under <a href="settings">Settings</a>, or take one out first.
           </p>
         <?php else: ?>
           <?php /* the office adds a dealer outright — approving its own entry
                    would be a step that never says no. The whole dealer form
                    opens in a dialog rather than living in this panel. */ ?>
           <span class="field-hint">
-            They get a code of their own straight away, and every sale they make earns
-            <?= e($srcDist['full_name']) ?> the
-            <?= e(rtrim(rtrim(number_format(distributor_override_rate() * 100, 2, '.', ''), '0'), '.')) ?>%
-            override.
+            A dealer added here is approved at once and gets their code with it, and every
+            sale they make earns <?= e($srcDist['full_name']) ?> the override —
+            <?= e(money_short(commission_value('override', 'stove'))) ?> a stove,
+            <?= e(money_short(commission_value('override', 'tuktuk'))) ?> a kit.
           </span>
 
           <div class="drawer-actions drawer-actions--end">
@@ -221,7 +272,12 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
 
     <section class="detail-panel" data-panel="2" role="tabpanel">
       <div class="detail-block">
-        <p class="detail-block__title">Sales earning <?= e($srcDist['full_name']) ?> something</p>
+        <p class="detail-block__title">
+          Sales earning <?= e($srcDist['full_name']) ?> something
+          <?php if ($srcClientAll > count($srcClients)): ?>
+            <span class="detail-block__note">newest <?= count($srcClients) ?> of <?= (int) $srcClientAll ?></span>
+          <?php endif; ?>
+        </p>
 
         <?php if (!$srcClients): ?>
           <p class="empty">Nothing has been sold under this distributor yet.</p>
@@ -279,38 +335,6 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
 
     <section class="detail-panel" data-panel="3" role="tabpanel">
       <div class="detail-block">
-        <p class="detail-block__title">Record a payout</p>
-
-        <form method="post" class="payout-form">
-          <?= csrf_field() ?>
-          <input type="hidden" name="action" value="payout">
-          <input type="hidden" name="id" value="<?= $srcDistId ?>">
-
-          <div class="form-grid">
-            <div class="field">
-              <label for="dpayout_amount_<?= $srcDistId ?>">Amount transferred</label>
-              <input id="dpayout_amount_<?= $srcDistId ?>" name="amount" type="number" step="0.01" min="0.01"
-                     value="<?= e(number_format($srcTotals['remaining'], 2, '.', '')) ?>" required>
-            </div>
-
-            <div class="field">
-              <label for="dpayout_note_<?= $srcDistId ?>">Reference</label>
-              <input id="dpayout_note_<?= $srcDistId ?>" name="note" type="text" maxlength="255"
-                     placeholder="UPI / UTR reference">
-            </div>
-          </div>
-
-          <span class="field-hint">
-            Starts at everything outstanding. Pay less and the difference stays owed —
-            <?= e(money($srcTotals['earned'])) ?> earned, <?= e(money($srcTotals['paid'])) ?> paid,
-            <?= e(money($srcTotals['remaining'])) ?> left.
-          </span>
-
-          <button type="submit" class="btn btn--primary">Record payout</button>
-        </form>
-      </div>
-
-      <div class="detail-block">
         <p class="detail-block__title">
           <?= count($srcPays) ?> transfer<?= count($srcPays) === 1 ? '' : 's' ?> so far
         </p>
@@ -336,24 +360,61 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
                     <td class="td-amount"><strong><?= e(money((float) $srcPay['amount'])) ?></strong></td>
                     <td><?= e($srcPay['note'] ?: '—') ?></td>
                     <td><span class="cell-sub"><?= e($srcPay['paid_by_name'] ?: 'a deleted account') ?></span></td>
-                    <td class="td-actions">
-                      <form method="post"
-                            data-confirm="Remove this payout of <?= e(money((float) $srcPay['amount'])) ?>?">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="action" value="payout_delete">
-                        <input type="hidden" name="id" value="<?= $srcDistId ?>">
-                        <input type="hidden" name="payout_id" value="<?= (int) $srcPay['id'] ?>">
-                        <button type="submit" class="icon-btn is-delete" title="Remove this payout">
-                          <i class="bi bi-trash" aria-hidden="true"></i>
-                          <span class="visually-hidden">Remove this payout</span>
-                        </button>
-                      </form>
-                    </td>
+                    <td class="td-actions"></td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>
             </table>
           </div>
+        <?php endif; ?>
+      </div>
+    </section>
+
+    <section class="detail-panel" data-panel="4" role="tabpanel">
+      <div class="detail-block">
+        <p class="detail-block__title">
+          What they hold
+          <span class="detail-block__note"><?= e(money($srcStock['value'])) ?> at cost</span>
+        </p>
+
+        <dl class="detail-fields">
+          <div class="detail-field">
+            <dt>Stoves</dt>
+            <dd><strong><?= (int) $srcStock['stove']['units'] ?></strong>
+              · <?= e(money($srcStock['stove']['value'])) ?></dd>
+          </div>
+          <div class="detail-field">
+            <dt>TukTuk kits</dt>
+            <dd><strong><?= (int) $srcStock['tuktuk']['units'] ?></strong>
+              · <?= e(money($srcStock['tuktuk']['value'])) ?></dd>
+          </div>
+          <div class="detail-field">
+            <dt>Altogether</dt>
+            <dd><strong><?= (int) $srcStock['units'] ?></strong> units</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="detail-block">
+        <p class="detail-block__title">
+          Orders from the office
+          <span class="detail-block__note"><?= count($srcOrders) ?> raised</span>
+        </p>
+
+        <?php if (!$srcOrders): ?>
+          <p class="empty">No entry found — they have not ordered any stock yet.</p>
+        <?php else: ?>
+          <?php $ownOrders = $srcOrders; require __DIR__ . '/stock-orders-table.php'; ?>
+        <?php endif; ?>
+      </div>
+
+      <div class="detail-block">
+        <p class="detail-block__title">Every movement</p>
+
+        <?php if (!$srcMoves): ?>
+          <p class="empty">No entry found — nothing has moved in or out yet.</p>
+        <?php else: ?>
+          <?php $ledgerRows = $srcMoves; require __DIR__ . '/stock-ledger-table.php'; ?>
         <?php endif; ?>
       </div>
     </section>

@@ -27,38 +27,15 @@ $payFlash  = (string) ($flash['pay'] ?? '');
    list under Forms pages through everything, ten at a time. */
 $recent = db()->query(
     "SELECT product AS type, id, full_name AS title, email, status, created_at,
-            reminder_count, reminded_at
+            reminder_count, reminded_at, reference_code
        FROM applications
      UNION ALL
-     SELECT 'contact', id, name, email, status, created_at, 0, NULL FROM contact_messages
+     SELECT 'contact', id, name, email, status, created_at, 0, NULL, '' FROM contact_messages
      UNION ALL
-     SELECT 'newsletter', id, email, email, status, created_at, 0, NULL FROM newsletter_subscribers
+     SELECT 'newsletter', id, email, email, status, created_at, 0, NULL, '' FROM newsletter_subscribers
      ORDER BY created_at DESC
      LIMIT 10"
 )->fetchAll();
-
-/* full records for the rows above, so Details can open without another page */
-$full = ['applications' => [], 'contact_messages' => [], 'newsletter_subscribers' => []];
-$ids  = ['applications' => [], 'contact_messages' => [], 'newsletter_subscribers' => []];
-
-foreach ($recent as $row) {
-    $table = type_config($row['type'])['table'];
-    $ids[$table][] = (int) $row['id'];
-}
-
-foreach ($ids as $table => $list) {
-    if (!$list) {
-        continue;
-    }
-
-    $in   = implode(',', array_fill(0, count($list), '?'));
-    $stmt = db()->prepare('SELECT * FROM ' . $table . ' WHERE id IN (' . $in . ')');
-    $stmt->execute($list);
-
-    foreach ($stmt->fetchAll() as $record) {
-        $full[$table][(int) $record['id']] = $record;
-    }
-}
 
 require __DIR__ . '/partials/layout-top.php';
 ?>
@@ -76,11 +53,18 @@ require __DIR__ . '/partials/layout-top.php';
 <div class="tiles">
   <?php foreach ($types as $key => $config): ?>
     <?php $counts = status_counts($key); ?>
-    <a class="tile" href="list.php?type=<?= e($key) ?>">
+    <a class="tile" href="list?type=<?= e($key) ?>">
       <span class="eyebrow"><?= e($config['label']) ?></span>
       <strong><?= (int) $counts['total'] ?></strong>
+      <?php /* A tile is a glance, not the pipeline: for an application it shows
+               only the four states somebody acts on - waiting for approval,
+               cancelled, turned down and done. The stages in between are worked
+               through on the form's own list, which this tile links to. */ ?>
+      <?php $tileStats = type_config($key)['table'] === 'applications'
+          ? ['submitted', 'complete', 'cancelled', 'rejected']
+          : statuses_for($key); ?>
       <span class="tile__stats">
-        <?php foreach (statuses_for($key) as $s): ?>
+        <?php foreach ($tileStats as $s): ?>
           <span class="tile__stat tile__stat--<?= e($s) ?>">
             <b><?= (int) $counts[$s] ?></b> <?= e(status_short($s)) ?>
           </span>
@@ -96,10 +80,8 @@ require __DIR__ . '/partials/layout-top.php';
     <span class="eyebrow" data-table-count>The newest 10, across all forms</span>
   </div>
 
-  <?php if (!$recent): ?>
-    <p class="empty">Nothing has been submitted yet.</p>
-  <?php else: ?>
-    <div class="table-wrap">
+  <?php /* the header carries this table's filters, so it stays either way */ ?>
+  <div class="table-wrap">
       <table class="data-table is-filterable" id="latestTable">
         <!-- fixed widths so switching a filter label cannot reflow the columns -->
         <colgroup>
@@ -133,6 +115,12 @@ require __DIR__ . '/partials/layout-top.php';
           </tr>
         </thead>
         <tbody>
+          <?php if (!$recent): ?>
+            <tr class="row-empty">
+              <td colspan="7">No entry found — nothing has been submitted yet.</td>
+            </tr>
+          <?php endif; ?>
+
           <?php $seq = 0; ?>
           <?php foreach ($recent as $row): ?>
             <?php $seq++; ?>
@@ -155,16 +143,16 @@ require __DIR__ . '/partials/layout-top.php';
               <td>
                 <?php
                   $rowType   = $row['type'];
-                  $returnUrl = 'index.php';
+                  $returnUrl = './';
                   require __DIR__ . '/partials/row-actions.php';
                 ?>
               </td>
               <td class="td-actions">
-                <?php $rowRecord = $full[type_config($row['type'])['table']][(int) $row['id']] ?? []; ?>
                 <button type="button" class="row-toggle"
                         data-drawer="detail-<?= e($row['type']) ?>-<?= (int) $row['id'] ?>"
+                        data-drawer-url="drawer.php?type=<?= e($row['type']) ?>&amp;id=<?= (int) $row['id'] ?>&amp;return=index.php"
                         data-title="<?= e($row['title']) ?>"
-                        data-code="<?= e((string) ($rowRecord['reference_code'] ?? '')) ?>"
+                        data-code="<?= e((string) ($row['reference_code'] ?? '')) ?>"
                         data-meta="<?= e($types[$row['type']]['label']) ?> · received <?= e(format_datetime($row['created_at'])) ?>"
                         data-status="<?= e($row['status']) ?>"
                         data-status-label="<?= e(status_short($row['status'])) ?>">
@@ -176,26 +164,8 @@ require __DIR__ . '/partials/layout-top.php';
         </tbody>
       </table>
       <p class="empty" data-table-empty hidden>Nothing matches those filters.</p>
-    </div>
-  <?php endif; ?>
+  </div>
 </div>
-
-<!-- ============ detail drawers ============ -->
-<?php foreach ($recent as $row): ?>
-  <?php
-    $table  = type_config($row['type'])['table'];
-    $record = $full[$table][(int) $row['id']] ?? null;
-
-    if (!$record) {
-        continue;
-    }
-
-    $srcType   = $row['type'];
-    $srcRow    = $record;
-    $srcReturn = 'index.php';
-    require __DIR__ . '/partials/drawer-source.php';
-  ?>
-<?php endforeach; ?>
 
 <?php require __DIR__ . '/partials/drawer.php'; ?>
 

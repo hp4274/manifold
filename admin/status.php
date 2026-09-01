@@ -16,7 +16,7 @@ require_once __DIR__ . '/emails.php';
 $user = require_login();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: index.php');
+    header('Location: ./');
     exit;
 }
 
@@ -63,13 +63,30 @@ if ($config['table'] === 'applications') {
         /* everything the applicant needs, all at once: their booking number, the
            amount, the QR code and the portal they upload the receipt in */
         $row['status'] = $status;
-        $mailFlag      = send_payment_email($row) ? 'sent' : 'failed';
+
+        /* the applicant's payment details, sent once the office has its answer */
+        after_response(static function () use ($row): void {
+            send_payment_email($row);
+        });
+
+        $mailFlag = 'sent';
+    }
+
+    if ($status === 'rejected') {
+        /* an answer either way: silence after a long form reads as lost */
+        $reason = mb_substr(trim((string) ($_POST['reason'] ?? '')), 0, 255);
+
+        after_response(static function () use ($row, $reason): void {
+            send_application_rejected_email($row, $reason);
+        });
+
+        $mailFlag = 'sent';
     }
 
     $return = (string) ($_POST['return'] ?? '');
 
-    if (!preg_match('/^(index|list)\.php(\?[a-z0-9=&_%-]*)?$/i', $return)) {
-        $return = 'list.php?type=' . urlencode($type);
+    if (!preg_match('#^(\./|list)(\?[a-z0-9=&_%-]*)?$#i', $return)) {
+        $return = 'list?type=' . urlencode($type);
     }
 
     admin_flash(['saved' => $id, 'mail' => $mailFlag]);
@@ -104,8 +121,8 @@ if (array_key_exists('admin_note', $_POST)) {
 /* back to whichever list the change came from */
 $return = (string) ($_POST['return'] ?? '');
 
-if (!preg_match('/^(index|list)\.php(\?[a-z0-9=&_%-]*)?$/i', $return)) {
-    $return = 'list.php?type=' . urlencode($type);
+if (!preg_match('#^(\./|list)(\?[a-z0-9=&_%-]*)?$#i', $return)) {
+    $return = 'list?type=' . urlencode($type);
 }
 
 admin_flash(['saved' => $id, 'mail' => $mailFlag]);

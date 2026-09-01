@@ -10,10 +10,62 @@ require_once __DIR__ . '/lib.php';
 
 $email = require_applicant();
 $error = '';
+
+/* An upload that fails belongs under the box it was chosen in, not at the top
+   of a page that may hold two of them. This remembers which one, so the right
+   box turns red and the other is left alone. */
+$uploadError = '';
+$uploadStage = '';
+
+/**
+ * Why an upload did not arrive, said plainly.
+ *
+ * A file over PHP's own limit never reaches the size check further down — the
+ * request arrives with an error code and an empty temporary file instead — so
+ * this is where "too large" has to be caught. Without it, a 12 MB receipt was
+ * answered with "Choose the receipt file to upload", which is both wrong and
+ * impossible to act on.
+ */
+function upload_error_message(int $code): string
+{
+    $limit = (int) (UPLOAD_MAX_BYTES / 1024 / 1024);
+
+    switch ($code) {
+        case UPLOAD_ERR_INI_SIZE:
+        case UPLOAD_ERR_FORM_SIZE:
+            return 'That file is larger than ' . $limit . ' MB. Send a smaller photo, or a PDF.';
+
+        case UPLOAD_ERR_PARTIAL:
+            return 'The upload stopped before it finished. Try it again.';
+
+        case UPLOAD_ERR_NO_FILE:
+            return 'Choose the receipt file to upload.';
+
+        case UPLOAD_ERR_NO_TMP_DIR:
+        case UPLOAD_ERR_CANT_WRITE:
+        case UPLOAD_ERR_EXTENSION:
+            return 'We could not save that file. Try again, and tell us if it keeps happening.';
+    }
+
+    return 'That file did not upload. Try again.';
+}
 $done  = false;
 
 /* ---------- receipt upload: one per stage, booking first ---------- */
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+/* A file past PHP's own post_max_size arrives with $_POST and $_FILES both
+   empty — the request is thrown away before this script sees any of it. Left
+   alone that reads as a missing CSRF token, so a receipt too big for the server
+   would be answered with a security error rather than "too large". */
+$postDiscarded = $_SERVER['REQUEST_METHOD'] === 'POST'
+    && !$_POST
+    && !$_FILES
+    && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0;
+
+if ($postDiscarded) {
+    $uploadError = 'That file is larger than ' . (int) (UPLOAD_MAX_BYTES / 1024 / 1024)
+        . ' MB. Send a smaller photo, or a PDF.';
+    $uploadStage = 'booking';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
     $id    = (int) ($_POST['id'] ?? 0);
@@ -26,6 +78,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $totals = $app ? payment_totals($app) : null;
     $due    = $totals !== null && in_array($stage, PAYMENT_STAGES, true) ? $totals['stages'][$stage] : null;
 
+    /* ---------- go ahead, or cancel and take the money back ----------
+       Asked once, after the documents are verified and before anything more is
+       owed. Answering is the client's own decision, so it is theirs to make in
+       the portal rather than something the office records for them. */
+    $choice = (string) ($_POST['choice'] ?? '');
+
+    if ($app && in_array($choice, ['continue', 'cancel'], true)) {
+        if (($app['status'] ?? '') !== 'confirm_pending') {
+            $error = 'That question has already been answered.';
+        } else {
+            db()->prepare(
+                'UPDATE applications SET delivery_choice = ?, delivery_choice_at = NOW() WHERE id = ? AND email = ?'
+            )->execute([$choice, $id, $email]);
+
+            $status = sync_application_status($id);
+
+            $fresh = db()->prepare('SELECT * FROM applications WHERE id = ?');
+            $fresh->execute([$id]);
+            $after = $fresh->fetch() ?: $app;
+
+            after_response(static function () use ($after, $choice): void {
+                $choice === 'cancel'
+                    ? send_order_cancelled_email($after)
+                    : send_delivery_open_email($after);
+
+                send_delivery_choice_admin($after, $choice);
+            });
+
+            header('Location: status?choice=' . urlencode($choice) . '#app-' . $id);
+            exit;
+        }
+    }
+
     if (!$app) {
         $error = 'That application could not be found.';
     } elseif ($due === null) {
@@ -37,18 +122,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($due['state'] === 'checking') {
         $error = 'We are still checking the receipt you uploaded for the ' . strtolower($due['label']) . '.';
     } elseif ($due['state'] === 'locked') {
-        $error = 'The delivery payment opens once your booking payment has been verified.';
-    } elseif (empty($_FILES['payment_proof']) || $_FILES['payment_proof']['error'] !== UPLOAD_ERR_OK) {
-        $error = 'Choose the receipt file to upload.';
+        $error = empty($app['docs_verified_at']) && payment_stage_settled((int) $app['id'], 'booking')
+            ? 'The delivery payment opens once our finance team has verified your documents.'
+            : 'The delivery payment opens once your booking payment has been verified.';
+    } elseif (empty($_FILES['payment_proof'])
+        || (int) $_FILES['payment_proof']['error'] !== UPLOAD_ERR_OK) {
+        /* whatever went wrong, said in words the person can act on */
+        $uploadError = upload_error_message(
+            (int) ($_FILES['payment_proof']['error'] ?? UPLOAD_ERR_NO_FILE)
+        );
+        $uploadStage = $stage;
     } else {
         $file  = $_FILES['payment_proof'];
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mime  = $finfo->file($file['tmp_name']);
 
         if ($file['size'] > UPLOAD_MAX_BYTES) {
-            $error = 'That file is larger than 10 MB.';
+            /* a file inside PHP's limit but outside ours */
+            $uploadError = upload_error_message(UPLOAD_ERR_INI_SIZE);
+            $uploadStage = $stage;
         } elseif (!isset(UPLOAD_ALLOWED_MIME[$mime])) {
-            $error = 'Upload a JPG, PNG, WebP or PDF.';
+            $uploadError = 'That is not a JPG, PNG, WebP or PDF.';
+            $uploadStage = $stage;
         } else {
             if (!is_dir(PAYMENT_PROOF_DIR)) {
                 mkdir(PAYMENT_PROOF_DIR, 0775, true);
@@ -57,7 +152,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = date('Ymd-His') . '-' . bin2hex(random_bytes(6)) . '.' . UPLOAD_ALLOWED_MIME[$mime];
 
             if (!move_uploaded_file($file['tmp_name'], PAYMENT_PROOF_DIR . '/' . $name)) {
-                $error = 'The upload did not complete. Try again.';
+                $uploadError = 'The upload did not complete. Try again.';
+                $uploadStage = $stage;
             } else {
                 /* the amount is the published one for this stage — the applicant
                    never types it, so a receipt can only ever be for what is owed */
@@ -74,9 +170,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 /* keep the application row in step and tell the team */
                 $app['status'] = sync_application_status($id);
-                send_payment_received_admin($app);
 
-                header('Location: status.php?uploaded=' . $id . '&stage=' . urlencode($stage) . '#app-' . $id);
+                /* the client has uploaded their receipt and wants their page
+                   back; telling the office can happen after they have it */
+                after_response(static function () use ($app): void {
+                    send_payment_received_admin($app);
+                });
+
+                header('Location: status?uploaded=' . $id . '&stage=' . urlencode($stage) . '#app-' . $id);
                 exit;
             }
         }
@@ -96,9 +197,13 @@ require __DIR__ . '/partials/head.php';
 <section class="section portal">
   <div class="container-x">
 
+    <?php /* the name off their own application, so the page opens by saying who
+             it belongs to rather than only which mailbox opened it */ ?>
+    <?php $who = $applications[0]['full_name'] ?? ''; ?>
+
     <p class="eyebrow eyebrow--rule">Signed in as <?= e($email) ?></p>
     <div class="section-head">
-      <h1 class="section-title">My applications.</h1>
+      <h1 class="section-title"><?= $who !== '' ? e($who) . '.' : 'My applications.' ?></h1>
       <p class="section-sub">Everything you have applied for, and what happens next at each stage.</p>
     </div>
 
@@ -117,9 +222,9 @@ require __DIR__ . '/partials/head.php';
       <div class="portal-card">
         <h2>Nothing here yet</h2>
         <p class="u-sub">No application is linked to <?= e($email) ?>. If you applied with a different address,
-          <a href="index.php">sign in with that one</a> instead.</p>
-        <p class="u-sub"><a class="link-arrow" href="../apply-stove.html">Apply for a stove</a> ·
-          <a class="link-arrow" href="../apply-tuktuk.html">Apply for a TukTuk kit</a></p>
+          <a href="./">sign in with that one</a> instead.</p>
+        <p class="u-sub"><a class="link-arrow" href="../apply-stove">Apply for a stove</a> ·
+          <a class="link-arrow" href="../apply-tuktuk">Apply for a TukTuk kit</a></p>
       </div>
     <?php endif; ?>
 
@@ -136,6 +241,31 @@ require __DIR__ . '/partials/head.php';
             <p class="portal-app__ref"><span>Booking number</span> <?= e($app['reference_code']) ?></p>
             <h2><?= e(product_name((string) $app['product'])) ?></h2>
             <p class="portal-app__meta">Applied <?= e(format_datetime($app['created_at'])) ?></p>
+
+            <?php /* who this went through, named on the application it belongs
+                     to rather than once at the top: a client with two orders may
+                     have bought them from two different people */ ?>
+            <?php $seller = sold_by($app); ?>
+
+            <?php if ($seller): ?>
+              <p class="portal-app__seller">
+                <span class="portal-app__seller-kind"><?= e($seller['kind']) ?></span>
+                <strong><?= e($seller['full_name']) ?></strong>
+                <span class="portal-app__code"><?= e($seller['code']) ?></span>
+
+                <?php if (!empty($seller['distributor_name'])): ?>
+                  <span class="portal-app__under">
+                    under <?= e($seller['distributor_name']) ?>
+                    · <?= e($seller['distributor_code']) ?>
+                  </span>
+                <?php endif; ?>
+              </p>
+            <?php else: ?>
+              <p class="portal-app__seller">
+                <span class="portal-app__seller-kind">Bought from</span>
+                <strong>Manifold Clean Energy</strong>
+              </p>
+            <?php endif; ?>
           </div>
           <span class="portal-status portal-status--<?= e($status) ?>"><?= e(status_label($status, 'applicant')) ?></span>
         </header>
@@ -169,6 +299,41 @@ require __DIR__ . '/partials/head.php';
           </ol>
 
           <p class="portal-app__copy"><strong><?= e($title) ?>.</strong> <?= e($copy) ?></p>
+
+          <?php /* The one question asked of somebody who came in through the
+                   website or a code: build it, or take the money back. Somebody
+                   whose partner already collected the whole price never sees
+                   this — there is nothing left to decide. */ ?>
+          <?php if ($status === 'confirm_pending'): ?>
+            <div class="portal-choice">
+              <p class="portal-choice__title">Shall we go ahead?</p>
+              <p class="portal-choice__note">
+                Continue and the delivery payment opens, and we build and deliver your unit.
+                Cancel and we refund everything you have paid, in full.
+              </p>
+
+              <div class="portal-choice__actions">
+                <form method="post">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
+                  <input type="hidden" name="choice" value="continue">
+                  <button type="submit" class="btn-pill btn-pill--accent">
+                    Continue with delivery <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                  </button>
+                </form>
+
+                <form method="post"
+                      data-confirm="Cancel this order? We refund everything you have paid.">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
+                  <input type="hidden" name="choice" value="cancel">
+                  <button type="submit" class="btn-pill portal-choice__cancel">
+                    Cancel and refund me
+                  </button>
+                </form>
+              </div>
+            </div>
+          <?php endif; ?>
         <?php endif; ?>
 
         <?php $totals = payment_totals($app); ?>
@@ -189,7 +354,16 @@ require __DIR__ . '/partials/head.php';
                 $isOpen  = $stage['state'] === 'due';
                 $stageId = $stageKey . '-' . (int) $app['id'];
               ?>
-              <section class="portal-stage portal-stage--<?= e($stage['state']) ?>">
+              <?php
+                /* The delivery payment is behind the finance check: the section
+                   stays visible so nobody wonders where it went, but what you
+                   would act on — the QR code, the form, the button — is veiled
+                   until the documents are verified. */
+                $sealed = $stageKey === 'delivery'
+                    && empty($app['docs_verified_at'])
+                    && $totals['stages']['booking']['settled'];
+              ?>
+              <section class="portal-stage portal-stage--<?= e($stage['state']) ?><?= $sealed ? ' is-sealed' : '' ?>">
 
                 <header class="portal-stage__head">
                   <div>
@@ -217,6 +391,9 @@ require __DIR__ . '/partials/head.php';
                   <?php elseif ($stage['state'] === 'checking'): ?>
                     Your receipt is with our team. We check every payment by hand, usually within
                     two working days.
+                  <?php elseif ($sealed): ?>
+                    Your booking is verified. This opens as soon as our finance team has checked your
+                    documents - we email you the moment they do.
                   <?php elseif ($stage['state'] === 'locked'): ?>
                     This opens once your booking payment has been verified. We will email you when it does.
                   <?php elseif ($stageKey === 'booking'): ?>
@@ -268,8 +445,15 @@ require __DIR__ . '/partials/head.php';
                   </ul>
                 <?php endif; ?>
 
-                <?php if ($isOpen): ?>
-                  <div class="portal-pay">
+                <?php /* Sealed, it is still drawn: seeing what is coming, veiled,
+                         reads better than a section with nothing in it. The
+                         fieldset makes sure nothing in there can be used. */ ?>
+                <?php if ($isOpen || $sealed): ?>
+                  <?php /* aria-hidden alone would hide it from a screen reader while leaving
+         its file field and button on the tab order — focus would land on
+         something nothing announces. `inert` takes both away, which is
+         what the blur already says to everyone who can see it. */ ?>
+                  <div class="portal-pay"<?= $sealed ? ' inert aria-hidden="true"' : '' ?>>
                     <div class="portal-pay__qr">
                       <?php $qr = qr_path(); ?>
                       <?php if ($qr !== ''): ?>
@@ -284,6 +468,7 @@ require __DIR__ . '/partials/head.php';
                     </div>
 
                     <form class="portal-pay__form form-x" method="post" enctype="multipart/form-data">
+                      <fieldset<?= $sealed ? ' disabled' : '' ?> style="border:0;margin:0;padding:0;min-width:0">
                       <?= csrf_field() ?>
                       <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
                       <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
@@ -294,17 +479,32 @@ require __DIR__ . '/partials/head.php';
                                placeholder="From your bank or UPI app">
                       </div>
 
-                      <div class="field">
+                      <?php /* an upload that failed says so here, against the box
+                               it was chosen in, rather than at the top of a page
+                               that may carry two of them */ ?>
+                      <?php $stageFailed = $uploadError !== '' && $uploadStage === $stageKey; ?>
+
+                      <div class="field<?= $stageFailed ? ' field--error' : '' ?>">
                         <label for="proof-<?= e($stageId) ?>">Proof of this payment
                           <span class="req" aria-hidden="true">*</span></label>
                         <input id="proof-<?= e($stageId) ?>" name="payment_proof" type="file"
-                               accept="image/*,application/pdf" required>
+                               accept="image/*,application/pdf" required
+                               <?= $stageFailed ? 'aria-describedby="proof-error-' . e($stageId) . '" aria-invalid="true"' : '' ?>>
+
+                        <?php if ($stageFailed): ?>
+                          <p class="field-error" id="proof-error-<?= e($stageId) ?>" role="alert">
+                            <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                            <?= e($uploadError) ?>
+                          </p>
+                        <?php endif; ?>
+
                         <span class="field-hint">JPG, PNG, WebP or PDF, up to 10 MB</span>
                       </div>
 
                       <button type="submit" class="btn-pill btn-pill--accent form-x__submit">
                         Upload <?= e(strtolower($stage['label'])) ?> proof <i class="bi bi-upload"></i>
                       </button>
+                    </fieldset>
                     </form>
                   </div>
                 <?php endif; ?>

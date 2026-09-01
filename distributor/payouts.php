@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'Approved. It goes to R&F in your next bundle.'
                 : 'Turned down. Those sales can be claimed again.';
 
-            header('Location: payouts.php');
+            header('Location: payouts');
             exit;
         }
     } elseif ($action === 'bundle') {
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['distributor_flash'] = 'Bundle sent to R&F — your own claim and every dealer '
                 . 'voucher you had approved.';
 
-            header('Location: payouts.php');
+            header('Location: payouts');
             exit;
         }
     }

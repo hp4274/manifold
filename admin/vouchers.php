@@ -27,7 +27,7 @@ function vouchers_done(string $message): void
 {
     $_SESSION['vouchers_flash'] = $message;
 
-    header('Location: vouchers.php');
+    header('Location: vouchers');
     exit;
 }
 

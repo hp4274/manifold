@@ -16,7 +16,7 @@ $pageLead   = $pageLead ?? '';
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= e($pageTitle) ?> — Manifold admin</title>
+<title><?= e($pageTitle) ?> - Manifold admin</title>
 <link rel="icon" type="image/png" href="<?= SITE_URL ?>/assets/images/favicon.png">
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="<?= SITE_URL ?>/assets/vendor/figtree/figtree.css">
@@ -29,14 +29,14 @@ $pageLead   = $pageLead ?? '';
 <div class="shell">
 
   <aside class="sidebar">
-    <a class="sidebar__brand" href="index.php" aria-label="Manifold Clean Energy admin">
+    <a class="sidebar__brand" href="./" aria-label="Manifold Clean Energy admin">
       <img src="<?= SITE_URL ?>/assets/images/manifold-white.webp" alt="Manifold Clean Energy">
     </a>
 
     <div>
       <p class="sidebar__label">Overview</p>
       <nav class="sidebar__nav">
-        <a href="index.php" class="<?= $activeType === '' ? 'is-active' : '' ?>">
+        <a href="./" class="<?= $activeType === '' ? 'is-active' : '' ?>">
           <i class="bi bi-grid" aria-hidden="true"></i> Dashboard
         </a>
       </nav>
@@ -46,7 +46,7 @@ $pageLead   = $pageLead ?? '';
       <p class="sidebar__label">Forms</p>
       <nav class="sidebar__nav">
         <?php foreach ($types as $key => $sidebarConfig): ?>
-          <a href="list.php?type=<?= e($key) ?>" class="<?= $activeType === $key ? 'is-active' : '' ?>">
+          <a href="list?type=<?= e($key) ?>" class="<?= $activeType === $key ? 'is-active' : '' ?>">
             <i class="bi <?= e($sidebarConfig['icon']) ?>" aria-hidden="true"></i>
             <?= e($sidebarConfig['label']) ?>
           </a>
@@ -57,28 +57,28 @@ $pageLead   = $pageLead ?? '';
     <div>
       <p class="sidebar__label">Configuration</p>
       <nav class="sidebar__nav">
-        <a href="blog.php" class="<?= $activeType === 'blog' ? 'is-active' : '' ?>">
+        <a href="blog" class="<?= $activeType === 'blog' ? 'is-active' : '' ?>">
           <i class="bi bi-journal-text" aria-hidden="true"></i> Blog
         </a>
-        <a href="referrals.php" class="<?= $activeType === 'referrals' ? 'is-active' : '' ?>">
+        <a href="referrals" class="<?= $activeType === 'referrals' ? 'is-active' : '' ?>">
           <i class="bi bi-people" aria-hidden="true"></i> Referrals
         </a>
-        <a href="distributors.php" class="<?= $activeType === 'distributors' ? 'is-active' : '' ?>">
+        <a href="distributors" class="<?= $activeType === 'distributors' ? 'is-active' : '' ?>">
           <i class="bi bi-diagram-3" aria-hidden="true"></i> Distributors
         </a>
-        <a href="dealers.php" class="<?= $activeType === 'dealers' ? 'is-active' : '' ?>">
+        <a href="dealers" class="<?= $activeType === 'dealers' ? 'is-active' : '' ?>">
           <i class="bi bi-shop" aria-hidden="true"></i> Dealers
         </a>
-        <a href="stock.php" class="<?= $activeType === 'stock' ? 'is-active' : '' ?>">
+        <a href="stock" class="<?= $activeType === 'stock' ? 'is-active' : '' ?>">
           <i class="bi bi-box-seam" aria-hidden="true"></i> Stock
         </a>
-        <a href="vouchers.php" class="<?= $activeType === 'vouchers' ? 'is-active' : '' ?>">
+        <a href="vouchers" class="<?= $activeType === 'vouchers' ? 'is-active' : '' ?>">
           <i class="bi bi-receipt-cutoff" aria-hidden="true"></i> Commission
         </a>
-        <a href="raffle.php" class="<?= $activeType === 'raffle' ? 'is-active' : '' ?>">
+        <a href="raffle" class="<?= $activeType === 'raffle' ? 'is-active' : '' ?>">
           <i class="bi bi-ticket-perforated" aria-hidden="true"></i> Raffle
         </a>
-        <a href="settings.php" class="<?= $activeType === 'settings' ? 'is-active' : '' ?>">
+        <a href="settings" class="<?= $activeType === 'settings' ? 'is-active' : '' ?>">
           <i class="bi bi-sliders" aria-hidden="true"></i> Settings
         </a>
       </nav>
@@ -90,10 +90,10 @@ $pageLead   = $pageLead ?? '';
         <?= e($user['email']) ?>
       </p>
       <nav class="sidebar__nav">
-        <a href="<?= SITE_URL ?>/index.html" target="_blank" rel="noopener">
+        <a href="<?= SITE_URL ?>/" target="_blank" rel="noopener">
           <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> View website
         </a>
-        <a href="logout.php">
+        <a href="logout">
           <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out
         </a>
       </nav>

@@ -14,10 +14,11 @@ declare(strict_types=1);
 $activeNav = $activeNav ?? '';
 $pageLead  = $pageLead ?? '';
 $navItems  = [
-    'dashboard' => ['label' => 'Dashboard', 'icon' => 'bi-grid',        'href' => 'index.php'],
-    'stock'     => ['label' => 'Stock',     'icon' => 'bi-box-seam',    'href' => 'stock.php'],
-    'clients'   => ['label' => 'Clients',   'icon' => 'bi-people',      'href' => 'clients.php'],
-    'payouts'   => ['label' => 'Payouts',   'icon' => 'bi-cash-coin',   'href' => 'payouts.php'],
+    'dashboard' => ['label' => 'Dashboard', 'icon' => 'bi-grid',        'href' => './'],
+    'stock'     => ['label' => 'Stock',     'icon' => 'bi-box-seam',    'href' => 'stock'],
+    'clients'   => ['label' => 'Clients',   'icon' => 'bi-people',      'href' => 'clients'],
+    'payouts'   => ['label' => 'Payouts',   'icon' => 'bi-cash-coin',   'href' => 'payouts'],
+    'profile'   => ['label' => 'Profile',   'icon' => 'bi-person-gear', 'href' => 'profile'],
 ];
 ?>
 <!DOCTYPE html>
@@ -25,19 +26,19 @@ $navItems  = [
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= e($pageTitle) ?> — Manifold dealer</title>
+<title><?= e($pageTitle) ?> - Manifold dealer</title>
 <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="../assets/vendor/figtree/figtree.css">
 <link rel="stylesheet" href="../assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
-<link rel="stylesheet" href="../admin/assets/admin.css">
+<link rel="stylesheet" href="../admin/<?= asset_url('assets/admin.css') ?>">
 </head>
 <body>
 
 <div class="shell">
 
   <aside class="sidebar">
-    <a class="sidebar__brand" href="index.php" aria-label="Manifold Clean Energy dealer portal">
+    <a class="sidebar__brand" href="./" aria-label="Manifold Clean Energy dealer portal">
       <img src="../assets/images/manifold-white.webp" alt="Manifold Clean Energy">
     </a>
 
@@ -58,10 +59,10 @@ $navItems  = [
         <?= e($dealer['dealer_code']) ?>
       </p>
       <nav class="sidebar__nav">
-        <a href="../index.html" target="_blank" rel="noopener">
+        <a href="../" target="_blank" rel="noopener">
           <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> View website
         </a>
-        <a href="logout.php">
+        <a href="logout">
           <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out
         </a>
       </nav>
@@ -104,7 +105,7 @@ $navItems  = [
                      money. Recording one you were paid for is not the same as
                      sending somebody to pay Manifold, so they are not the same
                      button. */ ?>
-            <a class="menu__item" href="add-client.php">
+            <a class="menu__item" href="add-client">
               <i class="bi bi-cash-coin" aria-hidden="true"></i> I was paid — record it
             </a>
             <?php foreach (['stove' => 'Stove', 'tuktuk' => 'TukTuk'] as $navProduct => $navLabel): ?>

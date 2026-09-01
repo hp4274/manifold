@@ -50,7 +50,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $referrer = $referrerStmt->fetch();
 
             $referral['referral_reward_note'] = $note;
-            $flash = $referrer && send_referral_paid_email($referrer, $referral)
+            if ($referrer) {
+                after_response(static function () use ($referrer, $referral): void {
+                    send_referral_paid_email($referrer, $referral);
+                });
+            }
+
+            $flash = $referrer
                 ? 'Marked as sent and the referrer has been emailed.'
                 : 'Marked as sent. The email did not go out — check the SMTP settings.';
         }
@@ -119,7 +125,7 @@ $referralCount = (int) $countStmt->fetchColumn();
 $paging = paged($referralCount, $_GET['page'] ?? 1);
 
 /* the URL of this view without a page, for the chips and the pager */
-$referralUrl = 'referrals.php'
+$referralUrl = 'referrals'
     . ($payout !== '' || $payment !== '' ? '?' : '')
     . implode('&', array_filter([
         $payout !== '' ? 'payout=' . urlencode($payout) : '',
@@ -135,7 +141,7 @@ $referralChip = static function (string $key, string $value) use ($payout, $paym
 
     $query = http_build_query(array_filter($parts, static fn ($v): bool => $v !== ''));
 
-    return 'referrals.php' . ($query === '' ? '' : '?' . $query);
+    return 'referrals' . ($query === '' ? '' : '?' . $query);
 };
 
 /* Two questions, so two column headers rather than two rows of chips: where
@@ -250,14 +256,14 @@ require __DIR__ . '/partials/layout-top.php';
   </span>
   <span class="tile">
     <span class="eyebrow">Pending payouts</span>
-    <strong><?= e(money($totals['pending'])) ?></strong>
+    <strong><?= e(money_short($totals['pending'])) ?></strong>
     <span class="tile__stats">
       <span class="tile__stat">including referrals not yet paid up</span>
     </span>
   </span>
   <span class="tile">
     <span class="eyebrow">Paid out so far</span>
-    <strong><?= e(money($totals['sent'])) ?></strong>
+    <strong><?= e(money_short($totals['sent'])) ?></strong>
     <span class="tile__stats">
       <span class="tile__stat">across every referral marked sent</span>
     </span>
@@ -330,7 +336,7 @@ require __DIR__ . '/partials/layout-top.php';
               <td colspan="6">
                 <?= $payout === '' && $payment === ''
                     ? 'No entry found — nobody has applied with a referral code yet.'
-                    : 'No entry found. <a href="referrals.php">Show all</a>.' ?>
+                    : 'No entry found. <a href="referrals">Show all</a>.' ?>
               </td>
             </tr>
           <?php endif; ?>

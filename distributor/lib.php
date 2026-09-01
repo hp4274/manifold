@@ -40,7 +40,7 @@ function require_distributor(): array
 
     if (!$dist) {
         /* one sign-in for everybody: the address decides the role */
-        header('Location: ../portal/index.php');
+        header('Location: ../portal/');
         exit;
     }
 

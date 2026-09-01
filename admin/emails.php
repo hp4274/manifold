@@ -54,9 +54,376 @@ function email_wrap(string $heading, string $inner): string
 
 function email_button(string $url, string $label): string
 {
-    return '<p style="margin:26px 0;"><a href="' . e($url) . '" '
-        . 'style="display:inline-block;padding:14px 26px;border-radius:999px;background:#4bb453;color:#ffffff;'
-        . 'font-size:15px;font-weight:700;text-decoration:none;">' . e($label) . '</a></p>';
+    return '<p style="margin:26px 0;">' . email_pill($url, $label) . '</p>';
+}
+
+/**
+ * The website's two buttons, in the only way email can draw them: an
+ * inline-block with its own padding. `$accent` is the green one somebody is
+ * meant to press, the other is the white one beside it.
+ *
+ * No flexbox and no classes — Outlook has neither.
+ */
+function email_pill(string $url, string $label, bool $accent = true): string
+{
+    $style = $accent
+        ? 'background:#4bb453;border:1px solid #4bb453;color:#ffffff;'
+        : 'background:#ffffff;border:1px solid #cfe0d4;color:#0f2c4d;';
+
+    return '<a href="' . e($url) . '" style="display:inline-block;padding:13px 24px;margin:0 8px 8px 0;'
+        . 'border-radius:999px;font-size:15px;font-weight:700;line-height:1;text-decoration:none;'
+        . $style . '">' . e($label) . '</a>';
+}
+
+/**
+ * A label/value table, the shape every notice in here uses for its facts.
+ *
+ * One renderer rather than six copies of the same markup: an email client is
+ * unforgiving enough without six chances to get the padding wrong.
+ */
+function email_rows(array $rows): string
+{
+    $table = '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 8px;">';
+
+    foreach ($rows as $label => $value) {
+        $value = (string) $value;
+
+        $table .= '<tr>'
+            . '<td style="padding:8px 0;font-size:15px;color:#8499ac;width:38%;">' . e($label) . '</td>'
+            . '<td style="padding:8px 0;font-size:15px;color:#0f2c4d;font-weight:600;">'
+            . e($value !== '' ? $value : '-') . '</td>'
+            . '</tr>';
+    }
+
+    return $table . '</table>';
+}
+
+/** Who in the office hears about something. Configured, or every live account. */
+function office_recipients(): array
+{
+    $recipients = array_filter(array_map('trim', explode(',', ADMIN_NOTIFY_EMAIL)));
+
+    if (!$recipients) {
+        $stmt       = db()->query('SELECT email FROM admin_users WHERE is_active = 1');
+        $recipients = array_column($stmt->fetchAll(), 'email');
+    }
+
+    return $recipients ?: [MAIL_REPLY_TO];
+}
+
+/** The same letter to everybody in the office. True if any of them took it. */
+function send_to_office(string $subject, string $heading, string $inner, string $kind): bool
+{
+    $sent = false;
+
+    foreach (office_recipients() as $to) {
+        $sent = send_mail($to, $subject, email_wrap($heading, $inner), $kind) || $sent;
+    }
+
+    return $sent;
+}
+
+/**
+ * Sent when an application arrives, before anybody has looked at it.
+ *
+ * The applicant has just filled a long form and pressed a button; saying
+ * nothing until the office gets to it is how somebody fills it in again.
+ */
+function send_application_received_email(array $app): bool
+{
+    $product = product_label((string) $app['product']);
+
+    $inner = '<p style="margin:0 0 16px;">Thank you, ' . e((string) $app['full_name'])
+        . '. We have your application for the <strong style="color:#0f2c4d;">' . e($product)
+        . '</strong> and it is with our team.</p>'
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Product'        => $product,
+            'Applied on'     => format_datetime((string) ($app['created_at'] ?? date('Y-m-d H:i:s'))),
+        ])
+        . '<p style="margin:16px 0 0;">Somebody reviews it by hand - usually within two working days. '
+        . 'When it is approved we email you the payment details and open your portal, where you upload '
+        . 'the receipt. Nothing is owed until then.</p>';
+
+    return send_mail(
+        (string) $app['email'],
+        'We have your application (' . $app['reference_code'] . ')',
+        email_wrap('Application received', $inner),
+        'application_received'
+    );
+}
+
+/** And the office hears about it, so nothing waits on somebody refreshing a page. */
+function send_new_application_admin(array $app): bool
+{
+    $product = product_label((string) $app['product']);
+    $link    = base_url() . '/admin/list?type=' . rawurlencode((string) $app['product'])
+        . '&status=submitted#row-' . (int) $app['id'];
+
+    $inner = '<p style="margin:0 0 16px;">A new application is waiting for a decision.</p>'
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Product'        => $product,
+            'Applicant'      => (string) $app['full_name'],
+            'Email'          => (string) $app['email'],
+            'Phone'          => (string) ($app['mobile_number'] ?? ''),
+            'Quoted code'    => (string) ($app['referred_by_code'] ?? ''),
+        ])
+        . email_button($link, 'Open it in the admin')
+        . '<p style="margin:0;font-size:14px;color:#8499ac;">Approving it emails the applicant their '
+        . 'payment details and opens their portal.</p>';
+
+    return send_to_office(
+        'New application - ' . $app['reference_code'] . ' (' . $product . ')',
+        'New application',
+        $inner,
+        'application_new'
+    );
+}
+
+/** Sent when the office turns an application down. */
+function send_application_rejected_email(array $app, string $reason = ''): bool
+{
+    $reason = trim($reason);
+
+    $inner = '<p style="margin:0 0 16px;">Thank you for applying for the '
+        . e(product_label((string) $app['product'])) . '. After review we are not able to take this '
+        . 'application forward.</p>'
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Applicant'      => (string) $app['full_name'],
+        ])
+        . ($reason !== ''
+            ? '<p style="margin:16px 0 0;"><strong style="color:#0f2c4d;">Why:</strong> ' . e($reason) . '</p>'
+            : '')
+        . '<p style="margin:16px 0 0;">Nothing has been charged. If you think this is a mistake, or your '
+        . 'circumstances change, reply to this email or call +91 97251 54186 and we will look again.</p>';
+
+    return send_mail(
+        (string) $app['email'],
+        'About your application (' . $app['reference_code'] . ')',
+        email_wrap('We cannot take this one forward', $inner),
+        'application_rejected'
+    );
+}
+
+/**
+ * A dealer is live: their own letter, and one to the distributor who holds them.
+ *
+ * Sent when the office approves a request, and when the office adds a dealer
+ * itself — both are the moment a code starts working.
+ */
+function send_dealer_added_email(array $dealer, ?array $distributor = null): bool
+{
+    $portal = base_url() . '/portal/';
+    $code   = (string) ($dealer['dealer_code'] ?? '');
+
+    $inner = '<p style="margin:0 0 16px;">You are set up as a Manifold dealer'
+        . ($distributor ? ' under ' . e((string) $distributor['full_name']) : '') . '.</p>'
+        . email_rows([
+            'Your code'   => $code,
+            'Name'        => (string) $dealer['full_name'],
+            'Distributor' => $distributor ? (string) $distributor['full_name'] : '',
+        ])
+        . '<p style="margin:16px 0 0;">Every sale made with your code is yours. Sign in with this email '
+        . 'address to see your clients, your stock and what you are owed - no password, we send a code.</p>'
+        . email_button($portal, 'Open your dashboard');
+
+    $sent = false;
+
+    if (($dealer['email'] ?? '') !== '') {
+        $sent = send_mail(
+            (string) $dealer['email'],
+            'Your dealer code is ' . $code,
+            email_wrap('Welcome to Manifold', $inner),
+            'dealer_added'
+        );
+    }
+
+    if ($distributor && ($distributor['email'] ?? '') !== '') {
+        $theirs = '<p style="margin:0 0 16px;">' . e((string) $dealer['full_name'])
+            . ' is approved and now sells under you.</p>'
+            . email_rows([
+                'Dealer'      => (string) $dealer['full_name'],
+                'Their code'  => $code,
+                'Email'       => (string) ($dealer['email'] ?? ''),
+                'Phone'       => (string) ($dealer['mobile_number'] ?? ''),
+            ])
+            . '<p style="margin:16px 0 0;">Every completed sale of theirs earns you the override.</p>'
+            . email_button(base_url() . '/distributor/dealers', 'See your dealers');
+
+        $sent = send_mail(
+            (string) $distributor['email'],
+            $dealer['full_name'] . ' is approved as your dealer',
+            email_wrap('A dealer under you', $theirs),
+            'dealer_added'
+        ) || $sent;
+    }
+
+    return $sent;
+}
+
+/**
+ * Sent when the finance team has checked the paperwork.
+ *
+ * It is the moment the delivery payment opens — or, on a sale a partner
+ * recorded as paid in full, the moment there is nothing left to do.
+ */
+function send_docs_verified_email(array $app): bool
+{
+    $settled = ($app['status'] ?? '') === 'complete';
+    $portal  = base_url() . '/portal/';
+
+    $inner = '<p style="margin:0 0 14px;">Hello ' . e((string) $app['full_name']) . ',</p>'
+        . '<p style="margin:0 0 16px;">Your documents have been checked and verified'
+        . ($settled
+            ? ', and that is the last step. Everything on your '
+                . e(product_label((string) $app['product'])) . ' is done - we will call you to arrange '
+                . 'the handover.</p>'
+            : '. One question before anything more is owed: tell us in your portal whether to build and '
+                . 'deliver your unit, or to cancel the order - if you cancel, everything you have paid is '
+                . 'refunded in full.</p>')
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Product'        => product_label((string) $app['product']),
+            'Verified on'    => format_datetime((string) ($app['docs_verified_at'] ?? date('Y-m-d H:i:s'))),
+        ])
+        . email_button($portal, $settled ? 'See your application' : 'Answer in your portal');
+
+    return send_mail(
+        (string) $app['email'],
+        'Your documents are verified (' . $app['reference_code'] . ')',
+        email_wrap($settled ? 'Documents verified' : 'Documents verified - delivery payment open', $inner),
+        'docs_verified'
+    );
+}
+
+/**
+ * Sent when the client says to go ahead: the delivery payment is open.
+ */
+function send_delivery_open_email(array $app): bool
+{
+    $inner = '<p style="margin:0 0 14px;">Hello ' . e((string) $app['full_name']) . ',</p>'
+        . '<p style="margin:0 0 16px;">Thank you - we are going ahead with your '
+        . e(product_label((string) $app['product'])) . '. The delivery payment is open in your portal '
+        . 'now; pay it and upload the receipt, and we will arrange the handover.</p>'
+        . email_rows([
+            'Booking number'   => (string) $app['reference_code'],
+            'Delivery payment' => money(stage_amount($app, 'delivery')),
+        ])
+        . email_button(base_url() . '/portal/', 'Pay the delivery amount');
+
+    return send_mail(
+        (string) $app['email'],
+        'Delivery payment open (' . $app['reference_code'] . ')',
+        email_wrap('Going ahead with your order', $inner),
+        'delivery_open'
+    );
+}
+
+/**
+ * Sent when the client cancels: what they paid comes back.
+ */
+function send_order_cancelled_email(array $app): bool
+{
+    $inner = '<p style="margin:0 0 14px;">Hello ' . e((string) $app['full_name']) . ',</p>'
+        . '<p style="margin:0 0 16px;">Your order is cancelled, as you asked. Everything you have paid '
+        . 'is refunded in full - our team is arranging the transfer to the account you paid from and '
+        . 'will confirm it by email.</p>'
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Product'        => product_label((string) $app['product']),
+            'To refund'      => money(payment_totals($app)['paid']),
+        ])
+        . '<p style="margin:16px 0 0;">If this was a mistake, reply to this email or call '
+        . '+91 97251 54186 and we will put it back.</p>';
+
+    return send_mail(
+        (string) $app['email'],
+        'Your order is cancelled (' . $app['reference_code'] . ')',
+        email_wrap('Order cancelled - refund on its way', $inner),
+        'order_cancelled'
+    );
+}
+
+/** And the office hears the answer, because a cancellation owes somebody money. */
+function send_delivery_choice_admin(array $app, string $choice): bool
+{
+    $cancelled = $choice === 'cancel';
+    $link      = base_url() . '/admin/list?type=' . rawurlencode((string) $app['product'])
+        . '#row-' . (int) $app['id'];
+
+    $inner = '<p style="margin:0 0 16px;">'
+        . e((string) $app['full_name'])
+        . ($cancelled
+            ? ' has cancelled their order after the documents were verified. The booking amount has to be '
+                . 'refunded.'
+            : ' has asked to go ahead. The delivery payment is open to them now.')
+        . '</p>'
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Product'        => product_label((string) $app['product']),
+            'Answered'       => format_datetime((string) ($app['delivery_choice_at'] ?? date('Y-m-d H:i:s'))),
+            $cancelled ? 'To refund' : 'Delivery payment' => $cancelled
+                ? money(payment_totals($app)['paid'])
+                : money(stage_amount($app, 'delivery')),
+        ])
+        . email_button($link, 'Open it in the admin');
+
+    return send_to_office(
+        ($cancelled ? 'Order cancelled - refund due' : 'Client is going ahead') . ' - ' . $app['reference_code'],
+        $cancelled ? 'Order cancelled' : 'Client is going ahead',
+        $inner,
+        'delivery_choice'
+    );
+}
+
+/** Sent when a stock order is released: the units are theirs now. */
+function send_stock_released_email(array $order, array $buyer, string $summary): bool
+{
+    if (($buyer['email'] ?? '') === '') {
+        return false;
+    }
+
+    $isDealer = ($order['buyer_type'] ?? '') === 'dealer';
+
+    $inner = '<p style="margin:0 0 16px;">Your stock order has been released - the units are on your '
+        . 'balance now.</p>'
+        . email_rows([
+            'Order'     => '#' . (int) $order['id'],
+            'Units'     => $summary,
+            'Paid'      => money((float) $order['total_amount']),
+            'Reference' => (string) ($order['reference'] ?? ''),
+        ])
+        . '<p style="margin:16px 0 0;">Recording a sale takes a unit off this balance, so what is left '
+        . 'is always what you can still sell.</p>'
+        . email_button(base_url() . ($isDealer ? '/dealer/stock' : '/distributor/stock'), 'See your stock');
+
+    return send_mail(
+        (string) $buyer['email'],
+        'Stock released - order #' . (int) $order['id'],
+        email_wrap('Your stock is released', $inner),
+        'stock_released'
+    );
+}
+
+/**
+ * Where a commission claim has got to, told to whoever it is waiting on.
+ *
+ * One letter for every step, because a claim that moves in silence is a claim
+ * somebody chases by phone.
+ */
+function send_voucher_update_email(string $to, string $heading, string $line, array $rows, string $link): bool
+{
+    if ($to === '') {
+        return false;
+    }
+
+    $inner = '<p style="margin:0 0 16px;">' . $line . '</p>'
+        . email_rows($rows)
+        . email_button($link, 'Open the claim');
+
+    return send_mail($to, $heading, email_wrap($heading, $inner), 'voucher_update');
 }
 
 /**
@@ -74,9 +441,9 @@ function send_payment_email(array $app): bool
     $hasQr    = $qrFile !== null;
 
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($app['full_name']) . ',</p>'
-        . '<p style="margin:0 0 14px;">We have your application for the <strong style="color:#0f2c4d;">'
-        . e($product) . '</strong>. Your booking number is <strong style="color:#0f2c4d;">'
-        . e($app['reference_code']) . '</strong>.</p>'
+        . '<p style="margin:0 0 14px;">Your application for the <strong style="color:#0f2c4d;">'
+        . e($product) . '</strong> has been approved. Your booking number is '
+        . '<strong style="color:#0f2c4d;">' . e((string) $app['reference_code']) . '</strong>.</p>'
         . '<p style="margin:0 0 20px;">To reserve your place, pay the booking amount of '
         . '<strong style="color:#0f2c4d;">' . e($amount) . '</strong> and upload the receipt. '
         . 'We check every payment by hand and confirm within two working days.</p>'
@@ -90,7 +457,7 @@ function send_payment_email(array $app): bool
         $inner .= '<p style="margin:0 0 20px;padding:12px 18px;border-radius:12px;background:#eefaf4;'
             . 'border:1px solid #cdeee0;font-size:15px;color:#0f2c4d;">'
             . 'Referral code <strong>' . e((string) $app['referred_by_code']) . '</strong> recorded. '
-            . 'What you pay is unchanged — the reward goes to whoever gave you the code, '
+            . 'What you pay is unchanged - the reward goes to whoever gave you the code, '
             . 'once your booking payment is verified.</p>';
     } elseif (!empty($app['referred_by_code'])) {
         $inner .= '<p style="margin:0 0 20px;padding:12px 18px;border-radius:12px;background:#fff6ed;'
@@ -115,13 +482,16 @@ function send_payment_email(array $app): bool
     $inner .= '<p style="margin:0 0 10px;font-weight:700;color:#0f2c4d;">2. Upload the receipt</p>'
         . '<p style="margin:0 0 4px;">Sign in with this email address and upload a screenshot or PDF of the payment.</p>'
         . email_button($portal, 'Sign in and upload')
-        . '<p style="margin:0;font-size:14px;color:#8499ac;">Signing in sends a one-time code to this address — no password to remember.</p>';
+        . '<p style="margin:0;font-size:14px;color:#8499ac;">Signing in sends a one-time code to this address - no password to remember.</p>';
 
+    /* This one now goes out when the office approves an application, not when
+       it arrives — the applicant already heard that it arrived — so it says so
+       rather than repeating "received". */
     return send_mail(
         $app['email'],
-        'Application received — pay the ' . $amount . ' booking amount to reserve your place ('
+        'Approved - pay the ' . $amount . ' booking amount to reserve your place ('
             . $app['reference_code'] . ')',
-        email_wrap('Application received', $inner),
+        email_wrap('Your application is approved', $inner),
         'payment',
         $hasQr ? $qrFile : null
     );
@@ -142,7 +512,7 @@ function send_payment_reminder_email(array $app, ?array $totals = null): bool
         . '</strong> (' . e($app['reference_code']) . ') is waiting on the '
         . '<strong style="color:#0f2c4d;">' . e(strtolower($stage['label'])) . ' of ' . e($amount) . '</strong>'
         . ($totals['paid'] > 0
-            ? ' — you have paid ' . e(money((float) $totals['paid'])) . ' of ' . e(money((float) $totals['due'])) . ' so far'
+            ? ' - you have paid ' . e(money((float) $totals['paid'])) . ' of ' . e(money((float) $totals['due'])) . ' so far'
             : '')
         . '.</p>'
         . '<p style="margin:0 0 8px;">Pay the full amount in one transfer and upload the receipt in the portal. '
@@ -187,10 +557,9 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
         'Product'           => $product,
         'Payment'           => $stageName,
         'Amount received'   => $amount,
-        'Payment reference' => (string) ($payment['reference'] ?: '—'),
+        'Payment reference' => (string) ($payment['reference'] ?: '-'),
         'Verified on'       => $paidOn,
-        'Paid to date'      => money((float) $totals['paid']) . ' of ' . money((float) $totals['due']),
-        'Balance'           => $settled ? 'Nil — paid in full' : money((float) $totals['balance']),
+        'Balance'           => $settled ? 'Nil - paid in full' : money((float) $totals['balance']),
     ];
 
     $table = '<table role="presentation" cellpadding="0" cellspacing="0" '
@@ -207,18 +576,18 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
     $table .= '</table>';
 
     if ($settled) {
-        $lead = '<p style="margin:0 0 20px;">This clears the last of it — both payments on your application '
+        $lead = '<p style="margin:0 0 20px;">This clears the last of it - both payments on your application '
             . 'are verified. Keep this email as your receipt.</p>';
     } elseif ($stageKey === 'booking') {
         $lead = '<p style="margin:0 0 20px;">Thank you. Your booking payment is verified and your '
             . e($product) . ' is reserved. The '
             . '<strong style="color:#0f2c4d;">' . e(money((float) $totals['stages']['delivery']['amount']))
-            . '</strong> delivery payment falls due when the unit is ready — we will email you then, and you '
+            . '</strong> delivery payment falls due when the unit is ready - we will email you then, and you '
             . 'can upload that receipt in the portal.</p>';
     } else {
         $lead = '<p style="margin:0 0 20px;">Thank you. We have credited this payment against your application. '
             . '<strong style="color:#0f2c4d;">' . e(money((float) $totals['balance'])) . '</strong> is still '
-            . 'outstanding — upload the receipt once it is paid.</p>';
+            . 'outstanding - upload the receipt once it is paid.</p>';
     }
 
     $closing = $settled
@@ -243,10 +612,11 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
             . 'and has their booking payment verified earns you <strong style="color:#0f2c4d;">' . e($earns)
             . '</strong>, which we transfer to you once we have checked it. Send them a link with the code '
             . 'already filled in:</p>'
-            . '<p style="margin:0 0 6px;font-size:15px;"><a href="' . e(referral_link($code, 'stove'))
-            . '" style="color:#0e8f96;">Apply for a stove &rarr;</a></p>'
-            . '<p style="margin:0;font-size:15px;"><a href="' . e(referral_link($code, 'tuktuk'))
-            . '" style="color:#0e8f96;">Apply for a TukTuk kit &rarr;</a></p>'
+            /* the same pair the website shows: the one to press, and the other */
+            . '<p style="margin:0;font-size:15px;">'
+            . email_pill(referral_link($code, 'stove'), 'Apply for a stove')
+            . email_pill(referral_link($code, 'tuktuk'), 'Apply for a TukTuk kit', false)
+            . '</p>'
             . '</div>';
     }
 
@@ -273,9 +643,9 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
 
     return send_mail(
         $app['email'],
-        'Receipt ' . $payment['receipt_no'] . ' — ' . $amount . ' received'
+        'Receipt ' . $payment['receipt_no'] . ' - ' . $amount . ' received'
             . ($settled ? ' (both payments verified)' : ', ' . money((float) $totals['balance']) . ' to go'),
-        email_wrap($settled ? 'Payment complete — your receipt' : 'Payment received — your receipt', $inner),
+        email_wrap($settled ? 'Payment complete - your receipt' : 'Payment received - your receipt', $inner),
         'receipt',
         null,
         $copies,
@@ -297,7 +667,7 @@ function send_referral_paid_email(array $referrer, array $referral): bool
         . '<strong style="color:#0f2c4d;">' . e($code) . '</strong> and has paid their fee, so we have sent you '
         . '<strong style="color:#0f2c4d;">' . e($amount) . '</strong>'
         . (!empty($referral['referral_reward_note'])
-            ? ' — ' . e((string) $referral['referral_reward_note'])
+            ? ' - ' . e((string) $referral['referral_reward_note'])
             : '')
         . '.</p>'
         . '<p style="margin:0 0 20px;">Thank you for the introduction. Your code keeps working, so anyone else '
@@ -348,7 +718,7 @@ function send_payment_rejected_email(array $app, string $reason = '', ?array $pa
 
     return send_mail(
         $app['email'],
-        'We could not verify your payment — ' . $app['reference_code'],
+        'We could not verify your payment - ' . $app['reference_code'],
         email_wrap('Payment could not be verified', $inner),
         'payment_rejected'
     );
@@ -361,17 +731,6 @@ function send_payment_rejected_email(array $app, string $reason = '', ?array $pa
  */
 function send_payment_received_admin(array $app): bool
 {
-    $recipients = array_filter(array_map('trim', explode(',', ADMIN_NOTIFY_EMAIL)));
-
-    if (!$recipients) {
-        $stmt       = db()->query('SELECT email FROM admin_users WHERE is_active = 1');
-        $recipients = array_column($stmt->fetchAll(), 'email');
-    }
-
-    if (!$recipients) {
-        $recipients = [MAIL_REPLY_TO];
-    }
-
     $product = product_label((string) $app['product']);
     $link    = base_url() . '/admin/list.php?type=' . rawurlencode((string) $app['product'])
         . '&status=' . rawurlencode((string) $app['status']) . '#row-' . (int) $app['id'];
@@ -382,39 +741,25 @@ function send_payment_received_admin(array $app): bool
         'Applicant'      => (string) $app['full_name'],
         'Email'          => (string) $app['email'],
         'Phone'          => (string) ($app['mobile_number'] ?? ''),
-        'Payment'        => status_label((string) $app['status']),
-        'Payment ref'    => (string) ($app['payment_reference'] ?? '—'),
+        /* the admin's own labels carry a long dash; a letter does not */
+        'Payment'        => str_replace('—', '-', status_label((string) $app['status'])),
+        'Payment ref'    => (string) ($app['payment_reference'] ?? '-'),
     ];
 
-    $table = '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 8px;">';
-
-    foreach ($rows as $label => $value) {
-        $table .= '<tr>'
-            . '<td style="padding:8px 0;font-size:15px;color:#8499ac;width:38%;">' . e($label) . '</td>'
-            . '<td style="padding:8px 0;font-size:15px;color:#0f2c4d;font-weight:600;">' . e($value !== '' ? $value : '—') . '</td>'
-            . '</tr>';
-    }
-
-    $table .= '</table>';
+    $table = email_rows($rows);
 
     $inner = '<p style="margin:0 0 16px;">An applicant has uploaded proof of payment. '
-        . 'The application is now sitting in <strong style="color:#0f2c4d;">Payment received — verify</strong>.</p>'
+        . 'The application is now sitting in <strong style="color:#0f2c4d;">Payment received - verify</strong>.</p>'
         . $table
         . email_button($link, 'Open it in the admin')
         . '<p style="margin:0;font-size:14px;color:#8499ac;">Open the row and use the ✅ action to verify the payment and complete the application.</p>';
 
-    $sent = false;
-
-    foreach ($recipients as $to) {
-        $sent = send_mail(
-            $to,
-            'Payment received — ' . $app['reference_code'] . ' (' . $product . ')',
-            email_wrap('Payment received', $inner),
-            'payment_received'
-        ) || $sent;
-    }
-
-    return $sent;
+    return send_to_office(
+        'Payment received - ' . $app['reference_code'] . ' (' . $product . ')',
+        'Payment received',
+        $inner,
+        'payment_received'
+    );
 }
 
 /** One-time sign-in code for the applicant portal. */
@@ -479,7 +824,7 @@ function send_contact_thanks_email(array $enquiry): bool
 
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($enquiry['name']) . ',</p>'
         . '<p style="margin:0 0 20px;">Thank you for writing to us. Your enquiry has reached the Ahmedabad team '
-        . 'and a person — not an autoresponder — will read it. We reply within two working days.</p>'
+        . 'and a person - not an autoresponder - will read it. We reply within two working days.</p>'
         . '<p style="margin:0 0 10px;font-weight:700;color:#0f2c4d;">What you sent us</p>'
         . $table
         . '<p style="margin:16px 0 6px;font-weight:700;color:#0f2c4d;">Your message</p>'
@@ -487,7 +832,7 @@ function send_contact_thanks_email(array $enquiry): bool
         . 'border:1px solid #e3ebf2;font-size:15px;color:#0f2c4d;">'
         . nl2br(e($enquiry['message'])) . '</p>'
         . '<p style="margin:0 0 4px;">In the meantime you can read how the technology works and what we are building.</p>'
-        . email_button(base_url() . '/technology.html', 'See the technology')
+        . email_button(base_url() . '/technology', 'See the technology')
         . '<p style="margin:0;font-size:14px;color:#8499ac;">Need us sooner? Call +91 97251 54186, '
         . 'or reply to this email and it lands with the same team.</p>';
 
@@ -512,10 +857,10 @@ function send_newsletter_welcome_email(string $to): bool
         . 'something worth telling: how the hydrogen stove and the TukTuk conversion kit are coming along, '
         . 'where the pilots are running, and when either opens up in a new city.</p>'
         . '<p style="margin:0 0 20px;">We write rarely and we never pass your address on.</p>'
-        . email_button($site . '/technology.html', 'See how it works')
+        . email_button($site . '/technology', 'See how it works')
         . '<p style="margin:0 0 4px;font-size:14px;color:#8499ac;">Already thinking about a unit? '
-        . '<a href="' . e($site) . '/apply-stove.html" style="color:#0e8f96;">Apply for the stove</a> or '
-        . '<a href="' . e($site) . '/apply-tuktuk.html" style="color:#0e8f96;">for the conversion kit</a>.</p>'
+        . '<a href="' . e($site) . '/apply-stove" style="color:#0e8f96;">Apply for the stove</a> or '
+        . '<a href="' . e($site) . '/apply-tuktuk" style="color:#0e8f96;">for the conversion kit</a>.</p>'
         . '<p style="margin:0;font-size:14px;color:#8499ac;">Did not sign up, or changed your mind? '
         . 'Reply with "unsubscribe" and you are off the list.</p>';
 

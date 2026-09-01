@@ -1,0 +1,147 @@
+# ==========================================================================
+# Clean addresses.
+#
+# A visitor sees /stove, /apply-stove, /admin, /portal/status — never the file
+# behind them. The files keep their names on disk; only the address changes.
+#
+# Three things happen here, in this order:
+#   1. the handful of scripts that are fetched by name are left alone,
+#   2. anyone landing on a file name is sent once to the clean address,
+#   3. the clean address serves the file.
+# ==========================================================================
+
+# MultiViews would guess at extensions before any of this runs, and its guess
+# is not ours: /blog would answer from blog.php on a whim.
+Options -MultiViews
+
+RewriteEngine On
+
+# ---------- 1. answered at their own address ----------
+# The blog feed and the raffle figures are fetched by main.js, the form handler
+# is posted to, and the rest stream a file or a fragment. Redirecting any of
+# them would break the caller, so they stop here.
+RewriteRule ^(blog|raffle)\.php$ - [L]
+RewriteRule ^admin/(submit|file|drawer|receipt|receipt-pdf|raffle-search)\.php$ - [L]
+RewriteRule ^portal/(session|prefill|receipt)\.php$ - [L]
+RewriteRule ^distributor/proof\.php$ - [L]
+
+# ---------- 2. the file name goes to the clean address ----------
+# Only a GET: a redirect drops the body of a POST, and every form here posts to
+# a script by name.
+#
+# THE_REQUEST is the request line the browser actually sent, so it still says
+# "stove.html" after step 3 has rewritten the address internally. Matching on
+# it, rather than on the current URI, is what keeps the two steps from chasing
+# each other in a loop. The target is taken from REQUEST_URI, which carries the
+# full path — the site works the same in a folder as it does at a domain root.
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} "\s[^\s]+\.(php|html)[\s?]" [NC]
+RewriteCond %{REQUEST_URI} ^(.*/)index\.(php|html)$
+RewriteRule ^ %1 [R=301,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} "\s[^\s]+\.(php|html)[\s?]" [NC]
+RewriteCond %{REQUEST_URI} ^(.+)\.(php|html)$
+RewriteRule ^ %1 [R=301,L,NE]
+
+# ---------- 3. the clean address serves the file ----------
+# .html first: where a name exists as both, the page is the HTML one and the
+# PHP is the feed behind it.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.+)$ $1.html [L]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.+)$ $1.php [L]
+
+# ---------- 4. what is not a page ----------
+# These are included by other scripts and answer nothing on their own; the
+# database schema is not the web's business at all. Reachable at two addresses
+# now that the extension is optional, so both are shut here.
+<FilesMatch "^(lib|config|mailer|emails|raffle-lib|receipt-pdf)\.php$">
+  Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(sql|md)$">
+  Require all denied
+</FilesMatch>
+
+# ==========================================================================
+# What the web may not see.
+#
+# The rules above hide the scripts that answer nothing. These hide the things
+# that are not the web's business at all: the repository, the editor and tool
+# folders, and any listing of a directory that has no index page. Without the
+# first block the whole source history — admin/config.php and the SMTP
+# password with it — can be reconstructed from /.git.
+# ==========================================================================
+Options -Indexes
+
+RedirectMatch 404 (?i)/\.git(/|$)
+
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
+
+# Matched against the path below this folder, so the site works the same in a
+# subfolder as it does at a domain root.
+RewriteRule (?i)^(\.playwright[^/]*|\.reticle|graphify-out|admin/tests)(/|$) - [R=404,L]
+
+# ==========================================================================
+# What the browser is told about the answer.
+#
+# None of these change a page; they stop a browser being talked into treating
+# one as something it is not. HSTS is left out on purpose — it belongs on the
+# HTTPS host, not here, where it would lock a local install out of http://.
+# ==========================================================================
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()"
+
+  # An uploaded document is served back by admin/file.php; nothing uploaded is
+  # ever a page, so it may not run as one.
+  <FilesMatch "\.(jpe?g|png|webp|gif|pdf)$">
+    Header always set X-Content-Type-Options "nosniff"
+  </FilesMatch>
+</IfModule>
+
+# ==========================================================================
+# Weight and staleness.
+#
+# style.css is 148 KB and bootstrap.min.css 228 KB — over the wire, uncompressed,
+# on every visit. Text compresses to roughly a fifth of that. The fingerprinted
+# assets (?v=…) may be held for a year because a change gives them a new address;
+# the HTML pages are never held, because they are the thing that changes.
+# ==========================================================================
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml \
+    application/javascript application/x-javascript application/json \
+    application/xml application/rss+xml image/svg+xml font/ttf font/otf \
+    application/vnd.ms-fontobject
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css                  "access plus 1 year"
+  ExpiresByType application/javascript    "access plus 1 year"
+  ExpiresByType image/webp                "access plus 1 year"
+  ExpiresByType image/png                 "access plus 1 year"
+  ExpiresByType image/jpeg                "access plus 1 year"
+  ExpiresByType image/svg+xml             "access plus 1 year"
+  ExpiresByType font/woff2                "access plus 1 year"
+  ExpiresByType text/html                 "access plus 0 seconds"
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(css|js|webp|png|jpe?g|svg|woff2?|ttf|otf)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "\.(html|php)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>

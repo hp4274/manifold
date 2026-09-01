@@ -44,7 +44,7 @@ if ($exists && $size > 0) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Error log — Manifold admin</title>
+  <title>Error log - Manifold admin</title>
   <link rel="icon" type="image/png" href="<?= SITE_URL ?>/assets/images/favicon.png">
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= SITE_URL ?>/assets/vendor/figtree/figtree.css">
@@ -83,8 +83,7 @@ if ($exists && $size > 0) {
 
       <p style="margin-top:22px">
         <a class="link-arrow" href="?lines=1000">Show 1000 lines</a> ·
-        <a class="link-arrow" href="diagnose-submit.php">Submit diagnostics</a> ·
-        <a class="link-arrow" href="index.php">Dashboard</a>
+        <a class="link-arrow" href="./">Dashboard</a>
       </p>
     </div>
   </main>

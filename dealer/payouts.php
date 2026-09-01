@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'raise
     if ($error === '') {
         $_SESSION['dealer_flash'] = 'Voucher raised. It is with your distributor now.';
 
-        header('Location: payouts.php');
+        header('Location: payouts');
         exit;
     }
 }

@@ -346,7 +346,16 @@
     function open() {
       if (!panel) buildPanel();
 
-      view = new Date((chosen || new Date()).getFullYear(), (chosen || new Date()).getMonth(), 1);
+      /* Open where there is something to pick. With nothing chosen the month is
+         today's — unless the field cannot accept today, as an installation date
+         that starts next year cannot, in which case it opens at the earliest
+         month it will take. */
+      var start = chosen || new Date();
+
+      if (!chosen && min && start < min) start = min;
+      if (!chosen && max && start > max) start = max;
+
+      view = new Date(start.getFullYear(), start.getMonth(), 1);
       paintPanel();
 
       panel.classList.add('is-open');

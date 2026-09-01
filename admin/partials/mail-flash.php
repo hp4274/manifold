@@ -26,6 +26,8 @@ $pay  = $payFlash ?? '';
   <p class="alert alert--ok">Payment accepted. The receipt has been emailed to the applicant.</p>
 <?php elseif ($pay === 'rejected'): ?>
   <p class="alert alert--error">Payment rejected. The applicant has been emailed and is back to payment pending.</p>
+<?php elseif ($pay === 'docs'): ?>
+  <p class="alert alert--ok">Documents verified. The applicant has been emailed.</p>
 <?php elseif ($pay === 'reminded'): ?>
   <p class="alert alert--ok">Reminder sent.</p>
 <?php elseif ($pay === 'mailfail'): ?>
