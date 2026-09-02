@@ -163,48 +163,28 @@ distributor portal alike, so the three can never quote different figures.
 
 ---
 
-## 3. Route B — a dealer or distributor signs the client up
+## 3. Route B — a dealer or distributor brings the client in
 
-The same route as A, entered on a different form. A partner who has agreed a
-sale in person types the customer in, so that customer does not have to go home
-and fill in the website form themselves.
+There is no second route any more, and that is the point: **a dealer or a
+distributor never takes money from a customer.** Every client pays the company,
+through the same form and the same seven stages as §2.
 
-**Money never passes through a dealer or a distributor.** The customer pays the
-company, in their own portal, and goes through every step of §2 — the office
-approves, they pay the booking amount, finance checks the documents, they
-confirm delivery and pay the delivery amount. The partner is paid their
-commission by us, out of what the customer paid us.
+What a partner has is a link. From **Add a client** in their portal:
 
-- Dealer: **Dealer portal → Add a client**
-- Distributor: **Distributor portal → Add a client**
-- Office, on a partner's behalf: the same form in the admin
+- **They pay Manifold — Stove form** and **— TukTuk form** open the ordinary
+  apply page in a new tab with that partner's code already in the referral box
+  and locked, so the sale is attributed to them (`referral_link()`).
 
-`create_direct_sale()` writes one row and nothing else:
+The customer fills the form in — with the partner beside them, or on their own
+phone later, it makes no difference — and from there it is Route A exactly:
+office approval, booking payment, finance check, delivery confirmation,
+delivery payment. Commission is frozen onto the row when the application
+arrives, and earned when the delivery payment is verified.
 
-- `status = 'submitted'` — exactly where a website application starts. A partner
-  entering a customer is not an approval; the office still decides.
-- **no payment rows, no verified stamps** — the customer has paid nobody yet
-- `sale_channel = 'direct'` — which form it came in on, and nothing more
-- `entered_by_dealer` / `entered_by_distributor` — who keyed it in
-- commission frozen by the same `commission_split()` as any other sale, and
-  written to `commission_lines` by `sync_application_status()` when the delivery
-  payment is verified, exactly as it is for a website sale
-- `referred_by_*` where a customer sent them — see §4
-
-Consequences worth knowing:
-
-- The client signs in to the same portal, sees the same seven stages, uploads
-  the same two receipts and gets the same emails and PDF receipts.
-- The partner earns nothing until the customer has actually paid in full. There
-  is no longer such a thing as a sale that is complete on arrival.
-- **Stock leaves the partner's shelf when the sale completes**, not when it is
-  typed in — `stock_take_on_completion()`, called from
-  `sync_application_status()` and guarded by the ledger row, so a sale the
-  office turns down costs the partner no stock and a sale that completes cannot
-  be counted twice. The portals still refuse to record a client the partner has
-  no unit for, so nothing can be promised out of an empty shelf.
-- A dealer's client still books their distributor's override, because the
-  override follows whoever signed that dealer up.
+The old **"I was paid — record it"** form is gone. It created an application
+that was already complete, with both payments marked verified and the money
+never reaching the company. Nothing writes `sale_channel = 'direct'` any more;
+rows that already carry it are historic and still display correctly.
 
 ---
 
@@ -373,18 +353,24 @@ Approving is the only thing that makes the code live.
 **Built and working.** Everything in this section describes code that runs
 today, with the file and function names to find it by.
 
-A direct sale (§3) hands over a unit out of the partner's own hand, so they have
-to have bought it first. Stock moves _down_ the chain one tier at a time and
-money moves _up_ it, and each tier only ever deals with the tier next to it.
+Stock moves _down_ the chain one tier at a time and money moves _up_ it, and
+each tier only ever deals with the tier next to it.
 
 ```
-   office ──────units─────▶ distributor ─────units─────▶ dealer ─────unit────▶ client
-          ◀─────money──────             ◀─────money─────        ◀────money────
-       admin/stock.php            distributor/stock.php      the sale is recorded
-       releases the units         releases the units         in *-/add-client.php
+   office ──────units─────▶ distributor ─────units─────▶ dealer
+          ◀─────money──────             ◀─────money─────
+       admin/stock.php            distributor/stock.php
+       releases the units         releases the units
 ```
 
 The office never sells to a dealer, and a dealer never buys from the office.
+
+**Nothing comes off a shelf for a client sale any more.** Since Route B was
+removed (§3) every client pays the company and the company ships the unit, so
+the ledger's `sale` side has no writer left — `stock_take_for_sale()` still
+exists and the historic `sale` rows still read correctly, but nothing calls it.
+What a partner holds is now inventory they have bought, and how it is drawn
+down is an open question for the office rather than something the code decides.
 
 ---
 
@@ -531,24 +517,21 @@ units twice.
 
 ### 8.5 Selling to a client — what comes off
 
-Recording a direct sale (§3) in `dealer/add-client.php` or
-`distributor/add-client.php` does two things in order:
+**Nothing, as the code now stands.** Every client pays Manifold and the company
+ships the unit, so no path deducts from a partner's shelf.
 
-1. **Before writing the sale**, check the seller holds enough:
-   `stock_units()` against the sale's `units_required`. If they are short the
-   sale is **refused** with a message naming what they have. This is enforced in
-   the controller, not only in the form.
-2. **After writing the sale**, `stock_take_for_sale()` writes a `sale` row:
-   `-units`, and value at cost, carrying the new `application_id` — which is
-   what ties a missing unit to the client who has it.
+For the record, what the sale side of the ledger did while Route B existed, and
+what the historic rows mean:
 
-Cost here is `stock_unit_cost()`: **the average of what the partner actually
-paid**, or `held value ÷ held units`. Two orders at different prices leave a
-blended cost, so a sale can never deduct more value than the units were bought
-for.
+- `stock_take_for_sale()` wrote a `sale` row of `-units` at cost, carrying the
+  `application_id` — which is what ties a missing unit to the client who has it.
+- Cost is `stock_unit_cost()`: **the average of what the partner actually
+  paid**, or `held value ÷ held units`. Two orders at different prices leave a
+  blended cost, so a sale could never deduct more value than the units were
+  bought for.
 
-Sales through a **share link**, where the client pays Manifold directly, take
-nothing off any shelf — that unit ships from the company.
+Two applications in the current database carry `sale_channel = 'direct'` and a
+matching `sale` ledger row each. They are history, and they still add up.
 
 ---
 

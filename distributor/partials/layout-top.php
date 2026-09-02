@@ -100,13 +100,10 @@ $navItems  = [
             <i class="bi bi-chevron-down menu__caret" aria-hidden="true"></i>
           </summary>
           <div class="menu__list">
-            <?php /* Two different sales, and the difference is who took the
-                     money. Recording one you were paid for is not the same as
-                     sending somebody to pay Manifold, so they are not the same
-                     button. */ ?>
-            <a class="menu__item" href="add-client">
-              <i class="bi bi-cash-coin" aria-hidden="true"></i> I was paid — record it
-            </a>
+            <?php /* One way in, and it is the customer's own: the form, with
+                     this partner's code locked into it. Money is never taken by
+                     a dealer or a distributor, so there is nothing else to
+                     record here. */ ?>
             <?php foreach (['stove' => 'Stove', 'tuktuk' => 'TukTuk'] as $navProduct => $navLabel): ?>
               <a class="menu__item" target="_blank" rel="noopener"
                  href="<?= e(referral_link((string) $dist['distributor_code'], $navProduct)) ?>">
