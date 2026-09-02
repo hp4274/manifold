@@ -228,11 +228,27 @@ require __DIR__ . '/partials/head.php';
       </div>
     <?php endif; ?>
 
+    <?php /* the orders on the left, the buy-again card parked on the right where
+             it stays put while a long list of stages scrolls past it */ ?>
+    <div class="portal-layout<?= $applications ? '' : ' portal-layout--single' ?>">
+      <div class="portal-layout__main">
+
     <?php foreach ($applications as $app): ?>
       <?php
         $status  = (string) $app['status'];
         $stageIx = array_search($status, APPLICATION_STAGES, true);
         [$title, $copy] = stage_copy($status);
+
+        /* Same stage, opposite news: the finance team has looked and cannot
+           accept the paperwork. The step keeps its title — this is still where
+           the application is — but "we are checking your documents" is no
+           longer true and must not be the first thing they read. The reason
+           itself is beside the delivery payment, which is what it holds shut. */
+        if ($status === 'docs_pending' && !empty($app['docs_rejected_at'])) {
+            $copy = 'Our finance team could not accept the documents you gave with the application. '
+                . 'We have emailed you what is wrong with them — send the corrected ones and we will '
+                . 'check again. Your application stands and your booking payment is safe.';
+        }
       ?>
       <article class="portal-app" id="app-<?= (int) $app['id'] ?>">
 
@@ -267,7 +283,10 @@ require __DIR__ . '/partials/head.php';
               </p>
             <?php endif; ?>
           </div>
-          <span class="portal-status portal-status--<?= e($status) ?>"><?= e(status_label($status, 'applicant')) ?></span>
+          <?php /* No badge up here: the stage the timeline marks and the
+                   paragraph under it already say where this order is, and a
+                   third telling of it in the corner read as a second, different
+                   status to the person looking at it. */ ?>
         </header>
 
         <?php if ($status === 'rejected'): ?>
@@ -391,6 +410,9 @@ require __DIR__ . '/partials/head.php';
                   <?php elseif ($stage['state'] === 'checking'): ?>
                     Your receipt is with our team. We check every payment by hand, usually within
                     two working days.
+                  <?php elseif ($sealed && !empty($app['docs_rejected_at'])): ?>
+                    Your booking is verified. This opens once our finance team can accept your
+                    documents - see below for what they need.
                   <?php elseif ($sealed): ?>
                     Your booking is verified. This opens as soon as our finance team has checked your
                     documents - we email you the moment they do.
@@ -407,6 +429,20 @@ require __DIR__ . '/partials/head.php';
                 <?php if (!empty($stage['reject_reason']) && $stage['state'] === 'due'): ?>
                   <p class="portal-alert portal-alert--error portal-stage__reject">
                     Your last receipt was not accepted: <?= e((string) $stage['reject_reason']) ?>
+                  </p>
+                <?php endif; ?>
+
+                <?php /* The finance team's verdict on the paperwork sits on this
+                         stage because this is the stage it holds shut. There is
+                         no upload box for documents, so it says how to send them
+                         rather than pointing at a form that is not there. */ ?>
+                <?php if ($sealed && !empty($app['docs_rejected_at'])): ?>
+                  <p class="portal-alert portal-alert--error portal-stage__reject">
+                    Your documents were not accepted: <?= e((string) $app['docs_reject_reason']) ?>
+                    <br>
+                    Reply to the email we sent with the corrected documents attached, or call
+                    <a href="tel:+919725154186">+91 97251 54186</a>. Your application stands and
+                    your booking payment is safe.
                   </p>
                 <?php endif; ?>
 
@@ -455,9 +491,16 @@ require __DIR__ . '/partials/head.php';
          what the blur already says to everyone who can see it. */ ?>
                   <div class="portal-pay"<?= $sealed ? ' inert aria-hidden="true"' : '' ?>>
                     <div class="portal-pay__qr">
-                      <?php $qr = qr_path(); ?>
+                      <?php
+                        $qr = qr_path();
+                        /* the QR is whatever file the office uploaded, so its size is
+                           read off the file rather than guessed, and the box below it
+                           stops jumping while the image loads */
+                        $qrSize = $qr === '' ? false : @getimagesize((string) qr_file());
+                      ?>
                       <?php if ($qr !== ''): ?>
                         <img src="../<?= e($qr) ?>"
+                             <?= $qrSize ? 'width="' . (int) $qrSize[0] . '" height="' . (int) $qrSize[1] . '"' : '' ?>
                              alt="Payment QR code for <?= e($app['reference_code']) ?>">
                       <?php endif; ?>
                       <p class="portal-pay__note">
@@ -589,6 +632,41 @@ require __DIR__ . '/partials/head.php';
 
       </article>
     <?php endforeach; ?>
+
+      </div>
+
+    <?php if ($applications): ?>
+      <aside class="portal-layout__side">
+      <div class="portal-card portal-again">
+        <p class="eyebrow eyebrow--rule">Buy again</p>
+        <h2>Want another one?</h2>
+        <p class="u-sub portal-card__lead">Your name, address and contact details carry over — only the
+          product details are left to answer.</p>
+
+        <div class="role-picker">
+          <a class="role-card" href="../apply-stove">
+            <span class="role-card__icon"><i class="bi bi-fire" aria-hidden="true"></i></span>
+            <span class="role-card__text">
+              <strong>Clean cookstove</strong>
+              <span>Less smoke, less fuel, same kitchen.</span>
+            </span>
+            <i class="bi bi-arrow-right" aria-hidden="true"></i>
+          </a>
+
+          <a class="role-card" href="../apply-tuktuk">
+            <span class="role-card__icon"><i class="bi bi-truck" aria-hidden="true"></i></span>
+            <span class="role-card__text">
+              <strong>TukTuk conversion kit</strong>
+              <span>Turn a petrol three-wheeler electric.</span>
+            </span>
+            <i class="bi bi-arrow-right" aria-hidden="true"></i>
+          </a>
+        </div>
+      </div>
+      </aside>
+    <?php endif; ?>
+
+    </div>
 
   </div>
 </section>

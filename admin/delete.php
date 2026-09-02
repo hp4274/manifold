@@ -53,7 +53,8 @@ if (!preg_match('#^(\./|list)(\?[a-z0-9=&_%-]*)?$#i', $return)) {
     $return = 'list?type=' . urlencode($type);
 }
 
-admin_flash(['deleted' => $id]);
+/* the row is gone, so the name is taken off the copy read before the delete */
+admin_flash(['deleted' => $id, 'deleted_note' => record_title($type, $row) . ' deleted.']);
 
 header('Location: ' . $return);
 exit;

@@ -162,6 +162,11 @@ ul{list-style:none;margin:0;padding:0}
 .topbar p{font-size:var(--t-ui);color:var(--muted)}
 
 /* ---------- buttons ---------- */
+/* A submit waiting on the declaration and the terms: spent-looking but still
+   clickable, because pressing it is how somebody asks what is missing. */
+.btn.is-locked{opacity:.45;box-shadow:none;transform:none}
+.btn.is-locked:hover{opacity:.45;box-shadow:none;transform:none}
+
 .btn{
   display:inline-flex;
   align-items:center;
@@ -206,6 +211,26 @@ ul{list-style:none;margin:0;padding:0}
   transition:border-color .2s ease,box-shadow .2s ease;
 }
 .field textarea{min-height:120px;resize:vertical}
+
+/* --- the dropdowns ---
+   Left to itself a select wears the browser's own arrow, which sits hard
+   against the text on one engine and floats in a grey well on another. One
+   chevron of ours instead, and the padding to keep the answer clear of it. */
+.field select{
+  appearance:none;
+  -webkit-appearance:none;
+  padding-right:44px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23768ba0'%3E%3Cpath d='M3.2 5.6a1 1 0 0 1 1.4 0L8 9l3.4-3.4a1 1 0 1 1 1.4 1.4l-4.1 4.1a1 1 0 0 1-1.4 0L3.2 7a1 1 0 0 1 0-1.4z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 16px center;
+  background-size:14px 14px;
+  cursor:pointer;
+  text-overflow:ellipsis;
+}
+/* the option list is the browser's; only its type is ours to set */
+.field select option{font-size:var(--t-sub);color:var(--ink);padding:6px 8px}
+.field select:hover{border-color:#c3d3df}
+.field select:disabled{background-color:var(--tint);color:var(--muted);cursor:not-allowed}
 /* one placeholder colour, stated rather than left to the browser — the default
    varies enough between them to read as a different shade of grey per field */
 .field input::placeholder,
@@ -538,7 +563,66 @@ ul{list-style:none;margin:0;padding:0}
   gap:16px;
 }
 .panel__body{padding:24px}
-.panel__body .field:last-of-type{margin-bottom:24px}
+
+/* ---------- exporting a list ----------
+   The button sits beside Add on the panel head; everything it asks for is in
+   the dialog, so the head stays a head. */
+.panel__head-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.export-open{display:inline-flex;align-items:center;gap:6px;height:38px}
+
+/* two dates, side by side until the dialog is too narrow to hold them */
+.export-dates{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.export-dates[hidden]{display:none}
+.export-dates .field{margin-bottom:18px}
+
+/* the file choice: a radio each, but the whole row is the target */
+.export-formats{border:0;padding:0;margin:0 0 4px}
+.export-formats legend{
+  font-size:13px;
+  font-weight:600;
+  color:var(--ink);
+  padding:0;
+  margin-bottom:8px;
+}
+.export-format{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:14px 16px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:#fff;
+  cursor:pointer;
+  transition:border-color .18s ease,background .18s ease;
+}
+.export-format + .export-format{margin-top:10px}
+.export-format:hover{border-color:var(--accent-2)}
+.export-format:has(input:checked){border-color:var(--accent-2);background:var(--tint)}
+.export-format:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.export-format input{flex:none;width:18px;height:18px;accent-color:var(--accent-deep)}
+.export-format__icon{
+  flex:none;
+  width:38px;height:38px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  background:var(--tint);
+  color:var(--accent-deep);
+  font-size:18px;
+}
+.export-format__text{display:grid;gap:2px;min-width:0}
+.export-format__text strong{font-size:14px;font-weight:700;color:var(--ink)}
+.export-format__text span{font-size:12.5px;color:var(--muted);line-height:1.45}
+
+@media (max-width:560px){
+  .export-dates{grid-template-columns:1fr}
+  .export-format__icon{display:none}
+}
+
+/* the same control inside a drawer, where it is a section rather than a dialog */
+.export-inline{max-width:520px}
+.export-inline .export-formats{margin-bottom:18px}
+.export-inline .btn{display:inline-flex;align-items:center;gap:8px}
+
 /* the picture a post already has, so editing never looks like losing it */
 .image-current{
   display:flex;
@@ -1056,6 +1140,7 @@ body.has-drawer{overflow:hidden}
 .pay-stage--locked{opacity:.72}
 .pay-stage--checking{border-color:rgba(23,176,166,.4)}
 .pay-stage--paid{border-color:rgba(75,180,83,.4)}
+.pay-stage--rejected{border-color:rgba(201,69,92,.4)}
 .pay-stage__head{
   display:flex;
   align-items:baseline;
@@ -1088,6 +1173,7 @@ body.has-drawer{overflow:hidden}
 .pay-stage--paid .pay-stage__state{color:#26743a}
 .pay-stage--checking .pay-stage__state{color:#0b7a74}
 .pay-stage--due .pay-stage__state{color:#8a5f1c}
+.pay-stage--rejected .pay-stage__state{color:var(--danger)}
 /* the documents stage carries a sentence and a button rather than a list, so
    it sets its own rhythm: the note reads at the panel's size and the button
    under it is not pinned against the edge of the card */
@@ -1162,6 +1248,22 @@ body.has-drawer{overflow:hidden}
   color:var(--muted);
 }
 .pay-stage__note + form{margin:14px 0 16px}
+/* the finance team's own words, shown back the way a refused payment's are */
+.pay-stage__note--reject{
+  padding:10px 14px;
+  border-radius:var(--radius-sm);
+  background:rgba(201,69,92,.08);
+  color:var(--danger);
+}
+/* Verify and Turn down, side by side — the reason box takes the rest of the
+   row and wraps under on a narrow drawer, the same as a payment's. */
+.pay-stage__actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  gap:10px;
+  margin:14px 0 16px;
+}
 .pay-stage .pay-list{margin-top:12px}
 
 .pay-panel__head{
@@ -1928,6 +2030,15 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
 .field--primary label{font-size:var(--t-sub);font-weight:700}
 .field--primary input{padding:16px;font-size:19px}
 .field__req{color:var(--accent-deep);font-weight:700;margin-left:2px}
+/* the opposite mark: a field nobody has to fill in says so quietly */
+.field__opt{
+  margin-left:6px;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
 
 /* the code is issued on save and never changes — shown, never editable */
 .code-preview{
@@ -2514,7 +2625,21 @@ body.has-ask{overflow:hidden}
 .direct-sale__notice i{flex:none;margin-top:2px;font-size:16px;color:var(--warn)}
 .direct-sale__notice strong{display:block;margin-bottom:2px;color:var(--ink)}
 /* the button gets a line of its own rather than sitting against the notice */
-.direct-sale__foot{display:flex;justify-content:flex-end;margin-top:20px}
+.direct-sale__foot{display:flex;justify-content:flex-end;align-items:center;margin-top:20px}
+/* what is holding the button back, where the button will be */
+.direct-sale__gate{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0;
+  padding:12px 16px;
+  border:1px dashed var(--line);
+  border-radius:var(--radius);
+  background:var(--tint);
+  font-size:13px;
+  color:var(--muted);
+}
+.direct-sale__gate i{color:var(--accent-deep);font-size:15px}
 
 /* PAN, GST and IFSC are capitals; the server stores them that way, this only
    makes typing look like what is about to be saved */
@@ -2742,3 +2867,17 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 /* An address is case blind: the box shows it the way it is written down. */
 input[type="email"],
 input[name*="email"]{text-transform:lowercase}
+
+/* --- skip link ---
+   First stop for a keyboard: the header is a topbar plus a full navigation,
+   which is about a dozen links before the content starts. */
+.skip-link{position:absolute;left:-9999px}
+.skip-link:focus{
+  left:16px;top:16px;
+  z-index:2000;
+  padding:10px 16px;
+  background:var(--white,#fff);
+  color:var(--ink,#0f2c4d);
+  border-radius:var(--radius-sm,10px);
+  box-shadow:0 8px 20px rgba(10,45,80,.18);
+}

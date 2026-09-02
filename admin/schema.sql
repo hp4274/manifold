@@ -220,6 +220,12 @@ CREATE TABLE IF NOT EXISTS `applications` (
   /* the finance team's check of the paperwork, between the two payments */
   `docs_verified_at` datetime DEFAULT NULL,
   `docs_verified_by` int(10) unsigned DEFAULT NULL,
+  /* and their answer when it does not pass. Not terminal: the reason is what
+     the applicant is emailed and what stands on the row until the corrected
+     paperwork is checked, at which point verifying clears all three. */
+  `docs_rejected_at` datetime DEFAULT NULL,
+  `docs_rejected_by` int(10) unsigned DEFAULT NULL,
+  `docs_reject_reason` varchar(255) DEFAULT NULL,
   /* the client's own answer once the documents pass: build it, or refund me */
   `delivery_choice` enum('waiting','continue','cancel') NOT NULL DEFAULT 'waiting',
   `delivery_choice_at` datetime DEFAULT NULL,

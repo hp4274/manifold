@@ -42,6 +42,47 @@ ini_set('log_errors', '1');
 ini_set('error_log', ERROR_LOG_FILE);
 ini_set('display_errors', '0');
 
+/**
+ * The key everything signed by this site is signed with — the sign-in code and
+ * the one-click unsubscribe link.
+ *
+ * Not a constant in this file: it is tracked, so a value written here would be
+ * published the moment the repository is. Define APP_SECRET in the untracked
+ * config.local.php to set it by hand. Otherwise one is made on first use and
+ * kept beside the error log, in a directory the web server already denies.
+ *
+ * Changing it invalidates every code and unsubscribe link already out — which
+ * for a ten-minute code and a link nobody has clicked yet costs nothing.
+ */
+function app_secret(): string
+{
+    static $secret = null;
+
+    if ($secret !== null) {
+        return $secret;
+    }
+
+    if (defined('APP_SECRET') && APP_SECRET !== '') {
+        return $secret = (string) APP_SECRET;
+    }
+
+    $file = ERROR_LOG_DIR . '/app-secret.key';
+
+    if (is_file($file)) {
+        $stored = trim((string) @file_get_contents($file));
+
+        if ($stored !== '') {
+            return $secret = $stored;
+        }
+    }
+
+    $secret = bin2hex(random_bytes(32));
+    @file_put_contents($file, $secret, LOCK_EX);
+    @chmod($file, 0600);
+
+    return $secret;
+}
+
 const UPLOAD_DIR = __DIR__ . '/uploads';
 
 /** Largest accepted upload, in bytes. */
@@ -68,7 +109,12 @@ const SMTP_HOST   = 'smtp.hostinger.com';
 const SMTP_PORT   = 465;         // 587 for TLS, 465 for SSL
 const SMTP_SECURE = 'ssl';       // 'tls', 'ssl' or '' for none
 const SMTP_USER   = 'info@manifoldcleanenergy.co.in';
-const SMTP_PASS   = 'xs3b-5eaz-daac-ijzl';   // Google app password, spaces removed
+/* The mailbox password lives in the untracked config.local.php beside this
+   file, so it never enters the repository. Empty here means "not set":
+   mailer.php only sends when SMTP_HOST and SMTP_USER are filled in. */
+$local = __DIR__ . '/config.local.php';
+if (is_file($local)) { require $local; }
+if (!defined('SMTP_PASS')) { define('SMTP_PASS', ''); }
 const SMTP_TIMEOUT = 15;
 
 /* Gmail rejects a From that is not the authenticated mailbox or a verified
@@ -93,9 +139,15 @@ const ADMIN_NOTIFY_EMAIL = 'info@manifoldcleanenergy.co.in';
  * value also leaves the address in a live email at the mercy of whatever Host
  * header the request arrived with.
  *
- * Change this to the real address when the site is deployed.
+ * On localhost this should be blank so base_url() auto-detects from the
+ * request (e.g. http://localhost/manifold). Set the real address in
+ * config.local.php for production:
+ *
+ *   define('PUBLIC_BASE_URL', 'https://manifoldcleanenergy.co.in');
+ *   define('SITE_PUBLIC_URL', 'https://manifoldcleanenergy.co.in');
+ *   define('EMAIL_LOGO_URL',  'https://manifoldcleanenergy.co.in/assets/images/favicon.png');
  */
-const PUBLIC_BASE_URL = 'http://localhost/manifold';
+if (!defined('PUBLIC_BASE_URL')) { define('PUBLIC_BASE_URL', ''); }
 
 /**
  * The public site, and the mark the emails show at the top.
@@ -104,8 +156,8 @@ const PUBLIC_BASE_URL = 'http://localhost/manifold';
  * one reader rendered it as coloured static. The company name beside it is live
  * text in the template, not part of the image.
  */
-const SITE_PUBLIC_URL = 'https://manifoldcleanenergy.co.in';
-const EMAIL_LOGO_URL  = 'https://manifoldcleanenergy.co.in/assets/images/favicon.png';
+if (!defined('SITE_PUBLIC_URL')) { define('SITE_PUBLIC_URL', ''); }
+if (!defined('EMAIL_LOGO_URL'))  { define('EMAIL_LOGO_URL',  ''); }
 
 /**
  * Payment QR code, relative to the site root. The first of these that exists
@@ -194,6 +246,49 @@ const DEALER_LIMIT_DEFAULT = 10;
  */
 /** The dial code a number is stored with when the form did not say. */
 const DEFAULT_DIAL_CODE = '91';
+
+/**
+ * How many digits a national number runs to, by dial code.
+ *
+ * Ten digits is India, not the world: a British mobile is ten but a landline
+ * can be nine, a Singapore number is eight and a Chinese one eleven. Only the
+ * codes worth being exact about are listed; anything else is held to the range
+ * E.164 allows, which still catches a typed area code or a missing digit.
+ *
+ * The same table is in `assets/js/apply.js`, which is what the form uses while
+ * somebody is typing. Change one and change the other.
+ */
+const DIAL_DIGITS = [
+    '91'  => [10, 10],  '1'   => [10, 10],  '44'  => [9, 10],   '61'  => [9, 9],
+    '64'  => [8, 10],   '27'  => [9, 9],    '234' => [10, 10],  '254' => [9, 9],
+    '233' => [9, 9],    '255' => [9, 9],    '256' => [9, 9],    '251' => [9, 9],
+    '20'  => [10, 10],  '212' => [9, 9],    '260' => [9, 9],    '263' => [9, 9],
+    '971' => [9, 9],    '966' => [9, 9],    '974' => [8, 8],    '965' => [8, 8],
+    '968' => [8, 8],    '973' => [8, 8],    '962' => [9, 9],    '972' => [9, 9],
+    '92'  => [10, 10],  '880' => [10, 10],  '94'  => [9, 9],    '977' => [10, 10],
+    '975' => [8, 8],    '960' => [7, 7],    '95'  => [8, 10],   '93'  => [9, 9],
+    '86'  => [11, 11],  '81'  => [10, 10],  '82'  => [9, 10],   '65'  => [8, 8],
+    '60'  => [9, 10],   '62'  => [9, 12],   '66'  => [9, 9],    '84'  => [9, 10],
+    '63'  => [10, 10],  '852' => [8, 8],    '49'  => [10, 11],  '33'  => [9, 9],
+    '39'  => [9, 10],   '34'  => [9, 9],    '351' => [9, 9],    '31'  => [9, 9],
+    '32'  => [9, 9],    '41'  => [9, 9],    '43'  => [10, 11],  '46'  => [7, 9],
+    '47'  => [8, 8],    '45'  => [8, 8],    '358' => [9, 10],   '353' => [9, 9],
+    '48'  => [9, 9],    '30'  => [10, 10],  '420' => [9, 9],    '36'  => [9, 9],
+    '40'  => [9, 9],    '359' => [9, 9],    '7'   => [10, 10],  '380' => [9, 9],
+    '90'  => [10, 10],  '55'  => [10, 11],  '52'  => [10, 10],  '54'  => [10, 10],
+    '56'  => [9, 9],    '57'  => [10, 10],  '51'  => [9, 9],
+];
+
+/**
+ * The digits a number under one dial code may run to, as [min, max].
+ *
+ * E.164 caps a whole number at 15 digits including the code, and nothing real
+ * is shorter than six, so that is what an unlisted code is held to.
+ */
+function dial_digits(string $dial): array
+{
+    return DIAL_DIGITS[$dial] ?? [6, 15 - min(4, strlen($dial))];
+}
 
 const INSTALL_FROM = '2027-01-01';
 

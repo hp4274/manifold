@@ -18,10 +18,21 @@ require_once __DIR__ . '/../portal/lib.php';
 /** The signed-in dealer's row, or null. */
 function dealer_user(): ?array
 {
+    /* Asked several times over one request — the sign-in page alone calls
+       portal_roles() twice, and the chrome asks again — so the row is looked
+       up once and held for the rest of the request. Not the session: a dealer
+       switched off mid-session has to stop counting as one on the next page,
+       which is the whole reason this is a query and not a session flag. */
+    static $cached = null;
+
     $id = (int) ($_SESSION['dealer_id'] ?? 0);
 
     if ($id === 0) {
         return null;
+    }
+
+    if ($cached !== null && (int) $cached['id'] === $id) {
+        return $cached;
     }
 
     $dealer = dealer_by_id($id);
@@ -34,6 +45,8 @@ function dealer_user(): ?array
 
         return null;
     }
+
+    $cached = $dealer;
 
     return $dealer;
 }

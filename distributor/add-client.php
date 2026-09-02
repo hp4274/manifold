@@ -15,7 +15,7 @@ require_once __DIR__ . '/lib.php';
 $dist      = require_distributor();
 $distId    = (int) $dist['id'];
 $pageTitle = 'Add a client';
-$pageLead  = 'Record a sale you have already been paid for.';
+$pageLead  = 'Record a client you signed up. They pay Manifold, the same as anybody else.';
 $activeNav = 'clients';
 
 $error      = '';
@@ -45,11 +45,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_c
     if ($error === '') {
         $id = create_direct_sale($saleValues, $product, null, $dist);
 
-        stock_take_for_sale('distributor', $distId, $product, $wanted, $id);
+        /* The units stay on the shelf for now. They come off when the customer
+           has paid us in full and taken delivery — an application the office
+           turns down should not cost anybody stock. */
 
-        $_SESSION['distributor_flash'] = 'Sale recorded. ' . $saleValues['full_name']
-            . ' can now sign in to their portal with ' . $saleValues['email'] . '. '
-            . $wanted . ' ' . product_label($product) . ' taken off your stock.';
+        $_SESSION['distributor_flash'] = 'Client recorded. The office reviews it, and '
+            . $saleValues['full_name'] . ' then pays the booking amount in their own portal — '
+            . 'they sign in with ' . $saleValues['email'] . '. Your '
+            . $wanted . ' ' . product_label($product)
+            . ' stays on your shelf until they take delivery.';
+
+        /* whoever sent them is named back: a reward booked in silence is a
+           reward somebody rings up about a month later */
+        if (!empty($saleValues['referred_by'])) {
+            $_SESSION['distributor_flash'] .= ' ' . $saleValues['referred_by']['full_name']
+                . ' is booked for the ' . money_short(referral_reward()) . ' referral reward.';
+        }
 
         header('Location: clients');
         exit;
@@ -94,9 +105,9 @@ require __DIR__ . '/partials/layout-top.php';
 <div class="panel">
   <div class="panel__head">
     <div class="panel__head-text">
-      <h2>A sale you took yourself</h2>
+      <h2>A client you signed up</h2>
       <span class="eyebrow">
-        earns you <?= e(money_short(commission_value('direct', 'stove'))) ?> on a stove,
+        the customer pays Manifold; you earn <?= e(money_short(commission_value('direct', 'stove'))) ?> on a stove,
         <?= e(money_short(commission_value('direct', 'tuktuk'))) ?> on a kit
       </span>
     </div>

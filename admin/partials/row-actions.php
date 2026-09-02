@@ -26,9 +26,11 @@ $actions = ($isApplication || $isSettled) ? [] : [
            applicant's portal, so it is worth its own pair of buttons here —
            this is the queue the office works through. */ ?>
   <?php if ($isApplication && $row['status'] === 'submitted'): ?>
-    <?php /* Approving is the ordinary answer and it is undone by turning them
-             down, so it does not stop to ask. Turning down still does. */ ?>
-    <form method="post" action="status.php">
+    <?php /* Approving emails a stranger a payment demand and opens their portal,
+             so it asks first — the same as turning them down, which sends
+             nothing at all. */ ?>
+    <form method="post" action="status.php"
+          data-confirm="Approve <?= e(record_title($rowType, $row)) ?>? They are emailed the payment details and their portal opens.">
       <?= csrf_field() ?>
       <input type="hidden" name="type" value="<?= e($rowType) ?>">
       <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">

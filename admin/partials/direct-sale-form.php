@@ -21,7 +21,7 @@ $sv = $saleValues ?? [];
 
   <section class="form-section">
     <div class="form-section__head">
-      <h3 class="form-section__title">Who bought it</h3>
+      <h3 class="form-section__title">Who is buying</h3>
       <span class="form-section__note">Name, email and mobile required</span>
     </div>
 
@@ -71,6 +71,22 @@ $sv = $saleValues ?? [];
         <input id="sale_units" name="units_required" type="number" min="1" max="99" step="1"
                inputmode="numeric"
                value="<?= (int) ($sv['units_required'] ?? 1) ?>">
+      </div>
+
+      <?php /* Who sold it and who sent them are two different questions. This
+               sale is the partner's whoever answers the second one — the code
+               only says whose referral reward comes out of it, which is what
+               lets a customer send somebody to a dealer who is not their own. */ ?>
+      <div class="field field--wide">
+        <label for="sale_referral">Referred by a customer <span class="field__opt">Optional</span></label>
+        <input id="sale_referral" name="referral_code" type="text" maxlength="20"
+               autocomplete="off" spellcheck="false" placeholder="MF……"
+               value="<?= e($sv['referred_by_code'] ?? '') ?>">
+        <span class="field-hint">
+          The customer code of whoever sent them, if anybody did. They are paid
+          <?= e(money_short(referral_reward())) ?> when this sale completes. The sale itself stays yours —
+          this changes nothing about your commission.
+        </span>
       </div>
     </div>
   </section>
@@ -209,16 +225,25 @@ $sv = $saleValues ?? [];
            the two partner portals load — portal-* classes live in the website's
            and rendered as bare text on this page */ ?>
   <p class="direct-sale__notice">
-    <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
     <span>
-      <strong>This records a sale you have already been paid for.</strong>
-      The customer owes nothing further, so their portal shows the order complete and your commission is
-      earned straight away. The office sees it marked as a direct sale. Use your share link instead if the
-      customer is going to pay Manifold themselves.
+      <strong>Take no money from the customer.</strong>
+      They pay Manifold, in their own portal, and they go through every step the same as anybody who
+      applied on the website: the office reviews this, then they pay the booking amount, finance checks
+      their documents, and they pay the delivery amount when the unit is installed. Your commission is
+      paid by us as those payments come in. This form only saves them filling the website form in
+      themselves.
     </span>
   </p>
 
-  <div class="direct-sale__foot">
-    <button type="submit" class="btn btn--primary">Record the sale</button>
+  <?php /* The two boxes above are what makes this a sale rather than an entry
+           somebody typed: until both are ticked there is nothing to submit, so
+           the button is not there to be pressed. */ ?>
+  <div class="direct-sale__foot" data-consent-gate>
+    <p class="direct-sale__gate" data-consent-note>
+      <i class="bi bi-lock" aria-hidden="true"></i>
+      Tick the declaration and the terms above to record this client.
+    </p>
+    <button type="submit" class="btn btn--primary" data-consent-submit>Record the client</button>
   </div>
 </form>

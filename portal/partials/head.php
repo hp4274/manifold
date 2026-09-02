@@ -19,15 +19,16 @@ require_once __DIR__ . '/../../distributor/lib.php';
 <link rel="stylesheet" href="../assets/vendor/figtree/figtree.css">
 <link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="../assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
-<link rel="stylesheet" href="../assets/css/style.css?v=1788264413">
+<link rel="stylesheet" href="../assets/css/style.css?v=1788364053">
 </head>
 <body>
+<a class="skip-link" href="#top">Skip to content</a>
 
 <div class="top-bar" role="banner">
   <div class="container-x top-bar__inner">
-    <a class="top-bar__email" href="mailto:info@manifoldcleanenergy.com">
+    <a class="top-bar__email" href="mailto:info@manifoldcleanenergy.co.in">
       <i class="bi bi-envelope"></i>
-      <span>info@manifoldcleanenergy.com</span>
+      <span>info@manifoldcleanenergy.co.in</span>
     </a>
 
     <div class="top-bar__social" aria-label="Social media links">
@@ -42,7 +43,7 @@ require_once __DIR__ . '/../../distributor/lib.php';
 <header class="site-header" id="siteHeader">
   <div class="nav-wrap">
     <a class="brand" href="../" aria-label="Manifold Clean Energy home">
-      <img class="brand-logo" src="../assets/images/manifold.webp" alt="Manifold Clean Energy Pvt. Ltd.">
+      <img class="brand-logo" src="../assets/images/manifold.webp" srcset="../assets/images/manifold-360w.webp 360w, ../assets/images/manifold.webp 1524w" sizes="180px" alt="Manifold Clean Energy Pvt. Ltd." width="1524" height="471">
     </a>
 
     <nav class="main-nav" id="mainNav" aria-label="Main">

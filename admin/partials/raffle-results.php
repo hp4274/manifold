@@ -30,7 +30,7 @@ declare(strict_types=1);
           </span>
           <?php if ($person['won_draws']): ?>
             <span class="cell-sub cell-sub--note">
-              already on draw <?= e(implode(', ', array_unique($person['won_draws']))) ?>
+              already won on <?= e(implode(', ', array_unique($person['won_draws']))) ?>
             </span>
           <?php endif; ?>
         </span>
@@ -45,7 +45,7 @@ declare(strict_types=1);
             <input type="hidden" name="q" value="<?= e($search) ?>">
             <button type="submit" name="action" value="add" class="btn btn--primary btn--sm">
               <i class="bi bi-plus-lg" aria-hidden="true"></i>
-              Add to draw <?= (int) $nextDraw['draw_no'] ?>
+              Add to <?= e(format_date($nextDraw['reveal_at'])) ?>
             </button>
           </form>
         <?php endif; ?>

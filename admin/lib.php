@@ -20,11 +20,11 @@ require_once __DIR__ . '/config.php';
  * ----------------------------------------------------------------------- */
 
 if (!defined('SITE_PUBLIC_URL')) {
-    define('SITE_PUBLIC_URL', 'https://manifoldcleanenergy.co.in');
+    define('SITE_PUBLIC_URL', '');
 }
 
 if (!defined('EMAIL_LOGO_URL')) {
-    define('EMAIL_LOGO_URL', SITE_PUBLIC_URL . '/assets/images/favicon.png');
+    define('EMAIL_LOGO_URL', '');
 }
 
 if (!defined('ERROR_LOG_DIR')) {
@@ -80,10 +80,19 @@ foreach ($_POST as $postKey => $postValue) {
 }
 
 if (session_status() === PHP_SESSION_NONE) {
+    /* Secure follows the request rather than being hard-coded on: set on a
+       plain-HTTP local install the browser drops the cookie and nobody can sign
+       in at all. Behind a load balancer or Cloudflare the request reaching PHP
+       is plain HTTP even though the visitor is on TLS, so the forwarded scheme
+       counts too — without it a production session would be sent in the clear. */
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'
+        || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443;
+
     session_set_cookie_params([
         'httponly' => true,
         'samesite' => 'Lax',
-        'secure'   => !empty($_SERVER['HTTPS']),
+        'secure'   => $https,
     ]);
     session_start();
 }
@@ -392,15 +401,15 @@ function status_from_payments(array $app, ?array $payments = null): string
     }
 
     /* The booking is paid and the finance team has the paperwork. Nothing else
-       moves until they say it is in order — including a sale a partner recorded
-       as paid in full, where this is the only step left. */
+       moves until they say it is in order, whichever form the client came in
+       on — a partner's or the website's. */
     if (empty($app['docs_verified_at'])) {
         return 'docs_pending';
     }
 
-    /* A sale a partner already collected in full has nothing left to decide:
-       the unit is paid for. The question below is for somebody who applied
-       through the website or a code and has only paid the booking amount. */
+    /* Both transfers are in, so there is nothing left to decide. The question
+       below is for somebody who has paid the booking amount and not yet the
+       delivery one. */
     if ($delivery['settled']) {
         return 'complete';
     }
@@ -479,7 +488,54 @@ function sync_application_status(int $applicationId): string
     /* what each partner has earned on this sale, rebuilt from what is verified */
     commission_write_lines($applicationId);
 
+    /* and the unit itself leaves the partner's shelf when the customer has
+       actually taken delivery — not when the sale was first written down, which
+       would take a unit off for an application the office went on to turn down */
+    if ($next === 'complete') {
+        stock_take_on_completion($applicationId);
+    }
+
     return $next;
+}
+
+/**
+ * Takes the units of a completed partner-entered sale off that partner's shelf.
+ *
+ * Safe to call twice: the ledger row carries the application it was for, so a
+ * sale that has already come off does not come off again — which matters
+ * because every payment verification runs the status machine over the sale.
+ */
+function stock_take_on_completion(int $applicationId): void
+{
+    $stmt = db()->prepare(
+        'SELECT id, product, units_required, sale_channel, entered_by_dealer, entered_by_distributor
+           FROM applications WHERE id = ?'
+    );
+    $stmt->execute([$applicationId]);
+    $app = $stmt->fetch();
+
+    if (!$app || ($app['sale_channel'] ?? 'online') !== 'direct') {
+        return;
+    }
+
+    $owner   = $app['entered_by_dealer'] ? 'dealer' : ($app['entered_by_distributor'] ? 'distributor' : '');
+    $ownerId = (int) ($app['entered_by_dealer'] ?: $app['entered_by_distributor'] ?: 0);
+
+    if ($owner === '' || $ownerId === 0) {
+        return;
+    }
+
+    $done = db()->prepare(
+        "SELECT 1 FROM stock_ledger WHERE application_id = ? AND reason = 'sale' LIMIT 1"
+    );
+    $done->execute([$applicationId]);
+
+    if ($done->fetchColumn()) {
+        return;
+    }
+
+    stock_take_for_sale($owner, $ownerId, (string) $app['product'],
+        max(1, (int) $app['units_required']), $applicationId);
 }
 
 /**
@@ -974,19 +1030,26 @@ function store_upload(string $field, string $dir = UPLOAD_DIR): ?string
     return move_uploaded_file($file['tmp_name'], $dir . '/' . $name) ? $name : null;
 }
 
-/* ---------- a sale a partner took themselves ----------
-   A dealer or distributor can enter a customer they sold to directly, where the
-   money went to them rather than to the company. Nothing is owed by that
-   customer here, so the application is created settled — but it is marked
-   `direct`, because a report that mixed it with a website sale would be
-   claiming money the company never received. */
+/* ---------- a customer a partner brought in ----------
+   A dealer or distributor can enter a customer they signed up in person, so
+   somebody who agreed to buy across a counter does not have to go home and fill
+   the website form in again.
+
+   The customer still pays the company, and still passes every step: the office
+   approves the application, the customer pays the booking amount in their own
+   portal, finance checks the documents, they confirm delivery and pay the
+   delivery amount. Money never passes through a dealer or a distributor — they
+   are paid their commission by us, out of what the customer paid us.
+
+   The row is marked `direct` only to say which form it came in on. */
 
 /**
  * Creates one application on a partner's behalf and returns its id.
  *
  * $dealer or $distributor, never both — a dealer's own distributor is looked up
  * the same way the public form does it, so the split is identical whichever
- * route the sale came in by.
+ * route the sale came in by. The application starts where a website one starts:
+ * `submitted`, waiting on the office.
  */
 function create_direct_sale(array $fields, string $product, ?array $dealer, ?array $distributor): int
 {
@@ -994,14 +1057,20 @@ function create_direct_sale(array $fields, string $product, ?array $dealer, ?arr
     $split = commission_split($product, $dealer, $distributor);
     $now   = date('Y-m-d H:i:s');
 
+    /* Who sold it and who sent them are two different questions.
+       The partner entering this sale owns it — their commission, their
+       distributor's override — whoever the customer was referred by, and the
+       referrer is paid their reward out of the same sale. That is what lets a
+       customer of one dealer send somebody to another: the reward follows the
+       person, the commission follows the sale. */
+    $sentBy = $fields['referred_by'] ?? null;
+
     $columns = [
         'product'                => $product,
-        /* the customer has already paid the partner in full, so there is no
-           stage left for them to be at */
-        /* The partner has already been paid in full, so both transfers are
-           recorded as verified below. What is left is the finance team's check
-           of the paperwork — the one step a partner cannot do for us. */
-        'status'                 => 'docs_pending',
+        /* Where every application starts, whoever typed it in: the office
+           decides, and only then is the customer asked for the booking amount.
+           A partner entering a customer is not an approval. */
+        'status'                 => 'submitted',
         'reference_code'         => 'tmp-' . bin2hex(random_bytes(6)),
         'referral_code'          => make_referral_code(),
         'full_name'              => $fields['full_name'],
@@ -1020,14 +1089,14 @@ function create_direct_sale(array $fields, string $product, ?array $dealer, ?arr
         'booking_amount'         => (float) $plan['booking'],
         'delivery_amount'        => (float) $plan['delivery'],
         'payment_amount'         => (float) $plan['booking'],
-        'booking_paid_at'        => $now,
-        'delivery_paid_at'       => $now,
-        'payment_verified_at'    => $now,
-        'confirmed_at'           => $now,
         'dealer_id'              => $dealer ? (int) $dealer['id'] : null,
         'dealer_commission'      => $split['dealer'],
         'distributor_id'         => $distributor ? (int) $distributor['id'] : null,
         'distributor_commission' => $split['distributor'],
+        'referred_by_code'       => ($fields['referred_by_code'] ?? '') ?: null,
+        'referred_by_id'         => $sentBy ? (int) $sentBy['id'] : null,
+        'referral_reward'        => $sentBy ? referral_reward() : 0.0,
+        'referral_reward_status' => $sentBy ? 'pending' : 'none',
         'sale_channel'           => 'direct',
         'entered_by_dealer'      => $dealer ? (int) $dealer['id'] : null,
         'entered_by_distributor' => $distributor && !$dealer ? (int) $distributor['id'] : null,
@@ -1047,31 +1116,10 @@ function create_direct_sale(array $fields, string $product, ?array $dealer, ?arr
 
     db()->prepare('UPDATE applications SET reference_code = ? WHERE id = ?')->execute([$ref, $id]);
 
-    /* Both transfers, as verified payments with their own receipt numbers: the
-       client's portal shows two receipts and a settled balance, exactly as it
-       would for somebody who paid us directly. Without these rows the row said
-       "paid" while the portal said nothing had been paid at all. */
-    $receipt = db()->prepare(
-        "INSERT INTO payments (application_id, stage, amount, reference, status, receipt_no,
-                               uploaded_at, decided_at)
-         VALUES (?, ?, ?, ?, 'verified', ?, ?, ?)"
-    );
-
-    $note = 'Paid to ' . ($dealer['full_name'] ?? $distributor['full_name'] ?? 'the partner');
-    $n    = 0;
-
-    foreach (PAYMENT_STAGES as $stage) {
-        $amount = (float) $plan[$stage];
-
-        if ($amount <= 0) {
-            continue;
-        }
-
-        $receipt->execute([$id, $stage, $amount, $note, $ref . '-R' . ++$n, $now, $now]);
-    }
-
-    /* paid in full the moment it is recorded, so every tranche is earned now */
-    commission_write_lines($id);
+    /* No payments are written here. The customer has paid nobody yet: they pay
+       us, in their own portal, once the office has approved the application —
+       and the commission lines are written by sync_application_status() as each
+       of those payments is verified, exactly as they are for a website sale. */
 
     return $id;
 }
@@ -1095,6 +1143,10 @@ function direct_sale_values(array $post): array
         'pin_code'       => trim((string) ($post['pin_code'] ?? '')) ?: null,
         'units_required' => max(1, (int) ($post['units_required'] ?? 1)),
         'note'           => trim((string) ($post['note'] ?? '')) ?: null,
+
+        /* Who sent this customer, if anybody. The sale is the partner's either
+           way — this only says whose referral reward it is. */
+        'referred_by_code' => normalise_referral_code((string) ($post['referral_code'] ?? '')),
 
         /* the same identification the public form asks for — a sale a partner
            took is still a customer of ours, and the office needs the same
@@ -1123,6 +1175,31 @@ function direct_sale_values(array $post): array
 
     if (!$values['declaration_accepted'] || !$values['terms_accepted']) {
         return [$values, 'The declaration and the terms both have to be agreed to before a sale can be recorded.'];
+    }
+
+    /* A referral code is checked here rather than quietly dropped: the partner
+       is standing with the customer and can read it again, and a reward lost to
+       a typo is a reward somebody chases by phone a month later. */
+    if ($values['referred_by_code'] !== '') {
+        $code = $values['referred_by_code'];
+
+        if (strncasecmp($code, 'MF', 2) !== 0) {
+            return [$values, 'That is a partner code, not a customer\'s. This sale is already yours — '
+                . 'the box is for the code of a customer who sent them, which starts MF.'];
+        }
+
+        $sentBy = referrer_for_code($code);
+
+        if (!$sentBy) {
+            return [$values, 'No customer holds the code ' . $code . '. A code only works once that '
+                . 'customer\'s own booking payment has been verified.'];
+        }
+
+        if (strcasecmp((string) ($sentBy['email'] ?? ''), $values['email']) === 0) {
+            return [$values, 'That is this customer\'s own code — nobody refers themselves.'];
+        }
+
+        $values['referred_by'] = $sentBy;
     }
 
     /* Taken only once everything else checks out: a rejected form must not
@@ -1346,6 +1423,18 @@ function stock_order_create(
     if ($buyerType === 'dealer' && !$sellerDistributorId) {
         return [0, 'You are not under a distributor yet, so there is nobody to order from. '
             . 'Ask the office to assign you one.'];
+    }
+
+    /* The reference is what ties this order to a line on a bank statement, so
+       a keyboard smash in the box makes the order unreconcilable later. Only
+       shape is checked — every bank names its reference differently — but six
+       characters of letters and digits is the floor. Optional still means
+       optional: an order with the proof attached and nothing typed is fine. */
+    $reference = trim((string) ($extra['reference'] ?? ''));
+
+    if ($reference !== '' && !preg_match('/^[A-Za-z0-9][A-Za-z0-9 \/_-]{5,}$/', $reference)) {
+        return [0, 'The payment reference should be the one printed on your transfer — at least six '
+            . 'letters or digits, and nothing else but spaces, hyphens, slashes and underscores.'];
     }
 
     $lines = [];
@@ -1866,9 +1955,13 @@ function commission_write_lines(int $applicationId): void
                 $base['paid'],
                 0,
                 $base['base'],
-                /* a flat amount has no percentage behind it; the column stays
-                   for the lines written while there was one */
-                0,
+                /* The commission is a flat amount, so no percentage produced it
+                   — but the share of the payment it came to is the one part of
+                   the calculation that was never written down. Recorded here so
+                   a line can be read back without the settings of the day. */
+                $base['base'] > 0
+                    ? min(999.99, round($party['amount'] / $base['base'] * 100, 2))
+                    : 0,
                 round($party['amount'], 2),
             ]);
         }
@@ -3122,10 +3215,9 @@ function blog_read_minutes(string $body): int
 /**
  * The finance team's verdict on an application's paperwork.
  *
- * It is the one step between the booking payment and the delivery payment, and
- * on a sale a partner recorded as paid in full it is the only step left. Moving
- * it re-reads the payments, so the status lands wherever the money says it
- * should — delivery due, or complete.
+ * It is the one step between the booking payment and the delivery payment.
+ * Moving it re-reads the payments, so the status lands wherever the money says
+ * it should — delivery due, or complete.
  *
  * Returns ['error' => …] or ['message' => …, 'status' => …].
  */
@@ -3151,8 +3243,15 @@ function docs_verify(int $applicationId, int $adminId): array
         return ['error' => 'The booking payment has to be verified first.'];
     }
 
-    db()->prepare('UPDATE applications SET docs_verified_at = NOW(), docs_verified_by = ? WHERE id = ?')
-        ->execute([$adminId, $applicationId]);
+    /* Verifying clears an earlier refusal: the corrected paperwork is what is
+       being verified, and leaving the old reason on the row would keep telling
+       the applicant their documents were turned down after they were accepted. */
+    db()->prepare(
+        'UPDATE applications
+            SET docs_verified_at = NOW(), docs_verified_by = ?,
+                docs_rejected_at = NULL, docs_rejected_by = NULL, docs_reject_reason = NULL
+          WHERE id = ?'
+    )->execute([$adminId, $applicationId]);
 
     $status = sync_application_status($applicationId);
 
@@ -3161,6 +3260,62 @@ function docs_verify(int $applicationId, int $adminId): array
             ? 'Documents verified. Everything on this sale is done.'
             : 'Documents verified. The delivery payment is open to them now.',
         'status'  => $status,
+    ];
+}
+
+/**
+ * The same verdict, the other way: the paperwork does not pass.
+ *
+ * Not terminal, and not a rejection of the application — the delivery payment
+ * simply stays shut and the applicant is told what is wrong so they can send
+ * corrected documents. The status does not move: it was `docs_pending` before
+ * and it is `docs_pending` after, because that is still exactly what is true.
+ *
+ * The reason is required for the same reason it is on a refused payment: this
+ * is the whole of what the applicant is told, and "your documents were not
+ * accepted" with nothing after it is not something anybody can act on.
+ *
+ * Returns ['error' => …] or ['message' => …, 'reason' => …].
+ */
+function docs_reject(int $applicationId, int $adminId, string $reason): array
+{
+    $reason = trim($reason);
+
+    if ($reason === '') {
+        return ['error' => 'Say what is wrong with the documents — the applicant is emailed the reason.'];
+    }
+
+    $stmt = db()->prepare('SELECT id, status, docs_verified_at FROM applications WHERE id = ?');
+    $stmt->execute([$applicationId]);
+    $app = $stmt->fetch();
+
+    if (!$app) {
+        return ['error' => 'That application no longer exists.'];
+    }
+
+    if ($app['status'] === 'rejected') {
+        return ['error' => 'That application was turned down.'];
+    }
+
+    if (!empty($app['docs_verified_at'])) {
+        return ['error' => 'The documents have already been verified. Ask an admin to reopen them first.'];
+    }
+
+    if (!payment_stage_settled($applicationId, 'booking')) {
+        return ['error' => 'The booking payment has to be verified first.'];
+    }
+
+    $reason = mb_substr($reason, 0, 255);
+
+    db()->prepare(
+        'UPDATE applications
+            SET docs_rejected_at = NOW(), docs_rejected_by = ?, docs_reject_reason = ?
+          WHERE id = ?'
+    )->execute([$adminId, $reason, $applicationId]);
+
+    return [
+        'message' => 'Documents turned down. The applicant has been emailed the reason.',
+        'reason'  => $reason,
     ];
 }
 
@@ -3570,6 +3725,47 @@ function record_title(string $type, array $row): string
     /* the dashboard's list is a UNION of three tables, so the name arrives
        under the alias they share — without it every row there was a '#id' */
     return $row['full_name'] ?? $row['name'] ?? $row['title'] ?? ('#' . $row['id']);
+}
+
+/**
+ * What a status change reads as afterwards, in the past tense.
+ *
+ * The confirmation line used to say "Submission #554 updated", which names
+ * neither who it was nor what was done to them — after approving four in a row
+ * it is impossible to tell whether the right one went through. This is the verb
+ * half of "Harsh Patel approved."
+ *
+ * `booking_pending` is the one that does not read as its own label: for an
+ * application it is the moment the office says yes, and "approved" is what
+ * everybody calls it.
+ */
+function status_done(string $status): string
+{
+    $done = [
+        'booking_pending' => 'approved',
+        'rejected'        => 'rejected',
+        'accepted'        => 'accepted',
+        'contacted'       => 'marked as contacted',
+        'new'             => 'put back to new',
+    ];
+
+    return $done[$status] ?? ('moved to ' . mb_strtolower(status_label($status)));
+}
+
+/**
+ * The whole confirmation line: who, and what was done to them.
+ *
+ * `$did` is everything that changed, in the order it happened — an empty one
+ * means the form was saved without changing anything, and says so rather than
+ * claiming an update that did not occur.
+ */
+function saved_note(string $type, array $row, array $did): string
+{
+    $who = record_title($type, $row);
+
+    return $did
+        ? $who . ' ' . implode(', ', $did) . '.'
+        : $who . ' — nothing to change.';
 }
 
 /**

@@ -6,18 +6,25 @@ Reached from the **Login** button in the site navbar.
 ## Sign in
 
 No passwords. The applicant types the email address they applied with, and a
-six-digit code is emailed to it (`applicant_otps`). The code lasts 10 minutes,
-allows 5 wrong guesses and is limited to 6 requests per address per hour.
+six-digit code is emailed to it. The code lasts 10 minutes, allows 5 wrong
+guesses, and is limited to 6 requests per hour counted per address **and** per
+IP (`login_attempts`, under an `otp:` prefix).
 
-An address with no application against it is turned away — *"We do not recognise
-that email address"* — rather than being shown the code box. Somebody who
-mistypes their address finds out immediately instead of waiting for a code that
-was never sent.
+Nothing about the code is stored. `issue_otp()` keeps an HMAC of the address,
+the expiry and the code in the session — `otp_signature()` — and `verify_otp()`
+recomputes it from what was typed. There is no `applicant_otps` row to read, and
+the six digits exist only in the email.
 
-The cost is that the form will confirm whether a given address has applied, so
-the portal can be used to test addresses one at a time. The per-address throttle
-does not cover this, because an unknown address never creates a row to count.
-If that ever matters, rate-limit by IP on this form.
+**Every address gets the same answer**: *"If that address is registered with us,
+a six-digit code is on its way."* It used to say which of three states an
+address was in — unknown, application pending, registered — which with no
+throttle in front of the form made it a way to walk a list of addresses and read
+back which ones we hold. The explanation an applicant still waiting on the
+office needs has moved into an email only they can read
+(`send_application_waiting_email()`).
+
+The code step is reached whatever was typed. A code entered against an address
+no code went out for simply does not match the signature, because there is none.
 
 ## What the applicant sees
 

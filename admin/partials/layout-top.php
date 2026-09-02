@@ -25,6 +25,7 @@ $pageLead   = $pageLead ?? '';
 <link rel="stylesheet" href="<?= SITE_URL ?>/assets/css/datepicker.css">
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 
 <div class="shell">
 
@@ -100,7 +101,7 @@ $pageLead   = $pageLead ?? '';
     </div>
   </aside>
 
-  <main class="main">
+  <main class="main" id="main">
     <div class="topbar">
       <div>
         <h1><?= e($pageTitle) ?></h1>

@@ -122,8 +122,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'delete') {
         /* Every dealer answers to a distributor, so deleting one that still
-           holds dealers would leave them answering to nobody. Move them first;
-           the database refuses this too. */
+           holds dealers would leave them answering to nobody. A dealer cannot
+           be moved once added, so the dealers have to go first — the database
+           refuses this too. */
         /* every dealer row counts here, turned-down ones included: the foreign
            key does not care what their approval status is */
         $heldStmt = db()->prepare('SELECT COUNT(*) FROM dealers WHERE distributor_id = ?');
@@ -132,7 +133,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($held > 0) {
             $error = 'That distributor still holds ' . $held . ' dealer' . ($held === 1 ? '' : 's')
-                . '. Move them to another distributor first — a dealer cannot be left without one.';
+                . '. Delete those dealers first — a dealer cannot be left without a distributor, '
+                . 'and a dealer already added cannot be moved to another one.';
         } else {
             db()->prepare('DELETE FROM distributors WHERE id = ?')->execute([$id]);
 
@@ -304,9 +306,12 @@ require __DIR__ . '/partials/layout-top.php';
         <?= (int) $paging['from'] ?>–<?= (int) $paging['to'] ?> of <?= (int) $paging['total'] ?>
       </span>
     </div>
+    <div class="panel__head-tools">
+      <?php $exportKind = 'distributors'; require __DIR__ . '/partials/export-bar.php'; ?>
     <button type="button" class="btn-add" data-modal-open="distributorModal">
       <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a distributor
     </button>
+    </div>
   </div>
 
   <?php /* The table is drawn even with nothing in it: its header carries the
@@ -533,5 +538,7 @@ require __DIR__ . '/partials/layout-top.php';
     </form>
   </div>
 </div>
+
+<?php $exportKind = 'distributors'; require __DIR__ . '/partials/export-modal.php'; ?>
 
 <?php require __DIR__ . '/partials/layout-bottom.php'; ?>

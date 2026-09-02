@@ -42,15 +42,22 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
   <?php /* Between the two payments: the finance team's check of the paperwork.
            Until it is done the delivery payment stays shut, which is what the
            applicant sees in their portal too. */ ?>
-  <?php $docsDone = !empty($srcRow['docs_verified_at']); ?>
+  <?php
+    $docsDone   = !empty($srcRow['docs_verified_at']);
+    /* an earlier refusal still standing — cleared the moment they are verified */
+    $docsRefused = !$docsDone && !empty($srcRow['docs_rejected_at']);
+  ?>
   <?php if ($payTotals['stages']['booking']['settled'] || $docsDone): ?>
-    <section class="pay-stage pay-stage--<?= $docsDone ? 'paid' : 'due' ?>">
+    <section class="pay-stage pay-stage--<?= $docsDone ? 'paid' : ($docsRefused ? 'rejected' : 'due') ?>">
       <header class="pay-stage__head">
         <h4 class="pay-stage__title">Finance documents</h4>
         <span class="pay-stage__state">
           <?php if ($docsDone): ?>
             <i class="bi bi-patch-check" aria-hidden="true"></i>
             verified <?= e(format_datetime((string) $srcRow['docs_verified_at'])) ?>
+          <?php elseif ($docsRefused): ?>
+            <i class="bi bi-x-circle" aria-hidden="true"></i>
+            turned down <?= e(format_datetime((string) $srcRow['docs_rejected_at'])) ?>
           <?php else: ?>
             <i class="bi bi-hourglass-split" aria-hidden="true"></i> waiting on finance
           <?php endif; ?>
@@ -58,22 +65,55 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
       </header>
 
       <?php if (!$docsDone): ?>
-        <p class="pay-stage__note">
-          The delivery payment opens for the applicant the moment this is verified, and they are
-          emailed. On a sale a partner recorded as paid in full, this is the only step left.
-        </p>
+        <?php if ($docsRefused): ?>
+          <p class="pay-stage__note pay-stage__note--reject">
+            Turned down: <?= e((string) $srcRow['docs_reject_reason']) ?>
+          </p>
+          <p class="pay-stage__note">
+            They have been emailed this and asked to reply with corrected documents. Verify below
+            once the new ones are in order — that clears this and opens the delivery payment.
+          </p>
+        <?php else: ?>
+          <p class="pay-stage__note">
+            The delivery payment opens for the applicant the moment this is verified, and they are
+            emailed. On a sale a partner recorded as paid in full, this is the only step left.
+          </p>
+        <?php endif; ?>
 
-        <form method="post" action="payment"
-              data-confirm="Mark the finance documents verified for <?= e(record_title($srcType, $srcRow)) ?>?">
-          <?= csrf_field() ?>
-          <input type="hidden" name="action" value="docs">
-          <input type="hidden" name="type" value="<?= e($srcType) ?>">
-          <input type="hidden" name="id" value="<?= $payId ?>">
-          <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
-          <button type="submit" class="btn btn--primary btn--sm">
-            <i class="bi bi-check-lg" aria-hidden="true"></i> Documents verified
-          </button>
-        </form>
+        <div class="pay-stage__actions">
+          <form method="post" action="payment.php"
+                data-confirm="Mark the finance documents verified for <?= e(record_title($srcType, $srcRow)) ?>?">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="docs">
+            <input type="hidden" name="type" value="<?= e($srcType) ?>">
+            <input type="hidden" name="id" value="<?= $payId ?>">
+            <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
+            <button type="submit" class="btn btn--primary btn--sm">
+              <i class="bi bi-check-lg" aria-hidden="true"></i> Documents verified
+            </button>
+          </form>
+
+          <?php /* The reason is required, here as on a refused payment: it is the
+                   whole of what the applicant is told, and they cannot correct
+                   paperwork nobody has said anything about. */ ?>
+          <form method="post" action="payment.php" class="pay-panel__reject"
+                data-confirm="Turn these documents down? The applicant is emailed the reason and asked for corrected ones.">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="docs_reject">
+            <input type="hidden" name="type" value="<?= e($srcType) ?>">
+            <input type="hidden" name="id" value="<?= $payId ?>">
+            <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
+            <label class="visually-hidden" for="docs-reason-<?= $payId ?>">
+              What is wrong with the documents
+            </label>
+            <input id="docs-reason-<?= $payId ?>" name="reason" type="text" maxlength="255"
+                   required placeholder="What is wrong? (goes in the email)"
+                   value="<?= e((string) ($srcRow['docs_reject_reason'] ?? '')) ?>">
+            <button type="submit" class="btn btn--danger btn--sm">
+              <i class="bi bi-x-lg" aria-hidden="true"></i> Turn down
+            </button>
+          </form>
+        </div>
       <?php endif; ?>
     </section>
   <?php endif; ?>
@@ -141,16 +181,6 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
                      href="file.php?path=<?= e(rawurlencode((string) $payment['proof_path'])) ?>&amp;dir=payments">
                     <i class="bi bi-paperclip" aria-hidden="true"></i> Proof of payment
                   </a>
-                <?php elseif (($srcRow['sale_channel'] ?? 'online') === 'direct'): ?>
-                  <?php /* A partner collected this themselves and recorded it; there
-                           never was a receipt to upload, so "proof removed" read as
-                           though something had gone missing. */ ?>
-                  <span class="pay-item__proof pay-item__proof--gone">
-                    <i class="bi bi-person-check" aria-hidden="true"></i>
-                    paid to <?= e($payment['reference'] !== null && str_starts_with((string) $payment['reference'], 'Paid to ')
-                        ? substr((string) $payment['reference'], 8)
-                        : 'the partner') ?>
-                  </span>
                 <?php else: ?>
                   <span class="pay-item__proof pay-item__proof--gone">
                     <i class="bi bi-paperclip" aria-hidden="true"></i> proof removed

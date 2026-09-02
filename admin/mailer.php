@@ -45,7 +45,7 @@ function send_mail(
             throw new RuntimeException('SMTP is not configured — fill in SMTP_HOST and SMTP_USER in admin/config.php.');
         }
 
-        $message    = build_message($to, $subject, $html, $inline, $files);
+        $message    = build_message($to, $subject, $html, $inline, $files, bulk_headers($to, $kind));
         $recipients = array_values(array_unique(array_filter(array_merge([$to], $bcc))));
 
         smtp_send($recipients, $message);
@@ -66,6 +66,47 @@ function send_mail(
 }
 
 /**
+ * The token that stands for "this address asked to be taken off the list".
+ *
+ * Signed rather than looked up, so the link in an email carries everything the
+ * endpoint needs and nothing anybody can guess: without app_secret() the token
+ * for an address cannot be worked out, so nobody can unsubscribe somebody else
+ * by typing their address into the URL.
+ */
+function unsubscribe_token(string $email): string
+{
+    return substr(hash_hmac('sha256', 'unsubscribe|' . mb_strtolower($email), app_secret()), 0, 32);
+}
+
+function unsubscribe_url(string $email): string
+{
+    return base_url() . '/unsubscribe?e=' . rawurlencode($email) . '&t=' . unsubscribe_token($email);
+}
+
+/**
+ * One-click unsubscribe, on bulk mail only.
+ *
+ * Gmail and Yahoo both require it of anybody sending in volume, and a domain
+ * without it starts landing in spam — taking the transactional mail sent from
+ * the same mailbox down with it. Transactional mail carries no such header:
+ * nobody unsubscribes from their own receipt.
+ *
+ * List-Unsubscribe-Post is what makes it one click rather than a page visit —
+ * the mail client POSTs the address itself and never opens a browser.
+ */
+function bulk_headers(string $to, string $kind): array
+{
+    if (strpos($kind, 'newsletter') !== 0) {
+        return [];
+    }
+
+    return [
+        'List-Unsubscribe: <' . unsubscribe_url($to) . '>',
+        'List-Unsubscribe-Post: List-Unsubscribe=One-Click',
+    ];
+}
+
+/**
  * Builds the raw RFC 5322 message.
  *
  * Every mail carries a plain-text part alongside the HTML one — HTML-only mail
@@ -73,8 +114,14 @@ function send_mail(
  * inline image is attached the structure is multipart/related wrapping the
  * multipart/alternative body.
  */
-function build_message(string $to, string $subject, string $html, ?string $inline, array $files = []): string
-{
+function build_message(
+    string $to,
+    string $subject,
+    string $html,
+    ?string $inline,
+    array $files = [],
+    array $extraHeaders = []
+): string {
     $eol   = "\r\n";
     $altB  = 'alt' . bin2hex(random_bytes(8));
     $relB  = 'rel' . bin2hex(random_bytes(8));
@@ -88,9 +135,15 @@ function build_message(string $to, string $subject, string $html, ?string $inlin
         'To: ' . $to,
         'Subject: ' . mail_encode($subject),
         'MIME-Version: 1.0',
-        'Message-ID: <' . bin2hex(random_bytes(12)) . '@manifoldcleanenergy.com>',
+        /* the domain has to follow MAIL_FROM; a mismatch counts against the spam score */
+        'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . substr(strrchr(MAIL_FROM, '@'), 1) . '>',
         'X-Mailer: Manifold Clean Energy',
     ];
+
+    foreach ($extraHeaders as $header) {
+        /* a header is one line: anything folded into it would be a new one */
+        $headers[] = str_replace(["\r", "\n"], '', $header);
+    }
 
     if ($files) {
         $headers[] = 'Content-Type: multipart/mixed; boundary="' . $mixB . '"';

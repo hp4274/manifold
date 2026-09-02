@@ -262,14 +262,18 @@ function raffle_sync(): void
  * ----------------------------------------------------------------------- */
 
 /**
- * Applicants the promotion allows: booking payment verified. Used for the
- * count on the page and to decide what the search may offer. The delivery
- * payment falls due much later and the draw does not wait for it.
+ * Applicants the promotion allows: booking payment verified, and not already
+ * holding a place from an earlier draw — that is the rule printed beside the
+ * number, so the number has to honour it. Used for the count on the page and
+ * to decide what the search may offer. The delivery payment falls due much
+ * later and the draw does not wait for it.
  */
 function raffle_eligible_count(): int
 {
     return (int) db()->query(
-        "SELECT COUNT(*) FROM applications WHERE booking_paid_at IS NOT NULL AND status <> 'rejected'"
+        "SELECT COUNT(*) FROM applications a
+          WHERE a.booking_paid_at IS NOT NULL AND a.status <> 'rejected'
+            AND a.id NOT IN (SELECT application_id FROM raffle_winners)"
     )->fetchColumn();
 }
 
@@ -299,7 +303,7 @@ function raffle_search(string $query, int $drawId = 0, int $limit = 12): array
 
     $sql = "SELECT a.id, a.full_name, a.email, a.mobile_number, a.city, a.state,
                    a.reference_code, a.referral_code, a.product, a.completed_at,
-                   w.id AS winner_id, w.draw_id AS won_draw_id, d.draw_no AS won_draw_no
+                   w.id AS winner_id, w.draw_id AS won_draw_id, d.reveal_at AS won_draw_at
               FROM applications a
          LEFT JOIN raffle_winners w ON w.application_id = a.id
          LEFT JOIN raffle_draws d   ON d.id = w.draw_id
@@ -332,8 +336,8 @@ function raffle_search(string $query, int $drawId = 0, int $limit = 12): array
             $rows[$id] = $row;
         }
 
-        if ($row['won_draw_no'] !== null) {
-            $rows[$id]['won_draws'][] = (int) $row['won_draw_no'];
+        if ($row['won_draw_at'] !== null) {
+            $rows[$id]['won_draws'][] = format_date((string) $row['won_draw_at']);
 
             if ($drawId > 0 && (int) $row['won_draw_id'] === $drawId) {
                 $rows[$id]['in_this_draw'] = true;
@@ -380,7 +384,7 @@ function raffle_add_winner(int $drawId, int $applicationId, ?int $userId = null)
     $taken = (int) $held->fetchColumn();
 
     if ($taken >= (int) $draw['winner_count']) {
-        return 'Draw ' . (int) $draw['draw_no'] . ' already has its '
+        return 'The draw on ' . format_date($draw['reveal_at']) . ' already has its '
             . (int) $draw['winner_count'] . ' winners. Remove one first, or raise the number in setup.';
     }
 

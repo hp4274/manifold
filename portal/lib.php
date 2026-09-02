@@ -189,67 +189,121 @@ function roles_for_email(string $email): array
 }
 
 /**
+ * What the sign-in form says whatever was typed at it.
+ *
+ * The three states an address could be in — unknown, waiting on the office,
+ * registered — used to be three different sentences, which with no per-IP
+ * throttle in front of the form made it a customer-list harvester: type an
+ * address, read which of the three came back. The kindness the middle sentence
+ * carried is not lost, it has moved into an email that only the owner of the
+ * mailbox can read.
+ */
+const OTP_SENT_NOTICE = 'If that address is registered with us, a six-digit code is on its way. '
+    . 'It is valid for ' . OTP_TTL_MINUTES . ' minutes.';
+
+/**
+ * The signature that stands in for a stored code.
+ *
+ * Nothing about a code is written down: the six digits go out by email, and
+ * what stays behind is this HMAC of the address, the expiry and the code. It
+ * proves a code that comes back was one we issued, to that address, before it
+ * expired — without there being a row anywhere for anybody to read.
+ */
+function otp_signature(string $email, int $expiresAt, string $code): string
+{
+    return hash_hmac('sha256', $email . '|' . $expiresAt . '|' . $code, app_secret());
+}
+
+/** How many codes this address or this connection has asked for in an hour. */
+function otp_recent_count(string $email, ?string $ip): int
+{
+    /* login_attempts is the throttle table this application already has, and
+       an issued code is recorded in it under the address it went to. Counted
+       per address and per connection, so clearing a cookie buys nothing: the
+       session store alone would make the cap a formality. */
+    $sql = 'SELECT COUNT(*) FROM login_attempts
+             WHERE attempted_at > (NOW() - INTERVAL 1 HOUR) AND (email = ?';
+    $args = ['otp:' . $email];
+
+    if ($ip !== null && $ip !== '') {
+        $sql .= ' OR ip_address = ?';
+        $args[] = $ip;
+    }
+
+    $sql .= ')';
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute($args);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/**
  * Issues a code and emails it. Returns an error string, or '' on success.
  *
- * An address nobody is registered under is turned away by name, because
- * somebody who mistypes their address should be told so rather than left
- * waiting for a code that will never arrive. The cost of that is that the form
- * will confirm whether a given address is known — see portal/README.md.
+ * '' does not mean a code went out — it means the form should say
+ * OTP_SENT_NOTICE, which is the same answer for an address we have never heard
+ * of as for one we know. An error string is only ever returned for something
+ * true of the request rather than of the address: too many tries, or our own
+ * mail failing.
  */
 function issue_otp(string $email, string $audience = 'any'): string
 {
     $ip = $_SERVER['REMOTE_ADDR'] ?? null;
 
-    $recent = db()->prepare(
-        'SELECT COUNT(*) FROM applicant_otps WHERE email = ? AND created_at > (NOW() - INTERVAL 1 HOUR)'
-    );
-    $recent->execute([$email]);
-
-    if ((int) $recent->fetchColumn() >= OTP_MAX_PER_HOUR) {
-        return 'Too many codes requested for that address. Try again in an hour.';
+    if (otp_recent_count($email, $ip) >= OTP_MAX_PER_HOUR) {
+        return 'Too many codes requested. Try again in an hour.';
     }
+
+    /* Counted whether or not a code follows: an unknown address that costs
+       nothing to try is what makes the form worth walking through a list. */
+    db()->prepare('INSERT INTO login_attempts (email, ip_address) VALUES (?, ?)')
+        ->execute(['otp:' . $email, $ip]);
 
     $known = $audience === 'any' ? roles_for_email($email) !== [] : (bool) otp_owner($email, $audience);
 
     if (!$known) {
-        /* An application still waiting on the office is not an unknown address,
-           and telling somebody we have never heard of them when we have their
-           application in hand is the wrong answer to the wrong question. */
+        /* An application still waiting on the office is not an unknown address.
+           Saying so on the page would answer the question for anybody typing
+           addresses at it, so it is said in an email instead — where only the
+           person who reads that mailbox sees it. */
         $waiting = db()->prepare(
             "SELECT COUNT(*) FROM applications WHERE email = ? AND status = 'submitted'"
         );
         $waiting->execute([$email]);
 
         if ((int) $waiting->fetchColumn() > 0) {
-            return 'Your application is with our team. We email you the payment details as soon as it '
-                . 'is approved, and your portal opens at the same time.';
+            after_response(static function () use ($email): void {
+                send_application_waiting_email($email);
+            });
         }
 
-        return 'We do not recognise that email address. Use the one you applied with, or the one the '
-            . 'office holds for you — or apply first, and we will email you as soon as it is in.';
+        /* nothing signed, so any code typed at the next step fails */
+        unset($_SESSION['otp']);
+
+        return '';
     }
 
-    $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-
-    db()->prepare(
-        'INSERT INTO applicant_otps (email, code_hash, expires_at, ip_address)
-         VALUES (?, ?, (NOW() + INTERVAL ? MINUTE), ?)'
-    )->execute([$email, password_hash($code, PASSWORD_DEFAULT), OTP_TTL_MINUTES, $ip]);
+    $code    = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    $expires = time() + OTP_TTL_MINUTES * 60;
 
     /* The mailbox has an hourly cap and refuses over it — "451 4.7.1 Ratelimit
        exceeded", then "454 4.3.0 Try again later". Saying the code is on its way
        when it is not leaves somebody waiting on an email that will never come, so
-       the failure is passed back rather than swallowed.
-
-       The unused code goes with it: it would otherwise count against the hourly
-       allowance and lock them out of trying again over our own failure. */
+       the failure is passed back rather than swallowed. */
     if (!send_otp_email($email, $code)) {
-        db()->prepare('DELETE FROM applicant_otps WHERE id = ?')
-            ->execute([(int) db()->lastInsertId()]);
+        unset($_SESSION['otp']);
 
         return 'We could not send the code just now. Please try again in a few minutes, '
              . 'or call +91 97251 54186 and we will help you in.';
     }
+
+    $_SESSION['otp'] = [
+        'email'     => $email,
+        'expires'   => $expires,
+        'signature' => otp_signature($email, $expires, $code),
+        'attempts'  => 0,
+    ];
 
     return '';
 }
@@ -257,40 +311,48 @@ function issue_otp(string $email, string $audience = 'any'): string
 /** Checks a code. Returns an error string, or '' when the code was accepted. */
 function verify_otp(string $email, string $code, string $audience = 'any'): string
 {
-    /* Looked up again here, not only when the code went out: the address may
-       have been switched off in between, and a code is not a licence to be a
-       dealer. This is the only thing that grants a role. */
+    $issued = $_SESSION['otp'] ?? null;
+
+    /* No signature, a signature for a different address, or one that has run
+       out: all the same answer. An address the form said nothing about at step
+       one must not be told something about it at step two. */
+    if (!is_array($issued)
+        || !hash_equals((string) ($issued['email'] ?? ''), $email)
+        || (int) ($issued['expires'] ?? 0) < time()) {
+        unset($_SESSION['otp']);
+
+        return 'That code is not right, or it has run out. Ask for a new one.';
+    }
+
+    if ((int) ($issued['attempts'] ?? 0) >= OTP_MAX_ATTEMPTS) {
+        unset($_SESSION['otp']);
+
+        return 'Too many wrong attempts. Ask for a new code.';
+    }
+
+    $expected = otp_signature($email, (int) $issued['expires'], $code);
+
+    if (!hash_equals((string) ($issued['signature'] ?? ''), $expected)) {
+        $_SESSION['otp']['attempts'] = (int) ($issued['attempts'] ?? 0) + 1;
+
+        return 'That code is not right.';
+    }
+
+    /* Looked up only now the code is proven: the address may have been switched
+       off since it went out, and a code is not a licence to be a dealer. This is
+       the only thing that grants a role. */
     $roles = $audience === 'any'
         ? roles_for_email($email)
         : (otp_owner($email, $audience) ? [$audience] : []);
 
     if (!$roles) {
+        unset($_SESSION['otp']);
+
         return 'That address is not registered any more. Ask the office to check it.';
     }
 
-    $stmt = db()->prepare(
-        'SELECT * FROM applicant_otps
-          WHERE email = ? AND used_at IS NULL AND expires_at > NOW()
-          ORDER BY id DESC LIMIT 1'
-    );
-    $stmt->execute([$email]);
-    $otp = $stmt->fetch();
-
-    if (!$otp) {
-        return 'That code has expired. Ask for a new one.';
-    }
-
-    if ((int) $otp['attempts'] >= OTP_MAX_ATTEMPTS) {
-        return 'Too many wrong attempts. Ask for a new code.';
-    }
-
-    if (!password_verify($code, $otp['code_hash'])) {
-        db()->prepare('UPDATE applicant_otps SET attempts = attempts + 1 WHERE id = ?')->execute([$otp['id']]);
-
-        return 'That code is not right.';
-    }
-
-    db()->prepare('UPDATE applicant_otps SET used_at = NOW() WHERE id = ?')->execute([$otp['id']]);
+    /* used once: the signature goes before the session is rebuilt */
+    unset($_SESSION['otp']);
 
     session_regenerate_id(true);
 

@@ -381,6 +381,16 @@
     if (closer) closeModal(closer.closest('.modal-x'));
   });
 
+  /* A download does not navigate, so the dialog that asked for it would
+     otherwise still be sitting there when the file lands. */
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest('form[data-modal-download]');
+    if (!form) return;
+
+    var modal = form.closest('.modal-x');
+    if (modal) setTimeout(function () { closeModal(modal); }, 400);
+  });
+
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || viewerOpen()) return;
 
@@ -644,6 +654,94 @@
     statusPick.addEventListener('change', showSchedule);
     showSchedule();
   }
+
+  /* ---------- a form that will not be sent until it is agreed to ----------
+     The declaration and the terms are what turn a typed-in record into a sale
+     somebody stood behind. Until every required box in the form is ticked
+     there is nothing to send, so the button is not there and a line says what
+     is holding it. */
+  function gateOf(form) {
+    return form ? form.querySelector('[data-consent-gate]') : null;
+  }
+
+  function agreedTo(form) {
+    var boxes = form.querySelectorAll('.field-consent input[type="checkbox"][required]');
+    var agreed = true;
+
+    Array.prototype.forEach.call(boxes, function (box) {
+      if (!box.checked) agreed = false;
+    });
+
+    return agreed;
+  }
+
+  function paintGate(form) {
+    var gate = gateOf(form);
+    if (!gate) return;
+
+    var agreed = agreedTo(form);
+    var button = gate.querySelector('[data-consent-submit]');
+    var note = gate.querySelector('[data-consent-note]');
+
+    /* Spent, not gone: the button stays where it is and stays clickable,
+       because pressing it is how somebody asks what is missing. */
+    if (button) {
+      button.classList.toggle('is-locked', !agreed);
+      button.setAttribute('aria-disabled', agreed ? 'false' : 'true');
+    }
+
+    if (note) note.hidden = agreed;
+  }
+
+  document.addEventListener('change', function (e) {
+    if (!e.target.matches('.field-consent input[type="checkbox"]')) return;
+
+    paintGate(e.target.form);
+  });
+
+  /* Pressed before it is agreed to: the browser is asked to check the form,
+     which marks every wrong or missing field through the `invalid` handler
+     further down and takes the page to the first of them. */
+  document.addEventListener('click', function (e) {
+    var button = e.target.closest('[data-consent-submit]');
+    if (!button || button.getAttribute('aria-disabled') !== 'true') return;
+
+    e.preventDefault();
+
+    var form = button.form;
+    if (form) form.reportValidity();
+  });
+
+  document.querySelectorAll('[data-consent-gate]').forEach(function (gate) {
+    paintGate(gate.closest('form'));
+  });
+
+  /* ---------- the export period ----------
+     Two dates belong to the custom range and to nothing else, so they only
+     appear once it is picked — and they are required then, because a custom
+     range with no dates is all time wearing a different name.
+
+     Delegated from the document, because the panel this control sits on is
+     swapped wholesale every time a filter changes. */
+  document.addEventListener('change', function (e) {
+    var pick = e.target.closest('[data-range-select]');
+    if (!pick || !pick.form) return;
+
+    var custom = pick.form.querySelector('[data-range-custom]');
+    if (!custom) return;
+
+    var picked = pick.value === 'custom';
+
+    custom.hidden = !picked;
+
+    custom.querySelectorAll('input').forEach(function (box) {
+      if (picked) {
+        box.setAttribute('required', 'required');
+      } else {
+        box.removeAttribute('required');
+      }
+    });
+  });
 
   /* ---------- click-to-cycle column headers ----------
      The header itself is the control. A filter header steps through the values

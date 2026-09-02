@@ -11,12 +11,16 @@ against an **active** dealer, and `verify_otp(..., 'dealer')` checks that again
 before the code signs anybody in. A dealer with no email address on their record
 cannot sign in until the office adds one.
 
-Applicants and dealers share the `applicant_otps` table and its throttle (6 per
-address per hour, 10-minute life, 5 wrong guesses). A code proves somebody reads
-that mailbox; what it opens is decided by the audience check, not the code.
+Applicants and dealers share one signed-code mechanism and its throttle (6 an
+hour per address and per IP, 10-minute life, 5 wrong guesses). Nothing is stored:
+the code lives in the email and an HMAC of it lives in the session. A code proves
+somebody reads that mailbox; what it opens is decided by the audience check, not
+the code.
 
 Switching a dealer off in the admin ends their session on the next request —
-`dealer_user()` re-reads the row every time rather than trusting the session.
+`dealer_user()` re-reads the row rather than trusting the session. It holds the
+row for the rest of a single request, which is a page's worth of caching and not
+a session's: the next page asks again.
 
 ## What a dealer sees
 

@@ -22,13 +22,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = (string) ($_POST['password'] ?? '');
     $ip       = $_SERVER['REMOTE_ADDR'] ?? null;
 
+    /* Two counts, either of which is enough to stop. Per address alone leaves
+       one common password sprayed across a hundred addresses entirely
+       unslowed — every attempt is the first for its email. The per-address
+       count stays as well, so somebody behind a shared office NAT does not
+       lock a colleague out by fumbling their own password. */
     $recent = db()->prepare(
         'SELECT COUNT(*) FROM login_attempts
          WHERE email = ? AND attempted_at > (NOW() - INTERVAL 15 MINUTE)'
     );
     $recent->execute([$email]);
+    $byEmail = (int) $recent->fetchColumn();
 
-    if ((int) $recent->fetchColumn() >= 8) {
+    $byIp = 0;
+
+    if ($ip !== null && $ip !== '') {
+        $fromIp = db()->prepare(
+            'SELECT COUNT(*) FROM login_attempts
+             WHERE ip_address = ? AND attempted_at > (NOW() - INTERVAL 15 MINUTE)'
+        );
+        $fromIp->execute([$ip]);
+        $byIp = (int) $fromIp->fetchColumn();
+    }
+
+    if ($byEmail >= 8 || $byIp >= 20) {
         $error = 'Too many failed attempts. Try again in 15 minutes.';
     } elseif ($email === '' || $password === '') {
         $error = 'Enter both an email address and a password.';

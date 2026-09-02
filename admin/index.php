@@ -17,8 +17,9 @@ $types     = submission_types();
 /* what the action that redirected here left behind — read once, so a reload
    does not repeat a confirmation for something that happened once */
 $flash     = admin_flash_take();
-$savedId   = (int) ($flash['saved'] ?? 0);
-$deletedId = (int) ($flash['deleted'] ?? 0);
+/* the name and what was done to them, composed where it happened — see list.php */
+$savedNote   = (string) ($flash['saved_note'] ?? '');
+$deletedNote = (string) ($flash['deleted_note'] ?? '');
 $mailFlash = (string) ($flash['mail'] ?? '');
 $payFlash  = (string) ($flash['pay'] ?? '');
 
@@ -40,12 +41,12 @@ $recent = db()->query(
 require __DIR__ . '/partials/layout-top.php';
 ?>
 
-<?php if ($savedId > 0): ?>
-  <p class="alert alert--ok">Submission #<?= $savedId ?> updated.</p>
+<?php if ($savedNote !== ''): ?>
+  <p class="alert alert--ok"><?= e($savedNote) ?></p>
 <?php endif; ?>
 
-<?php if ($deletedId > 0): ?>
-  <p class="alert alert--error">Submission #<?= $deletedId ?> deleted.</p>
+<?php if ($deletedNote !== ''): ?>
+  <p class="alert alert--error"><?= e($deletedNote) ?></p>
 <?php endif; ?>
 
 <?php require __DIR__ . '/partials/mail-flash.php'; ?>

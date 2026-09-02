@@ -174,7 +174,12 @@ require __DIR__ . '/partials/layout-top.php';
   </p>
 <?php else: ?>
 
-<?php if (!raffle_running()): ?>
+<?php if (!$config['enabled']): ?>
+  <p class="alert alert--warn">
+    The raffle is switched off, so nothing about it is shown on the website and no reveal will
+    happen. Turn it on under <a href="#raffle-setup">Raffle setup</a> below.
+  </p>
+<?php elseif (!raffle_running()): ?>
   <p class="alert alert--warn">
     The raffle is not running. Set a first draw date under <a href="#raffle-setup">Raffle setup</a> below
     and every following reveal is worked out from it, <?= (int) $config['cycle_days'] ?> days apart.
@@ -189,23 +194,38 @@ require __DIR__ . '/partials/layout-top.php';
   ?>
   <div class="panel panel--clock">
     <div class="panel__head">
-      <h2>Draw <?= (int) $nextDraw['draw_no'] ?></h2>
-      <span class="eyebrow"><?= $places ?> winners ·
+      <?php /* A draw is known by the day it is held, not by its number in a
+               sequence nobody outside this room counts. */ ?>
+      <h2>Draw</h2>
+      <span class="eyebrow"><?= e(format_date($nextDraw['reveal_at'])) ?> ·
+        <?= $places ?> winners ·
         <?= e(rtrim(rtrim(number_format((float) $nextDraw['gold_grams'], 3), '0'), '.')) ?> g of gold each</span>
     </div>
 
     <div class="panel__body">
       <div class="clock clock--wide">
-        <span class="eyebrow">Goes public in</span>
-        <p class="clock__time" data-countdown="<?= e(date(DateTimeInterface::ATOM, strtotime((string) $nextDraw['reveal_at']))) ?>">—</p>
-        <span class="clock__at"><?= e(format_datetime($nextDraw['reveal_at'])) ?></span>
+        <?php if ($config['enabled']): ?>
+          <span class="eyebrow">Goes public in</span>
+          <p class="clock__time" data-countdown="<?= e(date(DateTimeInterface::ATOM, strtotime((string) $nextDraw['reveal_at']))) ?>">—</p>
+          <span class="clock__at"><?= e(format_datetime($nextDraw['reveal_at'])) ?></span>
+        <?php else: ?>
+          <span class="eyebrow">Switched off</span>
+          <p class="clock__time">Not counting down</p>
+          <span class="clock__at">Turn the raffle on to start the countdown.</span>
+        <?php endif; ?>
       </div>
 
       <p class="clock__note">
         <?= count($winners) ?> of <?= $places ?> <?= $places === 1 ? 'place' : 'places' ?> filled.
-        Hold the draw however you like and record the winners below — until
-        <?= e(format_datetime($nextDraw['reveal_at'])) ?> the list is yours alone, and after it the website
-        shows it. <?= (int) $eligible ?> applicants have a verified booking payment and can be entered.
+        Hold the draw however you like and record the winners below —
+        <?php if ($config['enabled']): ?>
+          until <?= e(format_datetime($nextDraw['reveal_at'])) ?> the list is yours alone, and after it
+          the website shows it.
+        <?php else: ?>
+          the list stays yours alone, and the website shows nothing at all, for as long as the raffle
+          is switched off.
+        <?php endif; ?>
+        <?= (int) $eligible ?> applicants have a verified booking payment and can be entered.
       </p>
     </div>
   </div>
@@ -264,7 +284,7 @@ require __DIR__ . '/partials/layout-top.php';
   <?php if (!$winners) { continue; } ?>
   <div class="panel">
     <div class="panel__head">
-      <h2>Draw <?= (int) $draw['draw_no'] ?></h2>
+      <h2>Draw</h2>
       <span class="eyebrow">
         <?= raffle_is_revealed($draw) ? 'public since ' : 'goes public ' ?><?= e(format_datetime($draw['reveal_at'])) ?>
         · <?= count($winners) ?> <?= count($winners) === 1 ? 'winner' : 'winners' ?>

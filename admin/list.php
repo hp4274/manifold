@@ -59,8 +59,14 @@ $counts    = status_counts($type);
 /* what the action that redirected here left behind — read once, so a reload
    does not repeat a confirmation for something that happened once */
 $flash     = admin_flash_take();
+/* still an id as well as a sentence: it is what flags the row that changed */
 $savedId   = (int) ($flash['saved'] ?? 0);
-$deletedId = (int) ($flash['deleted'] ?? 0);
+/* who it was and what was done to them — "Submission #554 updated" named
+   neither, and after approving four in a row that is the only thing worth
+   reading. Composed where the action happened, which is the only place both
+   halves are known. */
+$savedNote   = (string) ($flash['saved_note'] ?? '');
+$deletedNote = (string) ($flash['deleted_note'] ?? '');
 $mailFlash = (string) ($flash['mail'] ?? '');
 $payFlash  = (string) ($flash['pay'] ?? '');
 /* without the page, saving a row on page 3 would come back to page 1 */
@@ -97,12 +103,12 @@ $activeType = $type;
 require __DIR__ . '/partials/layout-top.php';
 ?>
 
-<?php if ($savedId > 0): ?>
-  <p class="alert alert--ok">Submission #<?= $savedId ?> updated.</p>
+<?php if ($savedNote !== ''): ?>
+  <p class="alert alert--ok"><?= e($savedNote) ?></p>
 <?php endif; ?>
 
-<?php if ($deletedId > 0): ?>
-  <p class="alert alert--error">Submission #<?= $deletedId ?> deleted.</p>
+<?php if ($deletedNote !== ''): ?>
+  <p class="alert alert--error"><?= e($deletedNote) ?></p>
 <?php endif; ?>
 
 <?php require __DIR__ . '/partials/mail-flash.php'; ?>

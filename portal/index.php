@@ -44,10 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = issue_otp($email, 'any');
 
             if ($error === '') {
+                /* The same answer whether or not that address is registered —
+                   the code step is reached either way, and a code typed at it
+                   without one having gone out simply does not match. */
                 $_SESSION['otp_email'] = $email;
                 $step = 'code';
-                $note = 'A six-digit code is on its way to ' . $email . '. '
-                    . 'It is valid for ' . OTP_TTL_MINUTES . ' minutes.';
+                $note = OTP_SENT_NOTICE;
             }
         }
     }
@@ -176,6 +178,10 @@ require __DIR__ . '/partials/head.php';
             <input id="code" name="code" type="text" inputmode="numeric" pattern="[0-9]*"
                    maxlength="6" autocomplete="one-time-code" required autofocus
                    class="portal-code" placeholder="000000">
+            <span class="field-hint">
+              Nothing after a couple of minutes? Check the spam folder, then try the other address
+              you might be registered under.
+            </span>
           </div>
 
           <button type="submit" class="btn-pill btn-pill--accent form-x__submit">

@@ -45,14 +45,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'save') {
         [$values, $error] = partner_values($_POST);
 
-        /* every dealer answers to a distributor — there is no such thing as
-           one without, so this is checked here and not only in the form */
-        $values['distributor_id'] = (int) ($_POST['distributor_id'] ?? 0);
+        /* Every dealer answers to a distributor — there is no such thing as
+           one without, so this is checked here and not only in the form.
 
-        if ($error === '' && $values['distributor_id'] < 1) {
-            $error = 'Pick the distributor this dealer answers to.';
-        } elseif ($error === '' && !distributor_by_id($values['distributor_id'])) {
-            $error = 'That distributor no longer exists.';
+           It is answered once, when the dealer is added. An edit never touches
+           it: the overrides already booked belong to that distributor, and a
+           posted value on an existing dealer is ignored rather than trusted. */
+        if ($id === 0) {
+            $values['distributor_id'] = (int) ($_POST['distributor_id'] ?? 0);
+
+            if ($error === '' && $values['distributor_id'] < 1) {
+                $error = 'Pick the distributor this dealer answers to.';
+            } elseif ($error === '' && !distributor_by_id($values['distributor_id'])) {
+                $error = 'That distributor no longer exists.';
+            }
         }
 
         if ($error === '' && $id > 0) {
@@ -110,7 +116,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
        form — one wrong character should not cost sixteen fields */
     if ($error !== '' && $action === 'save') {
         $existing        = $id > 0 ? dealer_by_id($id) : null;
-        $editing         = $values + ['id' => $id, 'dealer_code' => $existing['dealer_code'] ?? ''];
+        $editing         = $values + ['id' => $id, 'dealer_code' => $existing['dealer_code'] ?? '',
+                                     'distributor_id' => $existing['distributor_id'] ?? 0];
         $isEdit          = $id > 0;
         $openDealerModal = true;
     }
@@ -359,9 +366,12 @@ require __DIR__ . '/partials/layout-top.php';
         <?= (int) $paging['from'] ?>–<?= (int) $paging['to'] ?> of <?= (int) $paging['total'] ?>
       </span>
     </div>
+    <div class="panel__head-tools">
+      <?php $exportKind = 'dealers'; require __DIR__ . '/partials/export-bar.php'; ?>
     <button type="button" class="btn-add" data-modal-open="dealerModal">
       <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a dealer
     </button>
+    </div>
   </div>
 
   <?php /* The table is drawn even with nothing in it: its header carries the
@@ -657,5 +667,7 @@ require __DIR__ . '/partials/layout-top.php';
     </form>
   </div>
 </div>
+
+<?php $exportKind = 'dealers'; require __DIR__ . '/partials/export-modal.php'; ?>
 
 <?php require __DIR__ . '/partials/layout-bottom.php'; ?>

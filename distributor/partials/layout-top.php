@@ -35,12 +35,13 @@ $navItems  = [
 <link rel="stylesheet" href="../admin/<?= asset_url('assets/admin.css') ?>">
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 
 <div class="shell">
 
   <aside class="sidebar">
     <a class="sidebar__brand" href="./" aria-label="Manifold Clean Energy distributor portal">
-      <img src="../assets/images/manifold-white.webp" alt="Manifold Clean Energy">
+      <img src="../assets/images/manifold-white.webp" srcset="../assets/images/manifold-white-240w.webp 240w, ../assets/images/manifold-white.webp 2173w" sizes="120px" alt="Manifold Clean Energy" width="2173" height="724">
     </a>
 
     <div>
@@ -70,7 +71,7 @@ $navItems  = [
     </div>
   </aside>
 
-  <main class="main">
+  <main class="main" id="main">
     <div class="topbar">
       <div>
         <h1><?= e($pageTitle) ?></h1>

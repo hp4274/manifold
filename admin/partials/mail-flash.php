@@ -28,6 +28,11 @@ $pay  = $payFlash ?? '';
   <p class="alert alert--error">Payment rejected. The applicant has been emailed and is back to payment pending.</p>
 <?php elseif ($pay === 'docs'): ?>
   <p class="alert alert--ok">Documents verified. The applicant has been emailed.</p>
+<?php elseif ($pay === 'docs_rejected'): ?>
+  <p class="alert alert--error">
+    Documents turned down. The applicant has been emailed the reason and asked to send corrected
+    ones. Their application stands and the delivery payment stays shut until you verify them.
+  </p>
 <?php elseif ($pay === 'reminded'): ?>
   <p class="alert alert--ok">Reminder sent.</p>
 <?php elseif ($pay === 'mailfail'): ?>

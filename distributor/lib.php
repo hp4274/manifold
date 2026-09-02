@@ -15,10 +15,17 @@ require_once __DIR__ . '/../admin/lib.php';
 /** The signed-in distributor's row, or null. */
 function distributor_user(): ?array
 {
+    /* held for the rest of the request, for the same reason as dealer_user() */
+    static $cached = null;
+
     $id = (int) ($_SESSION['distributor_id'] ?? 0);
 
     if ($id === 0) {
         return null;
+    }
+
+    if ($cached !== null && (int) $cached['id'] === $id) {
+        return $cached;
     }
 
     $dist = distributor_by_id($id);
@@ -29,6 +36,8 @@ function distributor_user(): ?array
 
         return null;
     }
+
+    $cached = $dist;
 
     return $dist;
 }

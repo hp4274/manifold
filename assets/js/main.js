@@ -19,6 +19,18 @@
     });
   }
 
+  /* A closed <details> keeps its two links out of the tab order, so a keyboard
+     could never reach Apply Now > TukTuk without opening the summary first.
+     Focus opens it, leaving it closes it again. */
+  Array.prototype.forEach.call(nav.querySelectorAll('.nav-dropdown'), function (drop) {
+    drop.addEventListener('focusin', function () { drop.open = true; });
+    drop.addEventListener('focusout', function (e) {
+      /* relatedTarget, not activeElement: during focusout the document has not
+         handed focus over yet, so activeElement is still the body */
+      if (!drop.contains(e.relatedTarget)) drop.open = false;
+    });
+  });
+
   if (toggle) {
     toggle.addEventListener('click', function () {
       var open = nav.classList.toggle('is-open');
@@ -102,6 +114,64 @@
       window.history.replaceState(null, '', window.location.pathname + (rest ? '?' + rest : ''));
     }
   }
+
+  /* ---------- Contact and newsletter: post without leaving the page ----------
+     These used to be plain form posts, so a refusal came back as
+     /contact?error=1 with an empty form and a toast that could not say what was
+     wrong — somebody who mistyped their email retyped the whole message. The
+     apply form has answered JSON from this same endpoint all along; these two
+     now take the same path, so what was typed survives a rejection and the
+     server's own sentence is what gets shown.
+
+     The forms still carry action, method and the `return` field, so without
+     JavaScript they post the old way and land on the old redirect. */
+  document.querySelectorAll('form[action*="submit.php"]').forEach(function (form) {
+    /* apply.js owns its own form, with step validation and a draft to clear */
+    if (form.id === 'applyForm') return;
+
+    form.addEventListener('submit', function (e) {
+      /* let the browser mark its own required fields first */
+      if (typeof form.reportValidity === 'function' && !form.reportValidity()) return;
+
+      e.preventDefault();
+
+      var button = form.querySelector('button[type="submit"], button:not([type])');
+      var wasText = button ? button.innerHTML : '';
+
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Sending…';
+      }
+
+      var restore = function () {
+        if (!button) return;
+        button.disabled = false;
+        button.innerHTML = wasText;
+      };
+
+      fetch(form.getAttribute('action'), {
+        method: 'POST',
+        body: new FormData(form),
+        headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' }
+      })
+        .then(function (response) { return response.json().catch(function () { return {}; }); })
+        .then(function (result) {
+          if (!result || !result.ok) {
+            throw new Error((result && result.message) || 'That did not go through.');
+          }
+
+          raiseToast(result.message, 'ok');
+          form.reset();
+          restore();
+        })
+        .catch(function (err) {
+          /* nothing is cleared: the answer names what was wrong and everything
+             typed is still on screen to correct */
+          raiseToast(err.message || 'That did not go through. Please call +91 97251 54186.', 'error');
+          restore();
+        });
+    });
+  });
 
   /* ---------- Our journey: wheel scrolling on mobile ----------
      Rows fade and shrink with their distance from the middle of the strip, so
@@ -491,6 +561,12 @@
 
           field.value = value;
           field.classList.add('is-prefilled');
+
+          /* Written in rather than typed, so nothing has fired: the phone box
+             formats and re-checks itself off this, and the stored number
+             arrives as "+919773444404" and needs both. */
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+
           filled.push(field);
         });
 
@@ -868,7 +944,8 @@
     var head = document.createElement('summary');
     head.innerHTML = '<span class="raffle__draw-no"></span><span class="raffle__draw-at"></span>'
       + '<i class="bi bi-chevron-down" aria-hidden="true"></i>';
-    head.querySelector('.raffle__draw-no').textContent = 'Draw ' + draw.drawNo;
+    /* a draw is the day it was held, not its number in a sequence */
+    head.querySelector('.raffle__draw-no').textContent = 'Draw';
     head.querySelector('.raffle__draw-at').textContent = draw.label;
 
     var list = document.createElement('ol');
@@ -975,7 +1052,7 @@
         var target = Date.parse(data.nextDraw.revealAt);
 
         wrap.querySelector('.raffle__at').textContent =
-          'Draw ' + data.nextDraw.drawNo + ' · ' + data.nextDraw.label;
+          'Draw · ' + data.nextDraw.label;
 
         function tick() {
           if (!wrap.isConnected) {
@@ -1327,8 +1404,14 @@
 
   /* ---------- Consent gate ----------
      Any form carrying required checkboxes (declaration, terms, contact
-     consent) keeps its submit button locked until every one of them is
-     ticked. JS-only, so the form still submits normally without scripts. */
+     consent) shows its submit button as locked until every one of them is
+     ticked. The button stays pressable on purpose: on a sixty-field form the
+     boxes are at the very bottom, and a dead button tells someone who missed
+     one nothing at all — the tooltip needs a hover the phone cannot give, and
+     `disabled` takes the button out of the tab order as well. Pressing it
+     instead runs the form's own validation, which marks every wrong field red
+     at once, scrolls to the first, and raises the toast. JS-only, so the form
+     still submits normally without scripts. */
   function lockUntilAccepted(form) {
     var boxes = form.querySelectorAll('input[type="checkbox"][required]');
     if (!boxes.length) return;
@@ -1344,7 +1427,6 @@
       });
 
       Array.prototype.forEach.call(buttons, function (button) {
-        button.disabled = !ready;
         button.classList.toggle('is-locked', !ready);
         if (ready) {
           button.removeAttribute('title');
@@ -1547,6 +1629,12 @@
 
   document.addEventListener('input', function (e) {
     if (!isPhoneBox(e.target)) return;
+
+    /* A box the apply form has taken over writes the number in the shape its
+       country uses — "(212) 555-0143" — and stripping that back to digits here
+       undid the formatting on every keystroke. The brackets and dashes are put
+       there by us, so they are not what this is guarding against. */
+    if (e.target.dataset.masked === '1') return;
 
     var digitsOnly = e.target.value.replace(/[^0-9]/g, '');
     if (digitsOnly !== e.target.value) e.target.value = digitsOnly;

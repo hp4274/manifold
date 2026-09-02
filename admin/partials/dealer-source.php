@@ -40,6 +40,9 @@ $srcAskedBy = $srcWaiting
       <button type="button" class="detail-tab" data-tab="3" role="tab" aria-selected="false">
         Stock <span class="detail-tab__count"><?= (int) $srcStock['units'] ?></span>
       </button>
+      <button type="button" class="detail-tab" data-tab="4" role="tab" aria-selected="false">
+        Export MIS
+      </button>
     </nav>
   <?php endif; ?>
 
@@ -314,6 +317,14 @@ $srcAskedBy = $srcWaiting
           <?php $ledgerRows = $srcMoves; require __DIR__ . '/stock-ledger-table.php'; ?>
         <?php endif; ?>
       </div>
+    </section>
+
+    <section class="detail-panel" data-panel="4" role="tabpanel">
+      <?php
+        $exportKind = 'dealers';
+        $exportId   = $srcDealerId;
+        require __DIR__ . '/export-panel.php';
+      ?>
     </section>
     <?php endif; ?>
   </div>

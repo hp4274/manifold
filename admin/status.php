@@ -89,7 +89,11 @@ if ($config['table'] === 'applications') {
         $return = 'list?type=' . urlencode($type);
     }
 
-    admin_flash(['saved' => $id, 'mail' => $mailFlag]);
+    admin_flash([
+        'saved'      => $id,
+        'saved_note' => saved_note($type, $row, [status_done($status)]),
+        'mail'       => $mailFlag,
+    ]);
 
     header('Location: ' . $return);
     exit;
@@ -101,11 +105,16 @@ if ($oldStatus === 'accepted' && $status !== 'accepted') {
     exit('This one has been accepted and can no longer be changed.');
 }
 
+/* what to say afterwards, collected as it happens */
+$did = [];
+
 if ($oldStatus !== $status) {
     db()->prepare('UPDATE ' . $config['table'] . ' SET status = ? WHERE id = ?')
         ->execute([$status, $id]);
 
     log_status_change($config['entity'], $id, $oldStatus, $status, (int) $user['id']);
+
+    $did[] = status_done($status);
 
     /* Applications are driven by payment.php, which sends the emails that go
        with a payment decision. Nothing to send from here. */
@@ -116,6 +125,10 @@ if (array_key_exists('admin_note', $_POST)) {
 
     db()->prepare('UPDATE ' . $config['table'] . ' SET admin_note = ? WHERE id = ?')
         ->execute([$note !== '' ? $note : null, $id]);
+
+    if ($note !== (string) ($row['admin_note'] ?? '')) {
+        $did[] = $note === '' ? 'note cleared' : 'note saved';
+    }
 }
 
 /* back to whichever list the change came from */
@@ -125,7 +138,11 @@ if (!preg_match('#^(\./|list)(\?[a-z0-9=&_%-]*)?$#i', $return)) {
     $return = 'list?type=' . urlencode($type);
 }
 
-admin_flash(['saved' => $id, 'mail' => $mailFlag]);
+admin_flash([
+    'saved'      => $id,
+    'saved_note' => saved_note($type, $row, $did),
+    'mail'       => $mailFlag,
+]);
 
 header('Location: ' . $return);
 exit;

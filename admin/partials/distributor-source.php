@@ -43,6 +43,9 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
     <button type="button" class="detail-tab" data-tab="4" role="tab" aria-selected="false">
       Stock <span class="detail-tab__count"><?= (int) $srcStock['units'] ?></span>
     </button>
+    <button type="button" class="detail-tab" data-tab="5" role="tab" aria-selected="false">
+      Export MIS
+    </button>
   </nav>
 
   <div class="detail-panels">
@@ -199,13 +202,6 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
                               <span class="visually-hidden">Turn down <?= e($srcDealer['full_name']) ?></span>
                             </button>
                           </form>
-                        <?php else: ?>
-                          <?php /* no unassigning: a dealer answers to a distributor
-                                   always, so moving them is a change of distributor
-                                   under Dealers, not a removal of one */ ?>
-                          <a class="btn btn--ghost btn--sm" href="dealers?edit=<?= (int) $srcDealer['id'] ?>">
-                            Move
-                          </a>
                         <?php endif; ?>
 
                         <?php /* The same drawer the Dealers page opens, from here:
@@ -417,6 +413,14 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
           <?php $ledgerRows = $srcMoves; require __DIR__ . '/stock-ledger-table.php'; ?>
         <?php endif; ?>
       </div>
+    </section>
+
+    <section class="detail-panel" data-panel="5" role="tabpanel">
+      <?php
+        $exportKind = 'distributors';
+        $exportId   = $srcDistId;
+        require __DIR__ . '/export-panel.php';
+      ?>
     </section>
   </div>
 </div>

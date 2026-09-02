@@ -15,9 +15,35 @@ require_once __DIR__ . '/lib.php';
 
 final class SimplePdf
 {
-    /** A4 in points. */
+    /** A4 portrait in points, which is what a receipt is. */
     private const WIDTH  = 595.28;
     private const HEIGHT = 841.89;
+
+    /** The page this document is actually drawn on — A4 either way up. */
+    private float $width;
+    private float $height;
+
+    /** Pages already finished; the one being drawn is $content. */
+    private array $pages = [];
+
+    /** Landscape is the only other page a report ever wants. */
+    public function __construct(bool $landscape = false)
+    {
+        $this->width  = $landscape ? self::HEIGHT : self::WIDTH;
+        $this->height = $landscape ? self::WIDTH : self::HEIGHT;
+    }
+
+    /** Finishes the page being drawn and starts the next one. */
+    public function newPage(): void
+    {
+        $this->pages[] = $this->content;
+        $this->content = '';
+    }
+
+    public function height(): float
+    {
+        return $this->height;
+    }
 
     /** Bezier constant for drawing a circle out of four curves. */
     private const KAPPA = 0.5523;
@@ -49,13 +75,13 @@ final class SimplePdf
 
     public function width(): float
     {
-        return self::WIDTH;
+        return $this->width;
     }
 
     /** y is measured from the top of the page, which is easier to reason about. */
     private function y(float $fromTop): float
     {
-        return self::HEIGHT - $fromTop;
+        return $this->height - $fromTop;
     }
 
     public function text(float $x, float $fromTop, string $text, float $size = 11, bool $bold = false, array $rgb = [0.36, 0.44, 0.53], float $tracking = 0.0): void
@@ -259,35 +285,65 @@ final class SimplePdf
     /** Assembles the objects into a finished document. */
     public function output(): string
     {
+        $streams = array_merge($this->pages, [$this->content]);
+
+        /* 1 catalog, 2 the page tree, 3 and 4 the two faces, then a page object
+           and a content stream for each page after them. */
+        $first = 5;
+        $kids  = [];
+
+        foreach (array_keys($streams) as $i) {
+            $kids[] = ($first + $i * 2) . ' 0 R';
+        }
+
         $objects = [
-            "<< /Type /Catalog /Pages 2 0 R >>",
-            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            sprintf(
-                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2f %.2f] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>",
-                self::WIDTH,
-                self::HEIGHT
-            ),
-            "<< /Length " . strlen($this->content) . " >>\nstream\n" . $this->content . "endstream",
-            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            '<< /Type /Pages /Kids [' . implode(' ', $kids) . '] /Count ' . count($streams) . ' >>',
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
         ];
 
-        $pdf     = "%PDF-1.4\n";
+        foreach ($streams as $i => $stream) {
+            $objects[] = sprintf(
+                '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2f %.2f] '
+                . '/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents %d 0 R >>',
+                $this->width,
+                $this->height,
+                $first + $i * 2 + 1
+            );
+            $objects[] = '<< /Length ' . strlen($stream) . " >>
+stream
+" . $stream . 'endstream';
+        }
+
+        $pdf     = "%PDF-1.4
+";
         $offsets = [];
 
         foreach ($objects as $i => $object) {
             $offsets[$i + 1] = strlen($pdf);
-            $pdf .= ($i + 1) . " 0 obj\n" . $object . "\nendobj\n";
+            $pdf .= ($i + 1) . " 0 obj
+" . $object . "
+endobj
+";
         }
 
         $xrefAt = strlen($pdf);
-        $pdf .= "xref\n0 " . (count($objects) + 1) . "\n0000000000 65535 f \n";
+        $pdf .= "xref
+0 " . (count($objects) + 1) . "
+0000000000 65535 f 
+";
 
         foreach ($offsets as $offset) {
-            $pdf .= sprintf("%010d 00000 n \n", $offset);
+            $pdf .= sprintf("%010d 00000 n 
+", $offset);
         }
 
-        $pdf .= "trailer\n<< /Size " . (count($objects) + 1) . " /Root 1 0 R >>\nstartxref\n" . $xrefAt . "\n%%EOF";
+        $pdf .= "trailer
+<< /Size " . (count($objects) + 1) . " /Root 1 0 R >>
+startxref
+" . $xrefAt . "
+%%EOF";
 
         return $pdf;
     }
@@ -409,7 +465,7 @@ function build_receipt_pdf(array $app, array $payment, array $totals = []): stri
     $pdf->line($left, $foot - 18, $right, $line);
     $pdf->text($left, $foot, 'Manifold Clean Energy Pvt. Ltd.', 9, true, $body);
     $pdf->text($left, $foot + 14, '711, SAFAL Prelude, Corporate Road, Prahlad Nagar, Ahmedabad 380015, Gujarat, India', 8, false, $muted);
-    $pdf->text($left, $foot + 27, '+91 97251 54186   ·   info@manifoldcleanenergy.com', 8, false, $muted);
+    $pdf->text($left, $foot + 27, '+91 97251 54186   ·   info@manifoldcleanenergy.co.in', 8, false, $muted);
 
     return $pdf->output();
 }

@@ -64,7 +64,7 @@ $revealed = raffle_is_revealed($draw);
               <?php endif; ?>
 
               <form method="post" class="inline-form"
-                    onsubmit="return confirm('Take <?= e(addslashes($winner['full_name'])) ?> off draw <?= (int) $draw['draw_no'] ?>?');">
+                    onsubmit="return confirm('Take <?= e(addslashes($winner['full_name'])) ?> off the <?= e(format_date($draw['reveal_at'])) ?> draw?');">
                 <?= csrf_field() ?>
                 <input type="hidden" name="winner_id" value="<?= (int) $winner['id'] ?>">
                 <button type="submit" name="action" value="remove" class="btn btn--ghost btn--sm">

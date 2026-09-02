@@ -66,6 +66,8 @@ function load_payment(int $paymentId, int $applicationId): array
 }
 
 $flash = '';
+/* what the confirmation line says was done, beside the applicant's own name */
+$did   = '';
 
 switch ($action) {
     /* ---------- verify one transfer ---------- */
@@ -93,6 +95,7 @@ switch ($action) {
             send_receipt_email($app, $payment, $totals);
         });
 
+        $did   = mb_strtolower(payment_stage_label((string) $payment['stage'])) . ' verified, receipt ' . $receipt;
         $flash = 'receipt';
         break;
 
@@ -131,6 +134,7 @@ switch ($action) {
             send_payment_rejected_email($app, $reason, $payment, $rejectTotals);
         });
 
+        $did   = mb_strtolower(payment_stage_label((string) $payment['stage'])) . ' turned down';
         $flash = 'rejected';
         break;
 
@@ -154,7 +158,34 @@ switch ($action) {
             send_docs_verified_email($after);
         });
 
+        $did   = 'finance documents verified';
         $flash = 'docs';
+        break;
+
+    /* ---------- the paperwork does not pass ----------
+       Not a rejection of the application: the delivery payment stays shut and
+       the applicant is told what to correct. The status does not move, because
+       `docs_pending` is still exactly what is true. */
+    case 'docs_reject':
+        $done = docs_reject($id, (int) $user['id'], $reason);
+
+        if (isset($done['error'])) {
+            /* a missing reason is the form's fault, everything else is a state
+               this application is no longer in — the same split as `reject` */
+            http_response_code($reason === '' ? 422 : 409);
+            exit($done['error']);
+        }
+
+        $refused = db()->prepare('SELECT * FROM applications WHERE id = ?');
+        $refused->execute([$id]);
+        $afterDocs = $refused->fetch() ?: $app;
+
+        after_response(static function () use ($afterDocs, $done): void {
+            send_docs_rejected_email($afterDocs, (string) $done['reason']);
+        });
+
+        $did   = 'finance documents turned down';
+        $flash = 'docs_rejected';
         break;
 
     /* ---------- nudge whoever still owes ---------- */
@@ -171,6 +202,14 @@ switch ($action) {
             exit('There is a receipt waiting to be checked — verify or reject it first.');
         }
 
+        /* "the booking payment of ₹0.00 is due" is not a thing to send anybody.
+           The bell never renders on a row like this, but the address is
+           reachable on its own, so the guard belongs here and not in the view. */
+        if ((float) $totals['stages'][$totals['current']]['balance'] <= 0) {
+            http_response_code(409);
+            exit('Nothing is outstanding on this application, so there is nothing to remind them of.');
+        }
+
         /* counted now, sent after: a reminder nobody is watching go out */
         db()->prepare('UPDATE applications SET reminded_at = NOW(), reminder_count = reminder_count + 1 WHERE id = ?')
             ->execute([$id]);
@@ -179,6 +218,7 @@ switch ($action) {
             send_payment_reminder_email($app, $totals);
         });
 
+        $did   = 'reminded about the ' . mb_strtolower($totals['stages'][$totals['current']]['label']);
         $flash = 'reminded';
         break;
 
@@ -193,7 +233,11 @@ if (!preg_match('#^(\./|list)(\?[a-z0-9=&_%-]*)?$#i', $return)) {
     $return = 'list?type=' . urlencode($type);
 }
 
-admin_flash(['pay' => $flash, 'saved' => $id]);
+admin_flash([
+    'pay'        => $flash,
+    'saved'      => $id,
+    'saved_note' => saved_note($type, $app, $did === '' ? [] : [$did]),
+]);
 
 header('Location: ' . $return);
 exit;

@@ -37,7 +37,8 @@ foreach (array_keys($srcGroups) as $groupLabel) {
       </div>
 
       <div class="decide-bar__actions">
-        <form method="post" action="status.php">
+        <form method="post" action="status.php"
+              data-confirm="Approve <?= e($srcRow['full_name']) ?>? They are emailed the payment details and their portal opens.">
           <?= csrf_field() ?>
           <input type="hidden" name="type" value="<?= e($srcType) ?>">
           <input type="hidden" name="id" value="<?= $srcId ?>">

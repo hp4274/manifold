@@ -63,6 +63,35 @@ function respond(bool $ok, string $message, int $code = 200): void
     exit;
 }
 
+/**
+ * Refuses a sixth post in an hour from one address.
+ *
+ * Counted off what is already stored rather than out of a table of its own:
+ * every one of these forms writes a row carrying the IP and the time it
+ * arrived, so the count is the record itself and there is nothing to keep
+ * tidy. Each accepted post sends mail, so this is the sending reputation of a
+ * shared mailbox as much as it is database spam.
+ *
+ * A request with no address behind it is not throttled — there is nothing to
+ * throttle it by, and refusing everybody over one missing header is worse.
+ */
+const SUBMIT_MAX_PER_HOUR = 5;
+
+function throttled(string $table, ?string $ip): bool
+{
+    if ($ip === null || $ip === '') {
+        return false;
+    }
+
+    $stmt = db()->prepare(
+        'SELECT COUNT(*) FROM `' . $table . '`
+          WHERE ip_address = ? AND created_at > (NOW() - INTERVAL 1 HOUR)'
+    );
+    $stmt->execute([$ip]);
+
+    return (int) $stmt->fetchColumn() >= SUBMIT_MAX_PER_HOUR;
+}
+
 function field(string $name, int $max = 255): ?string
 {
     $value = trim((string) ($_POST[$name] ?? ''));
@@ -120,7 +149,16 @@ if (!empty($_POST['website'])) {
     respond(true, 'Thank you.');
 }
 
+/* five an hour, per form and per address */
+$tables = ['stove' => 'applications', 'tuktuk' => 'applications',
+           'contact' => 'contact_messages', 'newsletter' => 'newsletter_subscribers'];
+
 try {
+    if (isset($tables[$form]) && throttled($tables[$form], $ip)) {
+        respond(false, 'That is a lot of submissions from one connection in a short time. '
+            . 'Wait an hour, or call +91 97251 54186 and we will take it down for you.', 429);
+    }
+
     if ($form === 'stove' || $form === 'tuktuk') {
         if (!checkbox('declaration_accepted') || !checkbox('terms_accepted')) {
             respond(false, 'The declaration and the terms must both be accepted.');
@@ -213,19 +251,10 @@ try {
            our form has to meet the same bar. */
         $digits = static fn (?string $value): string => preg_replace('/\D/', '', (string) $value);
 
-        if (strlen($digits($columns['mobile_number'])) !== 10) {
-            respond(false, 'The mobile number has to be ten digits — no country code, no spaces.');
-        }
-
-        if ($columns['alt_mobile_number'] !== null
-            && strlen($digits($columns['alt_mobile_number'])) !== 10) {
-            respond(false, 'The alternative mobile number has to be ten digits, or left empty.');
-        }
-
         /* The country code is chosen beside the number, and follows the
            nationality unless the applicant says otherwise. It is stored in
            front of the number so a call can be made from what is on the row;
-           the ten digits stay the ten digits. */
+           the national digits stay the national digits. */
         $dial = static function (string $field) use ($digits): string {
             $code = $digits(field($field, 6));
 
@@ -234,11 +263,39 @@ try {
             return $code === '' || strlen($code) > 4 ? DEFAULT_DIAL_CODE : $code;
         };
 
-        $columns['mobile_number'] = '+' . $dial('mobile_code') . $digits($columns['mobile_number']);
+        /* How long a number runs to is the country's business, not ours: ten
+           digits is India, nine is a British mobile, eight is Singapore. The
+           form holds somebody to the same figures while they type. */
+        $lengthOk = static function (string $number, string $code) use ($digits): bool {
+            [$min, $max] = dial_digits($code);
+            $length      = strlen($digits($number));
+
+            return $length >= $min && $length <= $max;
+        };
+
+        $mobileDial = $dial('mobile_code');
+        $altDial    = $dial('alt_mobile_code');
+
+        if (!$lengthOk($columns['mobile_number'], $mobileDial)) {
+            [$min, $max] = dial_digits($mobileDial);
+
+            respond(false, 'The mobile number has to be ' . ($min === $max ? $min . ' digits' : $min . ' to ' . $max . ' digits')
+                . ' for +' . $mobileDial . ' — no country code, no spaces.');
+        }
+
+        if ($columns['alt_mobile_number'] !== null
+            && !$lengthOk($columns['alt_mobile_number'], $altDial)) {
+            [$min, $max] = dial_digits($altDial);
+
+            respond(false, 'The alternative mobile number has to be '
+                . ($min === $max ? $min . ' digits' : $min . ' to ' . $max . ' digits')
+                . ' for +' . $altDial . ', or left empty.');
+        }
+
+        $columns['mobile_number'] = '+' . $mobileDial . $digits($columns['mobile_number']);
 
         if ($columns['alt_mobile_number'] !== null) {
-            $columns['alt_mobile_number'] = '+' . $dial('alt_mobile_code')
-                . $digits($columns['alt_mobile_number']);
+            $columns['alt_mobile_number'] = '+' . $altDial . $digits($columns['alt_mobile_number']);
         }
 
         if (!filter_var((string) $columns['email'], FILTER_VALIDATE_EMAIL)) {

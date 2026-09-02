@@ -9,31 +9,57 @@ require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/receipt-pdf.php';
 
-function email_wrap(string $heading, string $inner): string
+function email_wrap(string $heading, string $inner, string $preheader = ''): string
 {
     $year = date('Y');
 
-    return '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f6f9fc;">'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f9fc;padding:28px 12px;">'
+    /* The inbox preview line. Without one every client shows the masthead, so
+       twenty different mails all preview as "Manifold Clean Energy". Falls back
+       to the opening of the message itself. */
+    if ($preheader === '') {
+        $text = trim(preg_replace('/\s+/', ' ', strip_tags(str_replace('<', ' <', $inner))));
+        $preheader = $text === '' ? $heading : mb_substr($text, 0, 140);
+    }
+
+    return '<!DOCTYPE html><html lang="en"><head>'
+        . '<meta charset="utf-8">'
+        . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        . '<meta name="color-scheme" content="light dark">'
+        . '<meta name="supported-color-schemes" content="light dark">'
+        /* Gmail and Apple Mail invert a white card on their own, and the navy
+           body text is exactly the colour that comes out unreadable. Say what
+           dark should look like instead of letting them guess. */
+        . '<style>@media (prefers-color-scheme:dark){'
+        . 'body,.mf-bg{background:#0b1620 !important}'
+        . '.mf-card{background:#12212e !important;border-color:#263a4b !important}'
+        . '.mf-head,.mf-title{color:#eaf2f8 !important}'
+        . '.mf-body{color:#c2d2df !important}'
+        . '.mf-foot{background:#0e1b26 !important;border-color:#263a4b !important;color:#93a7b8 !important}'
+        . '.mf-sub{color:#93a7b8 !important}'
+        . '}</style></head>'
+        . '<body style="margin:0;padding:0;background:#f6f9fc;">'
+        . '<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f6f9fc;">'
+        . e($preheader) . '</div>'
+        . '<table role="presentation" class="mf-bg" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f9fc;padding:28px 12px;">'
         . '<tr><td align="center">'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #e3ebf2;border-radius:18px;overflow:hidden;font-family:Figtree,Segoe UI,Helvetica,Arial,sans-serif;">'
+        . '<table role="presentation" class="mf-card" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #e3ebf2;border-radius:18px;overflow:hidden;font-family:Figtree,Segoe UI,Helvetica,Arial,sans-serif;">'
         /* The masthead is the H2 mark as a PNG beside the name set as live text.
            The wordmark file is WebP, which Outlook cannot decode at all and
            which some proxies mangle — one arrived at a reader as coloured
            static — so nothing here depends on an image the client may not
            understand. Text also stays sharp on every screen. */
-        . '<tr><td style="padding:24px 30px 18px;background:#ffffff;">'
+        . '<tr><td class="mf-card" style="padding:24px 30px 18px;background:#ffffff;">'
         . '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
         . '<td width="52" style="padding-right:14px;vertical-align:middle;">'
-        . '<a href="' . e(SITE_PUBLIC_URL) . '" style="text-decoration:none;">'
-        . '<img src="' . e(EMAIL_LOGO_URL) . '" alt="" width="46" height="49" '
+        . '<a href="' . e(SITE_PUBLIC_URL !== '' ? SITE_PUBLIC_URL : base_url()) . '" style="text-decoration:none;">'
+        . '<img src="' . e(EMAIL_LOGO_URL !== '' ? EMAIL_LOGO_URL : base_url() . '/assets/images/favicon.png') . '" alt="" width="46" height="49" '
         . 'style="display:block;border:0;outline:none;width:46px;height:49px;">'
         . '</a></td>'
         . '<td style="vertical-align:middle;font-family:Figtree,Segoe UI,Helvetica,Arial,sans-serif;">'
-        . '<a href="' . e(SITE_PUBLIC_URL) . '" style="text-decoration:none;">'
-        . '<span style="display:block;font-size:18px;font-weight:700;letter-spacing:.01em;color:#0f2c4d;">'
+        . '<a href="' . e(SITE_PUBLIC_URL !== '' ? SITE_PUBLIC_URL : base_url()) . '" style="text-decoration:none;">'
+        . '<span class="mf-head" style="display:block;font-size:18px;font-weight:700;letter-spacing:.01em;color:#0f2c4d;">'
         . 'Manifold Clean Energy</span>'
-        . '<span style="display:block;padding-top:3px;font-size:12px;font-weight:400;color:#8499ac;">'
+        . '<span class="mf-sub" style="display:block;padding-top:3px;font-size:12px;font-weight:400;color:#8499ac;">'
         . 'Hydrogen on demand. Made in India.</span>'
         . '</a></td>'
         . '</tr></table></td></tr>'
@@ -44,11 +70,11 @@ function email_wrap(string $heading, string $inner): string
         . '<td width="33%" height="4" style="height:4px;line-height:4px;font-size:4px;background:#2ab98d;">&nbsp;</td>'
         . '<td width="33%" height="4" style="height:4px;line-height:4px;font-size:4px;background:#17b0a6;">&nbsp;</td>'
         . '</tr></table></td></tr>'
-        . '<tr><td style="padding:32px 30px 8px;"><h1 style="margin:0 0 16px;font-size:24px;line-height:1.35;color:#0f2c4d;">' . $heading . '</h1></td></tr>'
-        . '<tr><td style="padding:0 30px 30px;font-size:16px;line-height:1.7;color:#5b7186;">' . $inner . '</td></tr>'
-        . '<tr><td style="padding:20px 30px;background:#f6f9fc;border-top:1px solid #e3ebf2;font-size:13px;line-height:1.6;color:#8499ac;">'
+        . '<tr><td class="mf-card" style="padding:32px 30px 8px;"><h1 class="mf-title" style="margin:0 0 16px;font-size:24px;line-height:1.35;color:#0f2c4d;">' . $heading . '</h1></td></tr>'
+        . '<tr><td class="mf-card mf-body" style="padding:0 30px 30px;font-size:16px;line-height:1.7;color:#5b7186;">' . $inner . '</td></tr>'
+        . '<tr><td class="mf-foot" style="padding:20px 30px;background:#f6f9fc;border-top:1px solid #e3ebf2;font-size:13px;line-height:1.6;color:#8499ac;">'
         . 'Manifold Clean Energy Pvt. Ltd. · 711, SAFAL Prelude, Corporate Road, Prahlad Nagar, Ahmedabad 380015<br>'
-        . '+91 97251 54186 · info@manifoldcleanenergy.com<br>&copy; ' . $year . ' Manifold Clean Energy Pvt. Ltd.'
+        . '+91 97251 54186 · info@manifoldcleanenergy.co.in<br>&copy; ' . $year . ' Manifold Clean Energy Pvt. Ltd.'
         . '</td></tr></table></td></tr></table></body></html>';
 }
 
@@ -299,6 +325,46 @@ function send_docs_verified_email(array $app): bool
 }
 
 /**
+ * Sent when the finance team cannot accept the paperwork.
+ *
+ * The reason is the whole of what the applicant is told, so it goes in the body
+ * where they cannot miss it, in the same red panel a refused payment uses. The
+ * application itself is not turned down and nothing they have paid is at risk —
+ * said plainly, because "your documents were not accepted" reads like the end
+ * of the road to somebody who has already transferred money.
+ *
+ * There is no upload box in the portal for these, so the email asks for them by
+ * reply. Whoever reads that mailbox is the person who has the documents.
+ */
+function send_docs_rejected_email(array $app, string $reason): bool
+{
+    $inner = '<p style="margin:0 0 14px;">Hello ' . e((string) $app['full_name']) . ',</p>'
+        . '<p style="margin:0 0 14px;">Our finance team has looked at the documents on your '
+        . '<strong style="color:#0f2c4d;">' . e(product_label((string) $app['product'])) . '</strong> '
+        . 'application (' . e((string) $app['reference_code']) . ') and cannot accept them as they are.</p>'
+        . '<p style="margin:0 0 16px;padding:14px 18px;border-radius:12px;background:#fdf2f4;color:#a8324a;">'
+        . e($reason) . '</p>'
+        . '<p style="margin:0 0 16px;">Reply to this email with the corrected documents attached and we '
+        . 'will check them again. Your application stands and your booking payment is safe — the delivery '
+        . 'payment simply waits until the paperwork is in order.</p>'
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Product'        => product_label((string) $app['product']),
+            'Checked on'     => format_datetime((string) ($app['docs_rejected_at'] ?? date('Y-m-d H:i:s'))),
+        ])
+        . email_button(base_url() . '/portal/', 'See your application')
+        . '<p style="margin:16px 0 0;font-size:14px;color:#5c7389;">Not sure what is being asked for? '
+        . 'Call +91 97251 54186 and we will talk it through.</p>';
+
+    return send_mail(
+        (string) $app['email'],
+        'We need your documents again (' . $app['reference_code'] . ')',
+        email_wrap('Documents not accepted', $inner),
+        'docs_rejected'
+    );
+}
+
+/**
  * Sent when the client says to go ahead: the delivery payment is open.
  */
 function send_delivery_open_email(array $app): bool
@@ -504,6 +570,13 @@ function send_payment_reminder_email(array $app, ?array $totals = null): bool
     $portal  = base_url() . '/portal/index.php';
     $totals  = $totals ?? payment_totals($app);
     $stage   = $totals['stages'][$totals['current'] ?? 'booking'];
+
+    /* nothing outstanding, nothing to chase — see the same guard on
+       payment.php's remind action, which says so to the office */
+    if ((float) $stage['balance'] <= 0) {
+        return false;
+    }
+
     $amount  = money((float) $stage['balance']);
     $qrFile  = qr_file();
 
@@ -654,12 +727,48 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
 }
 
 /**
+ * Sent when somebody whose application is still with the office asks for a
+ * sign-in code.
+ *
+ * The portal has nothing to open for them yet, and the form cannot say so on
+ * the page without answering "is this address one of your customers?" for
+ * anybody who types addresses at it. So it is said here, where only the person
+ * who reads the mailbox sees it.
+ */
+function send_application_waiting_email(string $to): bool
+{
+    $inner = '<p style="margin:0 0 14px;">Hello,</p>'
+        . '<p style="margin:0 0 20px;">You asked for a sign-in code, and your application is still with '
+        . 'our team — so there is nothing in the portal to show you yet and no code has been sent.</p>'
+        . '<p style="margin:0 0 20px;">We email you the payment details as soon as it is approved, and '
+        . 'your portal opens at the same moment. Nothing is owed until then.</p>'
+        . '<p style="margin:0;font-size:14px;color:#5c7389;">If you were not expecting this, somebody '
+        . 'typed your address into our sign-in form. Nothing has been opened and nothing needs doing. '
+        . 'Any question at all: +91 97251 54186.</p>';
+
+    return send_mail(
+        $to,
+        'Your Manifold application is still with our team',
+        email_wrap('Nothing to sign in to yet', $inner),
+        'otp'
+    );
+}
+
+/**
  * Told to the referrer when the office has transferred their reward.
  * $referral is the application that quoted their code.
  */
 function send_referral_paid_email(array $referrer, array $referral): bool
 {
-    $amount = money((float) $referral['referral_reward']);
+    $reward = (float) $referral['referral_reward'];
+
+    /* "Your referral reward of ₹0.00 is on its way" is worse than silence.
+       Nothing was transferred, so there is nothing to announce. */
+    if ($reward <= 0) {
+        return false;
+    }
+
+    $amount = money($reward);
     $code   = (string) $referrer['referral_code'];
 
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($referrer['full_name']) . ',</p>'
@@ -771,7 +880,7 @@ function send_otp_email(string $to, string $code): bool
         . '<p style="margin:0;">It expires in 10 minutes and can be used once. '
         . 'If you did not ask for it, ignore this email.</p>';
 
-    return send_mail($to, 'Your Manifold sign-in code: ' . $code, email_wrap('Your sign-in code', $inner), 'otp');
+    return send_mail($to, 'Your Manifold sign-in code', email_wrap('Your sign-in code', $inner), 'otp');
 }
 
 /** Human label for the "I am writing about" choice on the contact form. */
@@ -861,8 +970,9 @@ function send_newsletter_welcome_email(string $to): bool
         . '<p style="margin:0 0 4px;font-size:14px;color:#8499ac;">Already thinking about a unit? '
         . '<a href="' . e($site) . '/apply-stove" style="color:#0e8f96;">Apply for the stove</a> or '
         . '<a href="' . e($site) . '/apply-tuktuk" style="color:#0e8f96;">for the conversion kit</a>.</p>'
-        . '<p style="margin:0;font-size:14px;color:#8499ac;">Did not sign up, or changed your mind? '
-        . 'Reply with "unsubscribe" and you are off the list.</p>';
+        . '<p style="margin:0;font-size:14px;color:#5c7389;">Did not sign up, or changed your mind? '
+        . '<a href="' . e(unsubscribe_url($to)) . '" style="color:#0e8f96;">Unsubscribe</a> — one click, '
+        . 'nothing to fill in.</p>';
 
     return send_mail(
         $to,

@@ -66,6 +66,8 @@ status: booking_pending    ← payment email sent, portal opens
 status: booking_review
     ↓  office accepts the receipt (or rejects it)
 status: docs_pending       ← receipt emailed; finance checks the paperwork
+    ↓  (or finance turns the documents down with a reason — the client is emailed
+    ↓   what is wrong and asked for corrected ones; the status stays here)
     ↓  office marks the finance documents verified
 status: confirm_pending    ← the client is asked: go ahead, or cancel?
     ↓  client answers in the portal
@@ -161,34 +163,47 @@ distributor portal alike, so the three can never quote different figures.
 
 ---
 
-## 3. Route B — a dealer or distributor sells directly
+## 3. Route B — a dealer or distributor signs the client up
 
-The short route. The client has already paid the partner in full, in cash or
-by their own arrangement; the company never receives that money and so has
-nothing to verify.
+The same route as A, entered on a different form. A partner who has agreed a
+sale in person types the customer in, so that customer does not have to go home
+and fill in the website form themselves.
+
+**Money never passes through a dealer or a distributor.** The customer pays the
+company, in their own portal, and goes through every step of §2 — the office
+approves, they pay the booking amount, finance checks the documents, they
+confirm delivery and pay the delivery amount. The partner is paid their
+commission by us, out of what the customer paid us.
 
 - Dealer: **Dealer portal → Add a client**
 - Distributor: **Distributor portal → Add a client**
 - Office, on a partner's behalf: the same form in the admin
 
-`create_direct_sale()` writes one row with everything settled at once:
+`create_direct_sale()` writes one row and nothing else:
 
-- `status = 'complete'` — there is no stage left to be at
-- `sale_channel = 'direct'` — this is how a sale the company never banked is
-  told apart from an online one
-- `booking_paid_at`, `delivery_paid_at`, `payment_verified_at`, `completed_at`,
-  `confirmed_at` — all stamped now
+- `status = 'submitted'` — exactly where a website application starts. A partner
+  entering a customer is not an approval; the office still decides.
+- **no payment rows, no verified stamps** — the customer has paid nobody yet
+- `sale_channel = 'direct'` — which form it came in on, and nothing more
 - `entered_by_dealer` / `entered_by_distributor` — who keyed it in
-- commission frozen by the same `commission_split()` as any other sale
+- commission frozen by the same `commission_split()` as any other sale, and
+  written to `commission_lines` by `sync_application_status()` when the delivery
+  payment is verified, exactly as it is for a website sale
+- `referred_by_*` where a customer sent them — see §4
 
 Consequences worth knowing:
 
-- The client **can** sign in to the portal (they are not `submitted`), and they
-  see a completed application with both payments verified.
-- No payment email, no QR code, no receipt upload — there is nothing to pay.
-- The partner's commission is earned immediately, because the sale is already
-  `complete`.
-- A dealer's direct sale still books their distributor's override, because the
+- The client signs in to the same portal, sees the same seven stages, uploads
+  the same two receipts and gets the same emails and PDF receipts.
+- The partner earns nothing until the customer has actually paid in full. There
+  is no longer such a thing as a sale that is complete on arrival.
+- **Stock leaves the partner's shelf when the sale completes**, not when it is
+  typed in — `stock_take_on_completion()`, called from
+  `sync_application_status()` and guarded by the ledger row, so a sale the
+  office turns down costs the partner no stock and a sale that completes cannot
+  be counted twice. The portals still refuse to record a client the partner has
+  no unit for, so nothing can be promised out of an empty shelf.
+- A dealer's client still books their distributor's override, because the
   override follows whoever signed that dealer up.
 
 ---
@@ -212,7 +227,9 @@ Resolved in `submit.php` at submission, in this order:
    first sale was a distributor's own direct sale, it carries down as one.
 
    Inheritance follows the chain: a sale that inherited a dealer passes that
-   dealer to anyone **it** refers, with no limit on depth.
+   dealer to anyone **it** refers, with no limit on depth. The **reward** does
+   not: it is paid to the direct referrer only. If C4 refers C5 and C5 refers
+   C6, C5 is paid on C6 and C4 is paid nothing — one level, every time.
 3. **`MD……`, an approved and active dealer** — `dealer_id` set, the dealer's
    commission for that product frozen onto the row, and the override frozen for
    the distributor that dealer answers to. Every dealer has one, so every dealer sale books an
@@ -230,6 +247,35 @@ Resolved in `submit.php` at submission, in this order:
 `is_active = 1` **and** `approval_status = 'approved'` for their code to book
 anything. That check sits in the shared function, so the public form, the admin
 and any other route all enforce it identically.
+
+### Who sold it and who sent them are two different questions
+
+The website form answers both from one code, because it only has one to work
+with: an `MF……` code names the referrer *and* hands the sale to that customer's
+own partner. A partner recording a sale in their own portal answers them
+separately, and this is where a customer can send somebody to a dealer who is
+not their own.
+
+`direct-sale-form.php` carries an optional **"Referred by a customer"** box that
+takes an `MF……` code. Whatever goes in it:
+
+- **the sale belongs to the partner entering it** — their dealer commission,
+  their distributor's override, or the distributor's direct rate;
+- **the referrer is paid their reward out of that same sale**, whoever their own
+  dealer is.
+
+So a customer of D1 (under Dis1) can introduce somebody who buys from D5 (under
+Dis2): D5 takes the dealer commission, Dis2 the override, and the D1 customer
+their ₹500. D1 and Dis1 earn nothing, because they did not sell it. The reward
+follows the person; the commission follows the sale.
+
+Three things are refused rather than quietly dropped, because the partner is
+standing with the customer and can read the code again:
+
+- a partner code (`MD……` / `MX……`) in that box — the sale is already theirs;
+- a code no customer holds, or one whose own booking payment is not yet
+  verified;
+- the buyer's own code — nobody refers themselves.
 
 ### When the referral reward is actually payable
 
@@ -897,7 +943,7 @@ All in `admin/lib.php`.
 | `submitted`        | Waiting for approval      | Application received       | The office, by approving              |
 | `booking_pending`  | Booking payment pending   | Booking payment due        | The client, by uploading a receipt    |
 | `booking_review`   | Booking receipt — verify  | Booking payment submitted  | The office, by accepting or rejecting |
-| `docs_pending`     | Finance documents — verify | Finance documents — verifying | The office, by verifying the documents |
+| `docs_pending`     | Finance documents — verify | Finance documents — verifying | The office, by verifying the documents. Turning them down keeps the status here: it records a reason on the row, emails it to the client and asks for corrected documents. Verifying afterwards clears the refusal. |
 | `confirm_pending`  | Waiting on the client to confirm | Go ahead with delivery? | The client, by choosing to continue or cancel |
 | `delivery_pending` | Delivery payment pending  | Delivery payment due       | The client, by uploading a receipt    |
 | `delivery_review`  | Delivery receipt — verify | Delivery payment submitted | The office, by accepting or rejecting |
