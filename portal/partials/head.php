@@ -14,12 +14,12 @@ require_once __DIR__ . '/../../distributor/lib.php';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= e($pageTitle) ?> - Manifold Clean Energy</title>
-<link rel="icon" type="image/png" href="../assets/images/favicon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/images/favicon-32.png">
+<link rel="apple-touch-icon" href="../assets/images/apple-touch-icon.png">
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="../assets/vendor/figtree/figtree.css">
-<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="../assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
-<link rel="stylesheet" href="../assets/css/style.css?v=1788364053">
+<link rel="stylesheet" href="../assets/css/style.css?v=1788418718">
 </head>
 <body>
 <a class="skip-link" href="#top">Skip to content</a>
@@ -34,8 +34,6 @@ require_once __DIR__ . '/../../distributor/lib.php';
     <div class="top-bar__social" aria-label="Social media links">
       <a href="https://www.facebook.com/people/Manifold-Clean-Energy/61593136808932/" target="_blank" rel="noopener" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
       <a href="https://www.instagram.com/manifoldcleanenergy" target="_blank" rel="noopener" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
-      <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
-      <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
     </div>
   </div>
 </div>

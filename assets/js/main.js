@@ -32,10 +32,33 @@
   });
 
   if (toggle) {
+    /* The panel covers the page, and the only way out was the same hamburger,
+       now behind it. This is a close button inside the panel itself. */
+    var navClose = document.createElement('button');
+    navClose.type = 'button';
+    navClose.className = 'nav-close';
+    navClose.setAttribute('aria-label', 'Close menu');
+    navClose.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+    navClose.addEventListener('click', function () {
+      closeMenu();
+      toggle.focus();
+    });
+    nav.insertBefore(navClose, nav.firstChild);
+
     toggle.addEventListener('click', function () {
       var open = nav.classList.toggle('is-open');
       toggle.setAttribute('aria-expanded', String(open));
       toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+
+      if (open) navClose.focus();
+    });
+
+    /* Escape closes it, the way every other panel on the site closes */
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && nav.classList.contains('is-open')) {
+        closeMenu();
+        toggle.focus();
+      }
     });
 
     nav.addEventListener('click', function (e) {
@@ -263,7 +286,7 @@
   var rootLink = document.querySelector('link[href*="assets/vendor/"]');
   var siteRoot = rootLink ? rootLink.getAttribute('href').split('assets/vendor/')[0] : '';
 
-  /* which page this is, used by the apply-form prefill and the promo popup */
+  /* which page this is, used by the apply-form prefill and the raffle popup */
   /* Addresses carry no file name — /stove, not /stove.html — and the home page
      is the site root itself. A bare folder is only the home page when it IS the
      root: /manifold/ is home, /manifold/portal/ is the sign-in and must never be
@@ -280,8 +303,8 @@
     page = siteRoot === '' ? 'index' : 'folder';
   }
 
-  /* asked for once and shared — the header menu and the promo popup both
-     need to know who is signed in */
+  /* asked for once and shared — the header menu and the apply-form prefill
+     both need to know who is signed in */
   var sessionAsk = fetch(siteRoot + 'portal/session.php', { credentials: 'same-origin' })
     .then(function (response) { return response.ok ? response.json() : null; })
     .catch(function () { return null; });
@@ -593,129 +616,6 @@
         applyForm.insertBefore(note, applyForm.firstChild);
       })
       .catch(function () { /* signed out or offline — the form stays empty */ });
-  }
-
-  /* ---------- Welcome popup ----------
-     A short introduction to the company and the two products, shown on arriving
-     at the home page. Anything with data-promo-open reopens it.
-
-     Closing it is an answer, and asking the same question again on the next
-     page load is not listening. So a dismissal buys five minutes of quiet: long
-     enough to read the site without being interrupted again, short enough that
-     somebody coming back later still meets the introduction.
-
-     Only the automatic opening is silenced. A footer link asking for it is a
-     request, and a request is always honoured. */
-  var PROMO_QUIET_MS = 5 * 60 * 1000;
-  var PROMO_KEY      = 'manifold:promo-closed-at';
-
-  /* Storage throws outright in some privacy modes rather than returning null,
-     so every touch of it is wrapped: a browser that refuses to remember simply
-     sees the popup each time, which is the behaviour we had before. */
-  function promoIsQuiet() {
-    try {
-      var closedAt = parseInt(window.localStorage.getItem(PROMO_KEY), 10);
-
-      if (isNaN(closedAt)) return false;
-
-      /* A stamp in the future means a clock that moved or a value somebody
-         edited. Left alone the subtraction goes negative and the popup is
-         silenced for good, so anything but a sane elapsed time reopens it. */
-      var since = Date.now() - closedAt;
-
-      return since >= 0 && since < PROMO_QUIET_MS;
-    } catch (err) {
-      return false;
-    }
-  }
-
-  function rememberPromoClosed() {
-    try {
-      window.localStorage.setItem(PROMO_KEY, String(Date.now()));
-    } catch (err) {
-      /* nothing to do: it opens next time, as it always did */
-    }
-  }
-
-  function openPromo() {
-    if (document.querySelector('.promo')) return;
-
-    var promo = document.createElement('div');
-    promo.className = 'promo';
-    promo.innerHTML =
-      '<div class="promo__backdrop" data-promo-close></div>' +
-      '<div class="promo__card" role="dialog" aria-modal="true" aria-labelledby="promoTitle">' +
-        '<button type="button" class="promo__close" data-promo-close aria-label="Close">' +
-          '<i class="bi bi-x-lg" aria-hidden="true"></i>' +
-        '</button>' +
-        '<h2 class="promo__title" id="promoTitle">Hydrogen on demand, made in India.</h2>' +
-        '<p class="promo__by">Powered by <strong>K7 Technology</strong></p>' +
-        '<p class="promo__lead">Manifold Clean Energy Pvt. Ltd. is an Ahmedabad company turning hydrogen from a ' +
-          'laboratory promise into products people can actually buy — built for two of the hardest places to ' +
-          'decarbonise: the household kitchen and the urban street.</p>' +
-        '<ul class="promo__products">' +
-          '<li>' +
-            '<span class="promo__product-icon"><i class="bi bi-fire" aria-hidden="true"></i></span>' +
-            '<span><strong>Kinetic Hydrogen Cooking Stove</strong>' +
-              'Generates hydrogen on demand for a clean, powerful flame. No smoke, no soot, ' +
-              'and it works with the cookware already in your kitchen.</span>' +
-          '</li>' +
-          '<li>' +
-            '<span class="promo__product-icon"><i class="bi bi-truck-front" aria-hidden="true"></i></span>' +
-            '<span><strong>Hydrogen Conversion Kit for TukTuk</strong>' +
-              'Converts an existing petrol or CNG auto rickshaw to hydrogen — no scrapping, familiar range ' +
-              'and throttle, zero CO₂ at the tailpipe.</span>' +
-          '</li>' +
-        '</ul>' +
-        '<div class="promo__actions">' +
-          '<a class="btn-pill btn-pill--accent" href="' + (page === 'index' ? '#products' : siteRoot + '#products') + '">' +
-            'See our products <i class="bi bi-arrow-right"></i></a>' +
-        '</div>' +
-      '</div>';
-
-    var opener = document.activeElement;
-
-    function closePromo() {
-      rememberPromoClosed();
-
-      promo.classList.remove('is-open');
-      setTimeout(function () { promo.remove(); }, 300);
-      if (opener && opener.focus) opener.focus();
-    }
-
-    promo.addEventListener('click', function (e) {
-      if (e.target.closest('[data-promo-close]')) closePromo();
-
-      /* an in-page jump would leave the modal sitting over the section it
-         just scrolled to */
-      var action = e.target.closest('.promo__actions a');
-      if (action && action.getAttribute('href').charAt(0) === '#') closePromo();
-    });
-
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && promo.isConnected) closePromo();
-    });
-
-    document.body.appendChild(promo);
-    requestAnimationFrame(function () { promo.classList.add('is-open'); });
-    promo.querySelector('.promo__close').focus();
-  }
-
-  /* anything on the page can ask for it — a footer link, a button, anywhere */
-  document.addEventListener('click', function (e) {
-    var trigger = e.target.closest('[data-promo-open]');
-    if (!trigger) return;
-
-    e.preventDefault();
-    openPromo();
-  });
-
-  if (page === 'index') {
-    /* never on top of the cookie gate — it waits its turn, and then only if it
-       was not closed in the last five minutes */
-    afterConsent(function () {
-      if (!promoIsQuiet()) openPromo();
-    });
   }
 
   /* ---------- Blog ----------

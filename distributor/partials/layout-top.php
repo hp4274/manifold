@@ -28,7 +28,7 @@ $navItems  = [
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= e($pageTitle) ?> - Manifold distributor</title>
-<link rel="icon" type="image/png" href="../assets/images/favicon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/images/favicon-32.png">
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="../assets/vendor/figtree/figtree.css">
 <link rel="stylesheet" href="../assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">

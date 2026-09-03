@@ -9,11 +9,10 @@
 declare(strict_types=1);
 
 const DB_HOST = '127.0.0.1';
-const DB_NAME = 'manifold';
-const DB_USER = 'root';
-const DB_PASS = '';
+const DB_NAME = 'u768511311_test_manifold';
+const DB_USER = 'u768511311_manifold';
+const DB_PASS = 'Manifold@2210';
 const DB_PORT = 3306;
-
 /** Absolute path where uploaded application documents are stored. */
 /**
  * The clock the whole application runs on: the office's, in Ahmedabad.

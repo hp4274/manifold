@@ -12,7 +12,7 @@ RewriteEngine On
 # 1. Scripts that must remain accessible by filename
 # ==========================================================================
 
-RewriteRule ^(blog|raffle)\.php$ - [L]
+RewriteRule ^(blog|raffle|seeder)\.php$ - [L]
 
 RewriteRule ^admin/(submit|file|drawer|receipt|receipt-pdf|raffle-search)\.php$ - [L]
 
@@ -113,11 +113,29 @@ RewriteRule ^(\.playwright[^/]*|\.reticle|graphify-out|admin/tests)(/|$) - [R=40
 # ==========================================================================
 
 <IfModule mod_deflate.c>
-<IfModule mod_filter.c>
 
-    AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml application/javascript application/x-javascript application/json application/xml application/rss+xml image/svg+xml font/ttf font/otf application/vnd.ms-fontobject
+    # By media type, which is the right way round — but AddOutputFilterByType is
+    # mod_filter's directive, and a server without that module loaded skips this
+    # whole block in silence. That is what left 390 KB of CSS going out raw.
+    <IfModule mod_filter.c>
+        AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml application/javascript application/x-javascript application/json application/xml application/rss+xml image/svg+xml font/ttf font/otf application/vnd.ms-fontobject
+    </IfModule>
 
-</IfModule>
+    # The fallback for a server with mod_deflate and no mod_filter: by
+    # extension, which mod_deflate can do on its own. Only text formats are
+    # listed — compressing a WebP or a woff2 a second time costs CPU and saves
+    # nothing.
+    <IfModule !mod_filter.c>
+        <FilesMatch "\.(css|js|html?|php|json|xml|svg|txt|map)$">
+            SetOutputFilter DEFLATE
+        </FilesMatch>
+    </IfModule>
+
+    # Proxies must not hand a gzipped copy to a client that cannot read one.
+    <IfModule mod_headers.c>
+        Header append Vary Accept-Encoding
+    </IfModule>
+
 </IfModule>
 
 

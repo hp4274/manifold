@@ -4,16 +4,33 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TukTuk Application - Hydrogen Conversion Kit | Manifold Clean Energy</title>
-<link rel="icon" type="image/png" href="assets/images/favicon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png">
 <meta name="description" content="Apply for the Manifold hydrogen conversion kit for auto rickshaws. Complete the application to reserve a technical assessment and installation slot.">
 
-<!-- Fonts, Bootstrap 5 and Bootstrap Icons — self-hosted, works offline -->
+  <link rel="canonical" href="https://manifoldcleanenergy.co.in/apply-tuktuk">
+
+  <!-- What a shared link looks like. Without these, a link pasted into
+       WhatsApp — which is where this audience shares things — is a bare URL. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Manifold Clean Energy">
+  <meta property="og:locale" content="en_IN">
+  <meta property="og:url" content="https://manifoldcleanenergy.co.in/apply-tuktuk">
+  <meta property="og:title" content="TukTuk Application - Hydrogen Conversion Kit | Manifold Clean Energy">
+  <meta property="og:description" content="Apply for the Manifold hydrogen conversion kit for auto rickshaws. Complete the application to reserve a technical assessment and installation slot.">
+  <meta property="og:image" content="https://manifoldcleanenergy.co.in/assets/images/app-2.webp">
+  <meta property="og:image:alt" content="TukTuk Application - Hydrogen Conversion Kit | Manifold Clean Energy">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="TukTuk Application - Hydrogen Conversion Kit | Manifold Clean Energy">
+  <meta name="twitter:description" content="Apply for the Manifold hydrogen conversion kit for auto rickshaws. Complete the application to reserve a technical assessment and installation slot.">
+  <meta name="twitter:image" content="https://manifoldcleanenergy.co.in/assets/images/app-2.webp">
+
+<!-- Figtree and Bootstrap Icons, self-hosted. The grid is ours, in style.css. -->
 <link rel="stylesheet" href="assets/vendor/figtree/figtree.css">
-<link rel="stylesheet" href="assets/vendor/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
 
-<link rel="stylesheet" href="assets/css/style.css?v=1788364053">
-<link rel="stylesheet" href="assets/css/datepicker.css?v=1788364053">
+<link rel="stylesheet" href="assets/css/style.css?v=1788418718">
+<link rel="stylesheet" href="assets/css/datepicker.css?v=1788418718">
 </head>
 <body>
 <a class="skip-link" href="#top">Skip to content</a>
@@ -29,8 +46,6 @@
     <div class="top-bar__social" aria-label="Social media links">
       <a href="https://www.facebook.com/people/Manifold-Clean-Energy/61593136808932/" target="_blank" rel="noopener" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
       <a href="https://www.instagram.com/manifoldcleanenergy" target="_blank" rel="noopener" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
-      <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
-      <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
     </div>
   </div>
 </div>
@@ -115,7 +130,7 @@
   <div class="container-x">
     <p class="eyebrow eyebrow--rule reveal">Application</p>
     <div class="section-head reveal">
-      <h2 class="section-title">Twelve short steps, one submission.</h2>
+      <h2 class="section-title">Six short steps, one submission.</h2>
       <p class="section-sub">Fields marked with an asterisk are required. Everything else helps us prepare a faster, more accurate assessment.</p>
     </div>
 
@@ -123,12 +138,14 @@
       <input type="hidden" name="form" value="tuktuk">
       <input type="hidden" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="display:none">
 
-      <!-- 1. Applicant information -->
       <section class="form-step reveal">
         <div class="form-step__head">
           <span class="form-step__num">01</span>
-          <h2>Applicant information</h2>
+          <h2>Who you are</h2>
         </div>
+
+        <h3 class="form-substep">Applicant information</h3>
+
 
         <div class="field-grid">
           <div class="field">
@@ -138,7 +155,7 @@
 
           <div class="field">
             <label for="date_of_birth">Date of birth <span class="req" aria-hidden="true">*</span></label>
-            <input id="date_of_birth" name="date_of_birth" type="date" data-limit="past" required>
+            <input id="date_of_birth" name="date_of_birth" type="date" autocomplete="bday" data-limit="past" required>
           </div>
 
           <div class="field">
@@ -705,14 +722,9 @@
                    title="Something like name@example.com" required>
           </div>
         </div>
-      </section>
 
-      <!-- 2. Identification details -->
-      <section class="form-step reveal">
-        <div class="form-step__head">
-          <span class="form-step__num">02</span>
-          <h2>Identification details</h2>
-        </div>
+        <h3 class="form-substep">Identification details</h3>
+
 
         <div class="field-grid">
           <div class="field">
@@ -746,22 +758,24 @@
         <p class="form-info">Both uploads are required. Files are stored securely and are only visible to our review team.</p>
       </section>
 
-      <!-- 3. Residential address -->
       <section class="form-step reveal">
         <div class="form-step__head">
-          <span class="form-step__num">03</span>
-          <h2>Residential address</h2>
+          <span class="form-step__num">02</span>
+          <h2>Where it goes</h2>
         </div>
+
+        <h3 class="form-substep">Residential address</h3>
+
 
         <div class="field-grid">
           <div class="field">
             <label for="house_number">House / Villa / Apartment number <span class="req" aria-hidden="true">*</span></label>
-            <input id="house_number" name="house_number" type="text" required>
+            <input id="house_number" name="house_number" type="text" autocomplete="address-line2" required>
           </div>
 
           <div class="field">
             <label for="street">Street name <span class="req" aria-hidden="true">*</span></label>
-            <input id="street" name="street" type="text" required>
+            <input id="street" name="street" type="text" autocomplete="address-line1" required>
           </div>
 
           <div class="field">
@@ -959,14 +973,9 @@
                    title="Six digits" required>
           </div>
         </div>
-      </section>
 
-      <!-- 4. Property / operator information -->
-      <section class="form-step reveal">
-        <div class="form-step__head">
-          <span class="form-step__num">04</span>
-          <h2>Property / operator information</h2>
-        </div>
+        <h3 class="form-substep">Property / operator information</h3>
+
 
         <div class="field-grid">
           <div class="field">
@@ -1025,12 +1034,14 @@
         </div>
       </section>
 
-      <!-- 5. Product requirement -->
       <section class="form-step reveal">
         <div class="form-step__head">
-          <span class="form-step__num">05</span>
-          <h2>Product requirement</h2>
+          <span class="form-step__num">03</span>
+          <h2>What you need</h2>
         </div>
+
+        <h3 class="form-substep">Product requirement</h3>
+
 
         <div class="field-grid">
           <div class="field">
@@ -1061,14 +1072,9 @@
                    title="Choose a date on or after 1 January 2027.">
           </div>
         </div>
-      </section>
 
-      <!-- 6. Water supply -->
-      <section class="form-step reveal">
-        <div class="form-step__head">
-          <span class="form-step__num">06</span>
-          <h2>Water supply (for on-board hydrogen generation)</h2>
-        </div>
+        <h3 class="form-substep">Water supply (for on-board hydrogen generation)</h3>
+
 
         <div class="field-grid">
           <div class="field">
@@ -1103,14 +1109,9 @@
             </div>
           </fieldset>
         </div>
-      </section>
 
-      <!-- 7. Technical assessment -->
-      <section class="form-step reveal">
-        <div class="form-step__head">
-          <span class="form-step__num">07</span>
-          <h2>Technical assessment</h2>
-        </div>
+        <h3 class="form-substep">Technical assessment</h3>
+
 
         <div class="field-grid">
           <fieldset class="field">
@@ -1147,12 +1148,14 @@
         </div>
       </section>
 
-      <!-- 8. Payment information -->
       <section class="form-step reveal">
         <div class="form-step__head">
-          <span class="form-step__num">08</span>
-          <h2>Payment information</h2>
+          <span class="form-step__num">04</span>
+          <h2>Paying for it</h2>
         </div>
+
+        <h3 class="form-substep">Payment information</h3>
+
 
         <div class="field-grid">
           <div class="field">
@@ -1175,14 +1178,9 @@
             <input id="bank_name" name="bank_name" type="text">
           </div>
         </div>
-      </section>
 
-      <!-- 9. Referral -->
-      <section class="form-step reveal">
-        <div class="form-step__head">
-          <span class="form-step__num">09</span>
-          <h2>Referral</h2>
-        </div>
+        <h3 class="form-substep">Referral</h3>
+
 
         <div class="field-grid">
           <div class="field">
@@ -1214,12 +1212,14 @@
         </div>
       </section>
 
-      <!-- 10. Environmental impact -->
       <section class="form-step reveal">
         <div class="form-step__head">
-          <span class="form-step__num">10</span>
-          <h2>Environmental impact</h2>
+          <span class="form-step__num">05</span>
+          <h2>Before you send it</h2>
         </div>
+
+        <h3 class="form-substep">Environmental impact</h3>
+
 
         <div class="field-grid">
           <div class="field">
@@ -1242,14 +1242,9 @@
             </select>
           </div>
         </div>
-      </section>
 
-      <!-- 11. Declaration -->
-      <section class="form-step reveal">
-        <div class="form-step__head">
-          <span class="form-step__num">11</span>
-          <h2>Declaration</h2>
-        </div>
+        <h3 class="form-substep">Declaration</h3>
+
 
         <p class="u-sub">I hereby certify that all information provided in this application is true and correct to the best of my knowledge. I understand that submission of this application does not guarantee approval, product allocation or installation until confirmed by the Company.</p>
 
@@ -1264,10 +1259,9 @@
         </label>
       </section>
 
-      <!-- 12. Terms and conditions -->
       <section class="form-step reveal">
         <div class="form-step__head">
-          <span class="form-step__num">12</span>
+          <span class="form-step__num">06</span>
           <h2>Terms &amp; conditions</h2>
         </div>
 
@@ -1294,13 +1288,7 @@
           <span>I have read and accept the Terms &amp; Conditions above. <span class="req" aria-hidden="true">*</span></span>
         </label>
       </section>
-
-      <div class="form-actions">
-        <p class="form-note">We use your information only to process this application. This form is not yet wired to a mailbox — until it is, call <a href="tel:+919725154186">+91 97251 54186</a>.</p>
-        <button type="submit" class="btn-pill btn-pill--accent form-x__submit">Submit application <i class="bi bi-send"></i></button>
-      </div>
-
-    </form>
+</form>
   </div>
 </section>
 
@@ -1380,11 +1368,7 @@
 
         <div class="footer-social" aria-label="Social media links">
           <a href="https://www.instagram.com/manifoldcleanenergy" target="_blank" rel="noopener" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
-          <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
           <a href="https://www.facebook.com/people/Manifold-Clean-Energy/61593136808932/" target="_blank" rel="noopener" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
-          <a href="#" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
-          <a href="#" aria-label="X"><i class="bi bi-twitter-x"></i></a>
-          <a href="#" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>
         </div>
       </div>
     </div>
@@ -1484,9 +1468,8 @@
   </button>
 </footer>
 
-<script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/js/datepicker.js?v=1788364053"></script>
-<script src="assets/js/main.js?v=1788364053"></script>
-<script src="assets/js/apply.js?v=1788364053"></script>
+<script src="assets/js/datepicker.js?v=1788418718"></script>
+<script src="assets/js/main.js?v=1788418718"></script>
+<script src="assets/js/apply.js?v=1788418718"></script>
 </body>
 </html>

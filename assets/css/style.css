@@ -53,11 +53,19 @@
   --t-title-lh:1.35;
   --t-sub-lh:1.7;
   --t-ui:15px;           /* shared control size: buttons, inputs, nav */
-  --t-micro:11px;        /* shared label size: eyebrows, tags, badges */
+  --t-micro:12px;        /* shared label size: eyebrows, tags, badges.
+                            11px was below the floor for anything a person has
+                            to read rather than glance at, and the blog date and
+                            the legal metadata are set in it. */
   --t-figure:38px;       /* numerals only: the price band and the instalment */
 
   --sec-pad:110px;       /* uniform vertical rhythm below the hero */
-  --container:1463px;
+  /* The page's own width. Capped in vw as well as pixels: a fixed 1463px
+        leaves a comfortable margin at 1900px and almost none at 1750, which is
+        why the same design read as "wider" on a smaller monitor. 77vw is the
+        proportion 1463px occupies at 1900px, so nothing moves on a large screen
+        and a narrower one keeps the same air down the sides. */
+  --container:min(1463px, max(1340px, 77vw));
   --topbar-h:45px;
   --header-h:74px;
   --header-offset:calc(var(--topbar-h) + var(--header-h));
@@ -116,7 +124,9 @@ p{margin:0}
   gap:8px;
   min-width:0;
   color:rgba(255,255,255,.82);
-  font-size:calc(12px * var(--fs));
+  /* 12px was under the readable floor for a live link; the press area itself is
+     grown to 44 px by the ::after square in the touch-target section below */
+  font-size:calc(13px * var(--fs));
   font-weight:500;
   letter-spacing:.01em;
   transition:color .2s ease;
@@ -156,12 +166,14 @@ p{margin:0}
   margin-inline:auto;
   padding-inline:20px;
 }
-/* Bootstrap turns a gutter into a negative margin on the row and padding on its
+/* The grid turns a gutter into a negative margin on the row and padding on its
    columns. A gutter wider than twice the container padding therefore hangs off
-   both edges — gx-5 is 48px against 20px of padding, which is the 8px of
-   sideways scroll every page had on a phone. The gutter is capped to what the
-   container can absorb at each width. */
-.container-x .row{--bs-gutter-x:2.5rem}
+   both edges — gx-5 is 48px against 20px of padding, which is the sideways
+   scroll every page used to have. The gutter is capped to what the container
+   can absorb. (--bs-gutter-x was the name while Bootstrap was loaded; the grid
+   is ours now and the variable is --gutter-x. Both are set, so a stale copy of
+   either stylesheet still behaves.) */
+.container-x .row{--gutter-x:2.5rem;--bs-gutter-x:2.5rem}
 
 .section{padding:var(--sec-pad) 0}
 /* second half of a two-part band — the previous section already paid the gap */
@@ -248,7 +260,11 @@ p{margin:0}
   display:inline-flex;
   align-items:center;
   gap:9px;
-  padding:13px 24px;
+  /* 16px of padding either side of a 15px line box puts the control at 46 px,
+     clear of the 44 px floor a finger needs. Everything pill-shaped inherits
+     it, which is why the fix is one number rather than twenty. */
+  padding:16px 24px;
+  min-height:46px;
   border-radius:999px;
   font-size:var(--t-ui);
   font-weight:600;
@@ -718,7 +734,7 @@ p{margin:0}
 .nav-toggle{
   display:none;
   margin-left:auto;
-  width:42px;height:38px;
+  width:46px;height:46px;
   background:none;
   border:1px solid #d5e0e9;
   border-radius:9px;
@@ -744,7 +760,16 @@ p{margin:0}
 .hero-media{
   position:absolute;
   inset:0;
-  background:url("../images/sdfgnfdsesdf.webp") center center/cover no-repeat;
+  /* A phone is sent the 960-wide copy, a laptop the 1440, and only a large
+     desktop the full 1518. As a background it cannot carry a srcset, so the
+     choice is made with media queries. */
+  background:url("../images/hero-home-960w.webp") center center/cover no-repeat;
+}
+@media (min-width:768px){
+  .hero-media{background-image:url("../images/hero-home-1440w.webp")}
+}
+@media (min-width:1600px){
+  .hero-media{background-image:url("../images/hero-home.webp")}
 }
 .hero-media::after{
   content:"";
@@ -758,7 +783,9 @@ p{margin:0}
   position:relative;
   z-index:2;
   width:100%;
-  max-width:1505px;
+  /* the hero runs a little wider than the rest of the page, at the same
+     proportion — see --container */
+  max-width:min(1505px, max(1380px, 79vw));
   margin-inline:auto;
   padding:calc(var(--header-offset) + 26px) 22px 46px;
 }
@@ -769,8 +796,9 @@ p{margin:0}
   border:1px solid rgba(255,255,255,.34);
   border-radius:999px;
   padding:6px 16px;
-  /* 9.5 rounded to under 10px on a phone: below what a label should ever be */
-  font-size:max(11px, calc(10px * var(--fs)));
+  /* 9.5 rounded to under 10px on a phone: below what a label should ever be,
+     and 11 was still under the floor for a badge somebody has to read */
+  font-size:max(12px, calc(11px * var(--fs)));
   font-weight:600;
   letter-spacing:.15em;
   text-transform:uppercase;
@@ -1057,7 +1085,7 @@ p{margin:0}
   letter-spacing:-.02em;
   margin-bottom:22px;
 }
-.tech-title__accent{color:var(--accent-2)}
+.tech-title__accent{color:var(--accent-ink-2)}
 .tech-text{
   font-size:var(--t-sub);
   font-weight:400;
@@ -1409,11 +1437,12 @@ p{margin:0}
   width:30px;height:30px;
   border-radius:50%;
   display:flex;align-items:center;justify-content:center;line-height:1;
-  background:var(--leaf-deep);
+  /* not --leaf-deep: that is 3.26 : 1 under white text */
+  background:#27827a;
   color:#fff;
   font-size:var(--t-micro);
   font-weight:700;
-  box-shadow:0 4px 12px rgba(47,158,148,.32);
+  box-shadow:0 4px 12px rgba(39,130,122,.32);
 }
 .why-card strong{
   display:block;
@@ -1465,7 +1494,7 @@ p{margin:0}
   color:var(--ink);
   font-weight:700;
 }
-.timeline-title span{color:var(--accent-2)}
+.timeline-title span{color:var(--accent-ink-2)}
 .timeline-head__lead{
   flex:0 1 380px;
   margin-top:44px;
@@ -1565,7 +1594,7 @@ p{margin:0}
 }
 
 /* the live milestone */
-.timeline-item--now .timeline-year{color:var(--accent-2)}
+.timeline-item--now .timeline-year{color:var(--accent-ink-2)}
 .timeline-item--now p{color:var(--accent-ink-2)}
 .timeline-item--now .timeline-dot{
   border-color:var(--accent-2);
@@ -1809,7 +1838,7 @@ p{margin:0}
   font-weight:700;
   letter-spacing:.16em;
   text-transform:uppercase;
-  color:var(--accent-deep);
+  color:var(--accent-ink-2);
 }
 .leaf__grid{
   display:grid;
@@ -1870,7 +1899,7 @@ p{margin:0}
 }
 
 /* the year the timeline is heading for, not one it has reached */
-.timeline-item--next .timeline-year{color:var(--accent-deep)}
+.timeline-item--next .timeline-year{color:var(--accent-ink-2)}
 .timeline-item--next .timeline-dot{
   border-style:dashed;
   border-color:var(--accent-deep);
@@ -1946,7 +1975,7 @@ p{margin:0}
   gap:9px;
   font-size:var(--t-sub);
   font-weight:700;
-  color:var(--accent-deep);
+  color:var(--accent-ink-2);
 }
 .blog-more__link i{font-size:15px;line-height:1;transition:transform .25s ease}
 .blog-more__link:hover i{transform:translateX(4px)}
@@ -1999,7 +2028,7 @@ p{margin:0}
   font-weight:700;
   letter-spacing:.14em;
   text-transform:uppercase;
-  color:var(--accent-deep);
+  color:var(--accent-ink-2);
 }
 .blog-card__title{
   margin:0 0 10px;
@@ -2025,7 +2054,7 @@ p{margin:0}
   font-family:inherit;
   font-size:var(--t-ui);
   font-weight:700;
-  color:var(--accent-deep);
+  color:var(--accent-ink-2);
   cursor:pointer;
   align-self:flex-start;
 }
@@ -2178,17 +2207,20 @@ body.has-drawer{overflow:hidden}
   margin-bottom:30px;
 }
 
+/* The teal that reads as a button. --accent-2 is a 2.69 : 1 colour under white
+   text and belongs to backgrounds and decoration; anything carrying words uses
+   the ink teal, which measures 5.18 : 1. */
 .btn-pill--teal{
   padding:15px 28px;
   font-size:var(--t-ui);
   color:#fff;
-  background:var(--accent-2);
-  box-shadow:0 10px 24px rgba(23,176,166,.26);
+  background:var(--accent-ink-2);
+  box-shadow:0 10px 24px rgba(12,122,116,.26);
 }
 .btn-pill--teal:hover{
   transform:translateY(-2px);
-  background:var(--accent-deep);
-  box-shadow:0 14px 30px rgba(23,176,166,.34);
+  background:#0a6a65;
+  box-shadow:0 14px 30px rgba(12,122,116,.34);
 }
 
 /* photo bleeds off the right edge and dissolves into the panel */
@@ -2479,7 +2511,8 @@ body.is-consent-gated{overflow:hidden}
 .consent-btn{
   border:1px solid transparent;
   border-radius:999px;
-  padding:9px 22px;
+  padding:12px 22px;
+  min-height:44px;
   font-family:inherit;
   font-size:calc(12.5px * var(--fs));
   font-weight:700;
@@ -2499,11 +2532,29 @@ body.is-consent-gated{overflow:hidden}
 }
 .consent-btn--decline:hover{background:rgba(255,255,255,.12);color:#fff}
 
+/* The bar is fixed over the page, so while it is up the last stretch of the
+   document would sit under it — including, on the home page, the hero's own
+   buttons. Its measured height (main.js sets --consent-h) is reserved at the
+   foot of the document, so everything can still be scrolled clear of it. */
+body.has-consent-bar{padding-bottom:var(--consent-h,86px)}
+
+/* And while it is up, the first screen gives it room rather than letting it lie
+   across the hero's own buttons — which is what it did at 1440 x 900, on both
+   of them. The moment consent is answered the bar goes and this goes with it. */
+body.has-consent-bar .hero,
+body.has-consent-bar .page-hero,
+body.has-consent-bar .soon{padding-bottom:var(--consent-h,86px)}
+
 /* the back-to-top button steps over the bar while it is up */
 body.has-consent-bar .to-top{bottom:calc(26px + var(--consent-h,86px))}
 
 @media (max-width:767px){
-  .consent-bar__inner{flex-direction:column;align-items:stretch;gap:14px}
+  /* 19 % of a 390 px screen was too much for a question with two answers: the
+     copy is tightened to two lines and the buttons share one row. */
+  .consent-bar{padding:12px 0}
+  .consent-bar__inner{flex-direction:column;align-items:stretch;gap:10px}
+  .consent-bar__text{font-size:calc(12.5px * var(--fs));line-height:1.45}
+  .consent-bar__icon{display:none}
   .consent-bar__actions{justify-content:stretch}
   .consent-btn{flex:1 1 0}
   body.has-consent-bar .to-top{bottom:calc(18px + var(--consent-h,132px))}
@@ -2512,151 +2563,6 @@ body.has-consent-bar .to-top{bottom:calc(26px + var(--consent-h,86px))}
 @media (prefers-reduced-motion:reduce){
   .consent-bar,
   .consent-scrim{transition:none}
-}
-
-/* ---------- 12c. Referral promo popup ----------
-   Injected by main.js once per browser, seven seconds in. */
-.promo{
-  position:fixed;
-  inset:0;
-  z-index:1400;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:24px;
-  opacity:0;
-  pointer-events:none;
-  transition:opacity .3s ease;
-}
-.promo.is-open{opacity:1;pointer-events:auto}
-
-.promo__backdrop{
-  position:absolute;
-  inset:0;
-  background:rgba(4,34,58,.55);
-  backdrop-filter:blur(3px);
-}
-
-.promo__card{
-  position:relative;
-  width:min(680px,100%);
-  max-height:calc(100vh - 48px);
-  overflow-y:auto;
-  padding:40px 38px 34px;
-  border-radius:24px;
-  background:#fff;
-  box-shadow:0 30px 80px rgba(4,34,58,.32);
-  transform:translateY(18px) scale(.98);
-  transition:transform .35s cubic-bezier(.22,.61,.36,1);
-}
-.promo.is-open .promo__card{transform:none}
-
-.promo__close{
-  position:absolute;
-  top:16px;right:16px;
-  width:38px;height:38px;
-  display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--line);
-  border-radius:50%;
-  background:#fff;
-  color:var(--ink-soft);
-  font-size:15px;
-  cursor:pointer;
-  transition:background .2s ease,color .2s ease,border-color .2s ease;
-}
-.promo__close:hover{background:var(--tint);color:var(--ink);border-color:#c3d3df}
-
-.promo__title{
-  margin:0 0 14px;
-  padding-right:44px;
-  font-size:calc(26px * var(--fs));
-  font-weight:700;
-  line-height:1.3;
-  letter-spacing:-.02em;
-  color:var(--ink);
-  max-width:20ch;
-}
-.promo__title span{
-  color:var(--accent-deep);
-  white-space:nowrap;
-}
-/* whose technology this is, sitting between the title and the lead */
-.promo__by{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  margin:0 0 18px;
-  padding:6px 14px;
-  border:1px solid rgba(75,180,83,.3);
-  border-radius:999px;
-  background:rgba(75,180,83,.12);
-  font-size:calc(14px * var(--fs));
-  font-weight:600;
-  color:var(--accent-ink);
-}
-.promo__by strong{font-weight:800}
-
-.promo__lead{
-  margin:0 0 22px;
-  font-size:var(--t-sub);
-  line-height:1.65;
-  color:var(--body);
-}
-
-.promo__products{
-  list-style:none;
-  margin:0 0 26px;
-  padding:0;
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:16px;
-}
-/* side by side, so each product reads top to bottom inside its own box */
-.promo__products li{
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  padding:18px;
-  border:1px solid var(--line);
-  border-radius:var(--radius);
-  background:var(--tint);
-}
-.promo__products li > span:last-child{
-  display:block;
-  font-size:var(--t-ui);
-  line-height:1.6;
-  color:var(--body);
-}
-.promo__products strong{
-  display:block;
-  margin-bottom:3px;
-  font-size:var(--t-ui);
-  color:var(--ink);
-}
-.promo__product-icon{
-  flex:0 0 38px;
-  width:38px;height:38px;
-  display:flex;align-items:center;justify-content:center;
-  border-radius:50%;
-  background:rgba(23,176,166,.12);
-  color:var(--accent-deep);
-  font-size:18px;
-  line-height:1;
-}
-
-.promo__actions{display:flex;flex-wrap:wrap;gap:12px}
-.promo__actions .btn-pill{flex:1 1 190px;justify-content:center}
-
-@media (max-width:639px){
-  .promo{padding:16px}
-  .promo__card{padding:32px 22px 26px;border-radius:20px}
-  .promo__title{font-size:calc(22px * var(--fs));max-width:none}
-  .promo__products{grid-template-columns:minmax(0,1fr)}
-}
-
-@media (prefers-reduced-motion:reduce){
-  .promo,
-  .promo__card{transition:none}
 }
 
 /* ---------- 12d. Gold raffle popup ----------
@@ -4388,7 +4294,7 @@ fieldset.field legend{margin-bottom:2px}
   gap:8px;
   max-width:80ch;
 }
-.legal-doc a{color:var(--accent-deep);font-weight:600}
+.legal-doc a{color:var(--accent-ink-2);font-weight:600}
 .legal-doc a:hover{text-decoration:underline}
 
 /* ---------- 13f. Applicant portal (portal/*.php) ---------- */
@@ -4963,7 +4869,7 @@ fieldset.field legend{margin-bottom:2px}
   font-size:var(--t-micro);
   font-weight:700;
   letter-spacing:.06em;
-  color:var(--accent-deep);
+  color:var(--accent-ink-2);
 }
 
 .safety-card h3{
@@ -5030,7 +4936,7 @@ fieldset.field legend{margin-bottom:2px}
   font-weight:700;
   letter-spacing:.14em;
   text-transform:uppercase;
-  color:var(--accent-deep);
+  color:var(--accent-ink-2);
 }
 .tech-range__item p:last-child{
   margin:0;
@@ -6081,4 +5987,227 @@ input[name*="email"]{text-transform:lowercase}
   transform:translate(-50%,-50%);
   width:max(100%,44px);
   height:max(100%,44px);
+}
+
+/* ---------- 22. targets a finger can hit ----------
+   Measured at 390 px: the footer's legal links were 26 px rows, the blog card's
+   "Read more" 26, the offer strip's close 30 and the skip link 31. The picture
+   in each case is fine; the box around it was not. */
+/* Only where a finger is doing the pointing. On a desktop this turned the
+   footer's six columns into 44px rows and loosened the whole block for no
+   reason — a mouse does not need the padding. */
+@media (hover:none),(max-width:991px){
+  .footer-policy a,
+  .footer-links a{display:inline-flex;align-items:center;min-height:44px}
+}
+
+/* a date field is a control, and its box was 30 px */
+.datefield__input,
+.datefield__button{min-height:44px}
+
+.proof-card__link{min-height:44px;display:inline-flex;align-items:center;gap:8px}
+
+.blog-card__more,
+.blog-more__link{min-height:44px;display:inline-flex;align-items:center;gap:8px}
+
+.offer-flash__close{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center}
+
+.offer-flash__cta{min-height:44px;display:inline-flex;align-items:center}
+
+.skip-link{min-height:44px;display:inline-flex;align-items:center}
+
+/* the checkbox a consent line hangs on: 20 px is the browser's, 24 is ours, and
+   the label beside it is part of the same target */
+.field-consent input[type="checkbox"]{width:24px;height:24px}
+.field-consent{min-height:44px}
+
+/* ---------- 23. the reading column ----------
+   Comfortable reading is 45-75 characters. Measured before this rule: 103 on
+   the legal pages, 85 on the apply forms, 67 on the product pages. The
+   technology page already read well because its columns are narrow — this
+   gives every other long-form block the same ceiling. */
+.legal-doc p,
+.legal-doc li,
+.legal-doc dd,
+.form-step__head p,
+.form-section__copy,
+.section-sub,
+.portal-app__copy,
+.faq-item p,
+.form-note,
+.apply-form .field-hint{
+  /* 60ch, not 68: Figtree's "0" is wide, so a 68ch box measured 87 characters
+     of real text on the legal pages. This lands at about 70. */
+  max-width:60ch;
+}
+
+/* a hint under a field is part of the field, so it may run to the field's own
+   width where that is narrower */
+.field .field-hint{max-width:min(68ch,100%)}
+
+/* ---------- 24. the grid ----------
+   What Bootstrap was here for. The audit found fourteen of its classes in use
+   across the site — the twelve-column grid, four gutter sizes, one alignment
+   utility and the screen-reader helper — against 233 KB of stylesheet. This is
+   those fourteen, at Bootstrap's own numbers, so the markup did not have to
+   change: 576 / 768 / 992 breakpoints, .25/.5/1/1.5/3rem spacers, a 1.5rem
+   default gutter split either side of the column.
+
+   Everything else Bootstrap gave us — the box-sizing, the body and heading
+   resets, the list and link resets — section 2 above already does. */
+
+/* Reboot normalises these, and a form control that falls back to the system
+   font in the middle of a Figtree page is the one visible thing it did. */
+button,input,select,textarea,optgroup{font-family:inherit;font-size:100%;line-height:inherit;margin:0}
+button{cursor:pointer}
+
+.row{
+  --gutter-x:1.5rem;
+  --gutter-y:0rem;
+  display:flex;
+  flex-wrap:wrap;
+  margin-top:calc(-1 * var(--gutter-y));
+  margin-right:calc(-.5 * var(--gutter-x));
+  margin-left:calc(-.5 * var(--gutter-x));
+}
+.row > *{
+  flex-shrink:0;
+  width:100%;
+  max-width:100%;
+  padding-right:calc(var(--gutter-x) * .5);
+  padding-left:calc(var(--gutter-x) * .5);
+  margin-top:var(--gutter-y);
+}
+
+/* gutters: g sets both, gx across, gy down */
+.g-4{--gutter-x:1.5rem;--gutter-y:1.5rem}
+.gx-5{--gutter-x:3rem}
+.gy-4{--gutter-y:1.5rem}
+.gy-5{--gutter-y:3rem}
+
+.align-items-center{align-items:center}
+
+/* the twelve columns, at each width the markup asks for */
+@media (min-width:576px){
+  .col-sm-6{flex:0 0 auto;width:50%}
+}
+@media (min-width:768px){
+  .col-md-6{flex:0 0 auto;width:50%}
+}
+@media (min-width:992px){
+  .col-lg-3{flex:0 0 auto;width:25%}
+  .col-lg-4{flex:0 0 auto;width:33.33333333%}
+  .col-lg-5{flex:0 0 auto;width:41.66666667%}
+  .col-lg-6{flex:0 0 auto;width:50%}
+  .col-lg-7{flex:0 0 auto;width:58.33333333%}
+  .col-lg-8{flex:0 0 auto;width:66.66666667%}
+}
+
+/* said to a screen reader, drawn for nobody */
+.visually-hidden{
+  position:absolute !important;
+  width:1px !important;
+  height:1px !important;
+  padding:0 !important;
+  margin:-1px !important;
+  overflow:hidden !important;
+  clip:rect(0,0,0,0) !important;
+  white-space:nowrap !important;
+  border:0 !important;
+}
+
+/* ---------- 25. the open menu's own close button ----------
+   Only drawn while the panel is a panel; on a wide screen the nav is a row in
+   the header and there is nothing to close. */
+.nav-close{display:none}
+
+@media (max-width:991px){
+  .main-nav.is-open .nav-close{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    align-self:flex-end;
+    width:48px;
+    height:48px;
+    margin:-4px -4px 4px;
+    border:1px solid var(--line);
+    border-radius:50%;
+    background:#fff;
+    color:var(--ink);
+    font-size:17px;
+  }
+
+  /* rows a thumb can hit without aiming */
+  .main-nav.is-open a,
+  .main-nav.is-open summary{min-height:48px;display:flex;align-items:center}
+}
+
+/* ---------- 26. the icon font, only the icons we draw ----------
+   The vendor face carries about 2,000 glyphs at 127 KB; this project draws 96
+   of them. Declared after the vendor stylesheet, so this @font-face is the one
+   that wins for the family and the full file is never fetched. Regenerate with
+   fontTools.subset if a new bi-* class is used. */
+@font-face{
+  font-family:"bootstrap-icons";
+  font-display:swap;
+  src:url("../vendor/bootstrap-icons/font/fonts/bootstrap-icons-subset.woff2") format("woff2");
+}
+
+/* ---------- 27. the step that holds more than one thing ----------
+   The application asks twelve things and used to ask them across twelve steps,
+   which told somebody on the second that they were an twelfth of the way in.
+   It is six steps now, and the old names live on as sub-headings inside them. */
+.form-substep{
+  margin:34px 0 18px;
+  padding-top:22px;
+  border-top:1px solid var(--line);
+  font-size:var(--t-sub);
+  font-weight:700;
+  letter-spacing:.01em;
+  color:var(--ink);
+}
+.form-step__head + .form-substep{margin-top:0;padding-top:0;border-top:0}
+
+/* ---------- 28. the last of the report's list ----------
+   Three small things the audit picked up at particular widths. */
+
+/* At 1440 the section head put the eyebrow and title hard left and the
+   sentence that explains them hard right, with 700 px of nothing between: they
+   read as unrelated. The pair is capped so they stay in conversation. */
+@media (min-width:1200px){
+  .section-head{max-width:1120px;gap:64px}
+  .section-head .section-sub{max-width:46ch}
+}
+
+/* The hero's supporting paragraph sits over the brightest part of the
+   photograph. The scrim was spent by the time it reached it; this carries it
+   the rest of the way down without touching the top of the image. */
+.hero-media::after{
+  background:
+    linear-gradient(90deg,rgba(14,71,124,.94) 0%,rgba(5,36,65,.86) 30%,rgba(0,0,0,.5) 52%,rgba(0,0,0,.16) 70%,rgba(0,0,0,0) 84%),
+    linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 34%),
+    linear-gradient(0deg,rgba(3,18,31,.5) 0%,rgba(3,18,31,0) 38%);
+}
+
+/* "HOME / KINETIC HYDROGEN COOKING STOVE / APPLICATION" wrapped with the last
+   crumb alone on a line. The middle one gives way first. */
+@media (max-width:600px){
+  .breadcrumb-x{flex-wrap:nowrap;min-width:0}
+  .breadcrumb-x a:not(:first-child){
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:14ch;
+  }
+}
+
+/* ---------- 29. the side margin on a smaller monitor ----------
+   The vw term above only bites between about 1600 and 1900 px, where a fixed
+   1463 left barely any air down the sides; the max() floor keeps the full
+   width on a laptop, and the px cap keeps it on a large monitor. Below the
+   tablet breakpoint the page has no width to spare at all, so the pixel
+   padding takes over again. */
+@media (max-width:1199px){
+  :root{--container:1463px}
+  .hero-inner{max-width:1505px}
 }
