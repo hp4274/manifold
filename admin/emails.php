@@ -687,8 +687,8 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
             . 'already filled in:</p>'
             /* the same pair the website shows: the one to press, and the other */
             . '<p style="margin:0;font-size:15px;">'
-            . email_pill(referral_link($code, 'stove'), 'Apply for a stove')
-            . email_pill(referral_link($code, 'tuktuk'), 'Apply for a TukTuk kit', false)
+            . email_pill(client_referral_link($app, 'stove'), 'Apply for a stove')
+            . email_pill(client_referral_link($app, 'tuktuk'), 'Apply for a TukTuk kit', false)
             . '</p>'
             . '</div>';
     }

@@ -26,16 +26,19 @@ require_once __DIR__ . '/admin/lib.php';
 
 /* ---------------------------------------------------------------- guards */
 
-/* A seeder loose on a live site is a bad afternoon. It refuses to run anywhere
-   but a local machine unless SEEDER_ALLOW_REMOTE is defined in
-   admin/config.local.php. */
+/* A seeder loose on a live site is a bad afternoon, so somewhere between here
+   and the first INSERT somebody has to say yes.
+ *
+ *   local machine          runs straight away — that is what it is for
+ *   anywhere else          asks once, on screen, naming the database it is
+ *                          about to write to; ?confirm=1 is that answer
+ *   SEEDER_ALLOW_REMOTE    defined in admin/config.local.php: never asks,
+ *                          for a staging box that is seeded often
+ *
+ * A test domain is therefore one click, not a file edit. */
 $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? 'cli'));
-$local = preg_match('/^(localhost|127\.0\.0\.1|::1|.*\.local|.*\.test)(:\d+)?$/', $host) === 1;
-
-if (!$local && !defined('SEEDER_ALLOW_REMOTE')) {
-    http_response_code(403);
-    exit('The seeder only runs on a local host. Define SEEDER_ALLOW_REMOTE in admin/config.local.php to override.');
-}
+$local = preg_match('/^(localhost|127\.0\.0\.1|::1|.*\.local|.*\.test|.*\.localhost)(:\d+)?$/', $host) === 1;
+$confirmed = isset($_GET['confirm']) || (defined('SEEDER_ALLOW_REMOTE') && SEEDER_ALLOW_REMOTE);
 
 @set_time_limit(300);
 
@@ -43,6 +46,73 @@ const SEED_TAG = '[seed]';
 
 $wipe = isset($_GET['wipe']) || (($_GET['only'] ?? '') === 'wipe');
 $onlyWipe = ($_GET['only'] ?? '') === 'wipe';
+
+if (!$local && !$confirmed) {
+    /* the same query the visitor arrived with, plus the answer */
+    $go = $_GET;
+    $go['confirm'] = '1';
+
+    http_response_code(200);
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Seeder — confirm</title>
+      <style>
+        body{margin:0;padding:60px 20px;background:#f4f7fa;
+             font:15px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#0f2c4d}
+        .card{max-width:620px;margin-inline:auto;background:#fff;border:1px solid #e3ebf2;
+              border-radius:14px;padding:30px 32px}
+        h1{margin:0 0 10px;font-size:24px;letter-spacing:-.02em}
+        dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:20px 0;font-size:14px}
+        dt{color:#5c7389}
+        dd{margin:0;font-weight:600}
+        .go,.no{display:inline-flex;align-items:center;justify-content:center;min-height:46px;
+                padding:0 24px;border-radius:999px;font-weight:700;font-size:14px;text-decoration:none}
+        .go{background:#0c7a74;color:#fff}
+        .no{color:#5c7389}
+        p.muted{color:#5c7389;font-size:14px}
+        code{background:#f4f7fa;border:1px solid #e3ebf2;border-radius:5px;padding:1px 6px;font-size:13px}
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>Seed this database?</h1>
+        <p class="muted">
+          This is not a local host, so it asks first. It writes test partners, clients and payments —
+          fine on a test domain, not something to do twice by accident.
+        </p>
+
+        <dl>
+          <dt>Host</dt><dd><?= e($host) ?></dd>
+          <dt>Database</dt><dd><?= e(DB_NAME) ?> on <?= e(DB_HOST) ?></dd>
+          <dt>Action</dt><dd><?= $onlyWipe
+              ? 'Remove seeded data only'
+              : ($wipe ? 'Remove seeded data, then seed again' : 'Add a batch of seeded data') ?></dd>
+        </dl>
+
+        <p>
+          <a class="go" href="?<?= e(http_build_query($go)) ?>">
+            Yes, <?= $onlyWipe ? 'remove it' : 'seed it' ?>
+          </a>
+          <a class="no" href="<?= e(rtrim(dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/')), '/\\') ?: '/') ?>/">
+            No, take me back
+          </a>
+        </p>
+
+        <p class="muted" style="margin-bottom:0">
+          Only rows tagged <code><?= e(SEED_TAG) ?></code> are ever removed. To stop it asking on
+          this server, put <code>define('SEEDER_ALLOW_REMOTE', true);</code> in
+          <code>admin/config.local.php</code>.
+        </p>
+      </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
 
 /* ------------------------------------------------------------ the fixtures */
 
@@ -185,14 +255,22 @@ function seed_application(string $quoted, string $product, array $opts = []): ar
     $email = $opts['email'] ?? seed_email('client');
     [$city, $state, $pin] = seed_city();
 
-    /* ---- who this sale belongs to, and who is paid out of it ---- */
+    /* ---- who this sale belongs to, and who is paid out of it ----
+       The form has two boxes: $quoted is the referral code and $partner the
+       dealer or distributor selling it. The partner box wins where it is
+       answered, which is what lets a customer of one dealer send somebody to
+       another. Same order as admin/submit.php. */
+    $partner  = $opts['partner'] ?? '';
     $referrer = $quoted === '' ? null : referrer_for_code($quoted);
-    $dealer = null;
-    $distributor = null;
 
-    if ($referrer) {
-        /* a customer's code: the reward is theirs, and the partner behind their
-           own sale keeps this one — re-checked, never copied blind */
+    $dealer = $partner === '' ? null : dealer_for_code($partner);
+    $distributor = $dealer
+        ? distributor_for_dealer($dealer)
+        : ($partner === '' ? null : distributor_for_code($partner));
+
+    if (!$dealer && !$distributor && $referrer) {
+        /* a customer's code and no partner named: the partner behind their own
+           sale keeps this one — re-checked, never copied blind */
         $dealer = dealer_by_id((int) ($referrer['dealer_id'] ?? 0));
 
         if ($dealer && ((int) $dealer['is_active'] !== 1 || $dealer['approval_status'] !== 'approved')) {
@@ -204,15 +282,15 @@ function seed_application(string $quoted, string $product, array $opts = []): ar
         } elseif (empty($referrer['dealer_id'])) {
             $distributor = distributor_by_id((int) ($referrer['distributor_id'] ?? 0));
         }
-
-        if ($distributor && (int) $distributor['is_active'] !== 1) {
-            $distributor = null;
-        }
-    } else {
+    } elseif (!$dealer && !$distributor && !$referrer) {
         $dealer = $quoted === '' ? null : dealer_for_code($quoted);
         $distributor = $dealer
             ? distributor_for_dealer($dealer)
             : ($quoted === '' ? null : distributor_for_code($quoted));
+    }
+
+    if ($distributor && (int) $distributor['is_active'] !== 1) {
+        $distributor = null;
     }
 
     /* nobody refers themselves */
@@ -578,6 +656,56 @@ if (!$onlyWipe) {
             $completed[] = $third;
         }
     }
+
+    /* --- 3b. cross-network: one dealer's customer sends somebody to another,
+             which is what the second box on the form is for --- */
+    $crossFrom = $completed[0];
+    $crossTo   = null;
+
+    foreach ($dealers as $d => $group) {
+        foreach ($group as $dealer) {
+            if ($dealer['approval_status'] === 'approved' && $dealer['is_active']
+                && (int) $dealer['distributor_id'] !== (int) $crossFrom['distributor_id']) {
+                $crossTo = $dealer;
+                break 2;
+            }
+        }
+    }
+
+    if ($crossTo) {
+        seed_advance(
+            seed_application((string) $crossFrom['referral_code'], 'stove', [
+                'partner' => (string) $crossTo['dealer_code'],
+                'note'    => 'Referred across networks',
+            ]),
+            'complete'
+        );
+
+        /* and the same again, still owing the delivery payment */
+        seed_advance(
+            seed_application((string) $crossFrom['referral_code'], 'tuktuk', [
+                'partner' => (string) $crossTo['dealer_code'],
+                'note'    => 'Referred across networks, mid-flow',
+            ]),
+            'delivery_pending'
+        );
+
+        $scenarios[] = ['Referred across networks',
+            'the closing dealer takes the commission, the referrer keeps the reward, '
+            . 'the referrer\'s own dealer earns nothing'];
+    }
+
+    /* --- 3c. a dealer's link with a referral code alongside it --- */
+    $withBoth = seed_advance(
+        seed_application((string) $completed[1]['referral_code'], 'stove', [
+            'partner' => (string) $dealers[1][1]['dealer_code'],
+            'note'    => 'Both codes quoted',
+        ]),
+        'complete'
+    );
+    $completed[] = $withBoth;
+
+    $scenarios[] = ['Both codes on one form', 'the partner box decides the sale, the referral box the reward'];
 
     $scenarios[] = ['Client refers a client', 'the referrer is paid ₹' . (int) referral_reward()
         . ', the sale stays with their own dealer'];

@@ -585,12 +585,14 @@ require __DIR__ . '/partials/head.php';
               We check each one and transfer the money to you by hand. Share a link and the code fills itself in.</p>
 
             <div class="portal-referral__links">
+              <?php /* both codes travel: theirs, so the reward is theirs, and the
+                       partner who sold to them, so the sale stays where it was */ ?>
               <button type="button" class="portal-referral__link"
-                      data-copy="<?= e(referral_link($code, 'stove')) ?>">
+                      data-copy="<?= e(client_referral_link($app, 'stove')) ?>">
                 <i class="bi bi-link-45deg" aria-hidden="true"></i> Copy stove link
               </button>
               <button type="button" class="portal-referral__link"
-                      data-copy="<?= e(referral_link($code, 'tuktuk')) ?>">
+                      data-copy="<?= e(client_referral_link($app, 'tuktuk')) ?>">
                 <i class="bi bi-link-45deg" aria-hidden="true"></i> Copy TukTuk link
               </button>
             </div>

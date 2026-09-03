@@ -5,6 +5,11 @@
 Options -MultiViews
 Options -Indexes
 
+# Every file here is UTF-8. Apache's built-in default is ISO-8859-1, and the
+# HTTP header beats the document's own <meta charset> — so without this the
+# rupee signs and em dashes go out labelled as Latin-1.
+AddDefaultCharset utf-8
+
 RewriteEngine On
 
 
@@ -112,13 +117,47 @@ RewriteRule ^(\.playwright[^/]*|\.reticle|graphify-out|admin/tests)(/|$) - [R=40
 # Compression
 # ==========================================================================
 
+# Brotli where the server has it, gzip where it does not. The two are kept
+# mutually exclusive on purpose: listed together, both filters run on the same
+# response and the client is handed gzip wrapped in brotli, which no browser can
+# read. Hostinger loads mod_brotli, so that is the branch that runs in
+# production; XAMPP has neither mod_brotli nor mod_filter, so it falls all the
+# way through to the extension list at the bottom.
+#
+# The type list is the same in both. Note text/javascript: Apache 2.4's
+# mime.types maps .js to text/javascript, not to application/javascript, so a
+# list carrying only the latter quietly leaves every script uncompressed. That
+# is invisible on a server without mod_filter, where the extension fallback
+# picks .js up anyway — and it is exactly what was happening in production.
+<IfModule mod_brotli.c>
+
+    <IfModule mod_filter.c>
+        AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/css text/xml text/javascript application/javascript application/x-javascript application/json application/xml application/rss+xml application/manifest+json image/svg+xml font/ttf font/otf application/vnd.ms-fontobject
+    </IfModule>
+
+    # same fallback as the gzip branch, so no combination of loaded modules
+    # ends up serving text uncompressed
+    <IfModule !mod_filter.c>
+        <FilesMatch "\.(css|js|html?|php|json|xml|svg|txt|map)$">
+            SetOutputFilter BROTLI_COMPRESS
+        </FilesMatch>
+    </IfModule>
+
+    <IfModule mod_headers.c>
+        Header append Vary Accept-Encoding
+    </IfModule>
+
+</IfModule>
+
+
+<IfModule !mod_brotli.c>
 <IfModule mod_deflate.c>
 
     # By media type, which is the right way round — but AddOutputFilterByType is
     # mod_filter's directive, and a server without that module loaded skips this
     # whole block in silence. That is what left 390 KB of CSS going out raw.
     <IfModule mod_filter.c>
-        AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml application/javascript application/x-javascript application/json application/xml application/rss+xml image/svg+xml font/ttf font/otf application/vnd.ms-fontobject
+        AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml text/javascript application/javascript application/x-javascript application/json application/xml application/rss+xml application/manifest+json image/svg+xml font/ttf font/otf application/vnd.ms-fontobject
     </IfModule>
 
     # The fallback for a server with mod_deflate and no mod_filter: by
@@ -137,6 +176,7 @@ RewriteRule ^(\.playwright[^/]*|\.reticle|graphify-out|admin/tests)(/|$) - [R=40
     </IfModule>
 
 </IfModule>
+</IfModule>
 
 
 # ==========================================================================
@@ -148,16 +188,24 @@ RewriteRule ^(\.playwright[^/]*|\.reticle|graphify-out|admin/tests)(/|$) - [R=40
     ExpiresActive On
 
     ExpiresByType text/css "access plus 1 year"
+    # both spellings: .js is text/javascript in Apache 2.4's mime.types
+    ExpiresByType text/javascript "access plus 1 year"
     ExpiresByType application/javascript "access plus 1 year"
 
     ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/avif "access plus 1 year"
     ExpiresByType image/png "access plus 1 year"
     ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
     ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/x-icon "access plus 1 year"
 
     ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
 
-    ExpiresByType text/html "access plus 0 seconds"
+    # Nothing here for text/html on purpose: mod_headers below owns it, and a
+    # rule here only added a second Cache-Control line saying max-age=0 beside
+    # the one that already says no-cache.
 
 </IfModule>
 
@@ -168,12 +216,16 @@ RewriteRule ^(\.playwright[^/]*|\.reticle|graphify-out|admin/tests)(/|$) - [R=40
 
 <IfModule mod_headers.c>
 
-    <FilesMatch "\.(css|js|webp|png|jpe?g|svg|woff2?|ttf|otf)$">
+    <FilesMatch "\.(css|js|mjs|webp|avif|png|jpe?g|gif|svg|ico|woff2?|ttf|otf)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
 
+    # "always", because mod_expires runs after a plain Header set and would put
+    # its own max-age=0 back over the top of this one. Both say do not reuse
+    # without asking, but only this one tells a shared cache it may hold a copy
+    # and revalidate it.
     <FilesMatch "\.(html|php)$">
-        Header set Cache-Control "no-cache, must-revalidate"
+        Header always set Cache-Control "no-cache, must-revalidate"
     </FilesMatch>
 
 </IfModule>

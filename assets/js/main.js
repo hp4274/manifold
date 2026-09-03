@@ -98,8 +98,11 @@
       entries.forEach(function (entry) {
         if (!entry.isIntersecting) return;
         var el = entry.target;
+        /* A stagger reads as deliberate up to about a quarter of a second;
+           past that the last card in a row is visibly late and the section
+           looks like it is still settling long after it arrived. */
         var siblings = Array.prototype.slice.call(el.parentElement.children);
-        el.style.transitionDelay = Math.min(siblings.indexOf(el), 5) * 90 + 'ms';
+        el.style.transitionDelay = Math.min(siblings.indexOf(el), 4) * 55 + 'ms';
         el.classList.add('is-visible');
         io.unobserve(el);
       });
@@ -257,22 +260,48 @@
      A shared link looks like apply-stove.html?ref=MFAB3K7P. Drop the code into
      the box so the applicant does not have to type it, and highlight it so the
      discount is visible before they submit. */
-  var referralField = document.getElementById('referral_code');
-  var sharedCode = (params.get('ref') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  /* Two boxes, two parameters: ?ref= is the customer who referred this one and
+     ?code= is the dealer or distributor selling it. A customer's own share link
+     carries both, which is how a sale stays with their dealer while the reward
+     goes to them. */
+  function fillCode(id, param) {
+    var field = document.getElementById(id);
+    if (!field) return;
 
-  if (referralField && sharedCode) {
-    referralField.value = sharedCode.slice(0, 20);
-    referralField.classList.add('is-prefilled');
-    /* the code came from somebody's own link — the sale belongs to them, so it
-       is shown but not editable. Typing a different one means opening the plain
-       apply page. readOnly, not disabled: a disabled field is never submitted. */
-    referralField.readOnly = true;
+    var code = (params.get(param) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    if (code) {
+      field.value = code.slice(0, 20);
+      field.classList.add('is-prefilled');
+      /* the code came from somebody's own link — the sale or the reward belongs
+         to them, so it is shown but not editable. Typing a different one means
+         opening the plain apply page. readOnly, not disabled: a disabled field
+         is never submitted. */
+      field.readOnly = true;
+    }
+
+    field.addEventListener('input', function () {
+      field.value = field.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
   }
 
-  if (referralField) {
-    referralField.addEventListener('input', function () {
-      referralField.value = referralField.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    });
+  fillCode('referral_code', 'ref');
+  fillCode('partner_code', 'code');
+
+  /* an older link put a partner's code in ?ref=; it still works, and it lands
+     in the box that code belongs to */
+  var strayPartner = (params.get('ref') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  var partnerField = document.getElementById('partner_code');
+  var referralField = document.getElementById('referral_code');
+
+  if (partnerField && referralField && !partnerField.value
+      && /^(MD|MX)/.test(strayPartner)) {
+    partnerField.value = strayPartner.slice(0, 20);
+    partnerField.classList.add('is-prefilled');
+    partnerField.readOnly = true;
+    referralField.value = '';
+    referralField.classList.remove('is-prefilled');
+    referralField.readOnly = false;
   }
 
   /* ---------- Signed-in account menu ----------

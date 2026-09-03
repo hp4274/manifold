@@ -9,10 +9,11 @@
 declare(strict_types=1);
 
 const DB_HOST = '127.0.0.1';
-const DB_NAME = 'u768511311_test_manifold';
-const DB_USER = 'u768511311_manifold';
-const DB_PASS = 'Manifold@2210';
+const DB_NAME = 'manifold';
+const DB_USER = 'root';
+const DB_PASS = '';
 const DB_PORT = 3306;
+
 /** Absolute path where uploaded application documents are stored. */
 /**
  * The clock the whole application runs on: the office's, in Ahmedabad.
@@ -115,6 +116,26 @@ $local = __DIR__ . '/config.local.php';
 if (is_file($local)) { require $local; }
 if (!defined('SMTP_PASS')) { define('SMTP_PASS', ''); }
 const SMTP_TIMEOUT = 15;
+
+/* ----------------------------------------------------------------------
+ * Persistent database connections
+ * ----------------------------------------------------------------------
+ * A connection is handed back to the pool at the end of a request instead of
+ * being closed, so the next request on the same Apache worker skips the TCP
+ * handshake and MySQL's auth round trip. On a page that runs a handful of
+ * small queries that setup is a real share of the time spent.
+ *
+ * The cost is one open connection per Apache worker process rather than one
+ * per concurrent request. Shared hosting caps this: if MySQL's
+ * max_user_connections is lower than the number of workers Apache will spawn,
+ * a busy moment starts refusing connections outright. Set
+ *
+ *     define('DB_PERSISTENT', false);
+ *
+ * in config.local.php to turn it off for a host where that is the case —
+ * nothing else in the code changes.
+ * -------------------------------------------------------------------- */
+if (!defined('DB_PERSISTENT')) { define('DB_PERSISTENT', true); }
 
 /* Gmail rejects a From that is not the authenticated mailbox or a verified
    alias, so send as the account and route replies to the company inbox. */
@@ -351,10 +372,32 @@ function db(): PDO
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
+                PDO::ATTR_PERSISTENT         => DB_PERSISTENT,
             ]);
 
-            /* NOW() has to mean the same moment as PHP's time() */
+            /* NOW() has to mean the same moment as PHP's time(). Re-sent on
+               every request rather than only on a new connection: a pooled one
+               outlives the change into and out of daylight saving. */
             $pdo->exec("SET time_zone = '" . (new DateTime('now'))->format('P') . "'");
+
+            /* A pooled connection keeps whatever the last request left on
+               it, and a request that dies inside a transaction — a fatal error
+               or an exit() between beginTransaction() and commit() — would
+               hand the next one either a lock to wait on or half of somebody
+               else's commission run to commit.
+
+               PHP 8 rolls that back itself when the connection goes back to
+               the pool; measured here on 8.4, the transaction is gone and the
+               uncommitted row with it, with this block removed. It stays for
+               the older builds where that was not the case, and because it
+               costs an in-process flag read on a request that ends cleanly. */
+            if (DB_PERSISTENT) {
+                register_shutdown_function(static function () use ($pdo): void {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                });
+            }
         } catch (PDOException $e) {
             http_response_code(500);
             exit('Database connection failed. Check admin/config.php and that schema.sql has been imported.');

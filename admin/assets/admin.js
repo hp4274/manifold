@@ -7,6 +7,47 @@
 (function () {
   'use strict';
 
+  /* ---------- one dial for display scaling ----------
+     Windows at 125% is a 1536px viewport on a 1920px monitor, and at 150% a
+     1280px one. The admin is designed for 1600; below that the choice is to
+     reflow it or to draw it smaller, and reflowing a dense table is what put a
+     status pill on top of a row's buttons.
+
+     So the shell is laid out at the width it was designed for and scaled down
+     to fit — `zoom`, which unlike a transform still lays the page out, so
+     scrollbars and hit areas stay honest. It never scales up past 1:1, and it
+     stops at 0.75 so a genuinely small window falls back to the responsive
+     rules rather than becoming unreadable.
+
+     100vh means the unscaled viewport inside a zoomed box, so anything sized
+     against the window divides by the same number — see --zoom in admin.css. */
+  var DESIGN_WIDTH = 1600;
+  var MIN_ZOOM = 0.75;
+  var shell = document.querySelector('.shell');
+
+  function fitToScreen() {
+    if (!shell) return;
+
+    var zoom = Math.min(1, Math.max(MIN_ZOOM, window.innerWidth / DESIGN_WIDTH));
+
+    /* rounded, so a resize by one pixel does not repaint the whole page */
+    zoom = Math.round(zoom * 100) / 100;
+
+    if (shell.dataset.zoom === String(zoom)) return;
+
+    shell.dataset.zoom = String(zoom);
+    shell.style.zoom = zoom === 1 ? '' : String(zoom);
+    document.documentElement.style.setProperty('--zoom', String(zoom));
+  }
+
+  fitToScreen();
+
+  var fitTimer = null;
+  window.addEventListener('resize', function () {
+    window.clearTimeout(fitTimer);
+    fitTimer = window.setTimeout(fitToScreen, 120);
+  });
+
   /* ---------- confirm before a destructive action ----------
      The browser's own confirm box says "localhost says" above the question and
      looks like nothing else on the page, which is a poor frame for "delete this

@@ -365,8 +365,18 @@ p{margin:0}
 }
 
 /* --- scroll reveal --- */
-.reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+.reveal{opacity:0;transform:translateY(22px);transition:opacity .55s ease,transform .55s ease}
 .reveal.is-visible{opacity:1;transform:none}
+
+/* A block with something pressable in it fades, and does not travel.
+   The 22px rise is fine on a paragraph or a picture; on a button it means the
+   thing under the cursor is still moving when somebody goes to press it, which
+   reads as the button stretching down the screen as it arrives. */
+.reveal:has(a[class*="btn"]),
+.reveal:has(button),
+.reveal:has(input),
+.reveal:has(select),
+.reveal:has(summary){transform:none}
 @media (prefers-reduced-motion:reduce){
   .reveal{opacity:1;transform:none;transition:none}
 }
@@ -498,9 +508,11 @@ p{margin:0}
 
 .nav-wrap{
   width:100%;
-  max-width:1505px;
+  /* the same column the page below it uses, so the logo and the buttons line up
+     with the content rather than sitting 20px further out */
+  max-width:var(--container);
   margin-inline:auto;
-  padding-inline:22px;
+  padding-inline:20px;
   display:flex;
   align-items:center;
   gap:26px;
@@ -3661,7 +3673,10 @@ body.has-consent-bar .to-top{bottom:calc(26px + var(--consent-h,86px))}
 
 .apply-form{
   display:grid;
-  gap:44px;
+  /* One step is on screen at a time, so this gap only ever separates the
+     progress card from that step and the step from the buttons. 44px left a
+     visible hole under the card. */
+  gap:28px;
   background:#fff;
   border:1px solid var(--line);
   border-radius:var(--radius-lg);
@@ -3962,7 +3977,8 @@ fieldset.field legend{margin-bottom:2px}
   z-index:5;
   display:grid;
   gap:10px;
-  margin-bottom:30px;
+  /* the grid gap above already spaces it off the step below */
+  margin-bottom:0;
   padding:14px 18px;
   background:var(--white);
   border:1px solid var(--line);
@@ -6158,8 +6174,8 @@ button{cursor:pointer}
    which told somebody on the second that they were an twelfth of the way in.
    It is six steps now, and the old names live on as sub-headings inside them. */
 .form-substep{
-  margin:34px 0 18px;
-  padding-top:22px;
+  margin:30px 0 4px;
+  padding-top:20px;
   border-top:1px solid var(--line);
   font-size:var(--t-sub);
   font-weight:700;

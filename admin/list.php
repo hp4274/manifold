@@ -139,20 +139,27 @@ require __DIR__ . '/partials/layout-top.php';
                rows behind one status are shorter or longer than another's, and
                an empty result has no cells to size at all. */ ?>
       <table class="table--fixed">
+        <?php
+          $hasSource = $type !== 'newsletter' && $type !== 'contact';
+
+          /* One share per column, in the order the row renders them, so the
+             Actions share can be read against what actually sits in it: a new
+             contact enquiry carries four icons and needs 168px of them, and at
+             the 14% it used to have there was room for three — the fourth wrapped
+             onto a line of its own under the others. */
+          $columnWidths = $type === 'newsletter'
+              /*  #   email  received  status  actions  details  */
+              ? [5,   33,              18,     12,      18,      14]
+              : ($hasSource
+                  /*  #  name  contact  source  received  status  actions  details */
+                  ? [5,  15,   17,      11,     11,       13,     17,      11]
+                  /*  #  name  contact  received  status  actions  details */
+                  : [5,  17,   20,      12,       12,     20,      14]);
+        ?>
         <colgroup>
-          <?php $hasSource = $type !== 'newsletter' && $type !== 'contact'; ?>
-          <col style="width:5%">
-          <col style="width:<?= $type === 'newsletter' ? '34%' : ($hasSource ? '16%' : '18%') ?>">
-          <?php if ($type !== 'newsletter'): ?>
-            <col style="width:<?= $hasSource ? '18%' : '21%' ?>">
-          <?php endif; ?>
-          <?php if ($hasSource): ?>
-            <col style="width:12%">
-          <?php endif; ?>
-          <col style="width:<?= $type === 'newsletter' ? '20%' : ($hasSource ? '12%' : '14%') ?>">
-          <col style="width:<?= $type === 'newsletter' ? '13%' : '14%' ?>">
-          <col style="width:<?= $hasSource ? '12%' : '14%' ?>">
-          <col style="width:<?= $hasSource ? '11%' : '14%' ?>">
+          <?php foreach ($columnWidths as $width): ?>
+            <col style="width:<?= $width ?>%">
+          <?php endforeach; ?>
         </colgroup>
         <thead>
           <tr>
@@ -225,7 +232,7 @@ require __DIR__ . '/partials/layout-top.php';
                   </div>
                 </td>
               <?php endif; ?>
-              <td><?= e(format_datetime($row['created_at'])) ?></td>
+              <td class="td-when"><?= e(format_datetime($row['created_at'])) ?></td>
               <td><span class="pill pill--<?= e($row['status']) ?>"><?= e(status_short($row['status'])) ?></span></td>
               <td>
                 <?php $rowType = $type; require __DIR__ . '/partials/row-actions.php'; ?>

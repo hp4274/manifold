@@ -386,11 +386,29 @@ try {
 
            Both shares are frozen here for the same reason the price is: raising
            a rate later must not rewrite what this sale was worth. */
-        if ($referrer) {
-            /* A customer's code, so the reward is theirs — and the partner who
-               made that first sale keeps this one too. Without this the dealer
-               who found the customer earns nothing on the customer they went on
-               to find, and the sale books commission to nobody at all.
+        /* ---------- who sold it ----------
+           A second box on the form takes the partner's own code, because who
+           sold a sale and who referred it are two different questions and one
+           box could only ever answer one of them. Answered here it wins: a
+           customer of one dealer can send somebody to another, and the sale
+           belongs to whoever closed it while the reward still goes to whoever
+           sent them.
+
+           Left empty, the answer falls back to where it always came from — the
+           partner behind the referring customer's own sale, or the code in the
+           referral box if that turned out to be a partner's. */
+        $quotedPartner = normalise_referral_code(field('partner_code', 20));
+
+        $dealer      = $quotedPartner === '' ? null : dealer_for_code($quotedPartner);
+        $distributor = $dealer
+            ? distributor_for_dealer($dealer)
+            : ($quotedPartner === '' ? null : distributor_for_code($quotedPartner));
+
+        if (!$dealer && !$distributor && $referrer) {
+            /* A customer's code and no partner named, so the partner who made
+               that first sale keeps this one too. Without this the dealer who
+               found the customer earns nothing on the customer they went on to
+               find, and the sale books commission to nobody at all.
 
                Re-checked rather than copied: a dealer switched off since the
                first sale books no more, and if theirs is the one that went, the
@@ -407,21 +425,31 @@ try {
                 $distributor = distributor_for_dealer($dealer);
             } elseif (empty($referrer['dealer_id'])) {
                 $distributor = distributor_by_id((int) ($referrer['distributor_id'] ?? 0));
-            } else {
-                $distributor = null;
             }
-
-            if ($distributor && (int) $distributor['is_active'] !== 1) {
-                $distributor = null;
-            }
-        } else {
+        } elseif (!$dealer && !$distributor && !$referrer) {
+            /* nothing in the partner box and nothing a customer holds: the
+               referral box may still carry a partner's code, which is how every
+               shared link worked before there were two boxes */
             $dealer      = $quoted === '' ? null : dealer_for_code($quoted);
             $distributor = $dealer
                 ? distributor_for_dealer($dealer)
                 : ($quoted === '' ? null : distributor_for_code($quoted));
         }
 
+        if ($distributor && (int) $distributor['is_active'] !== 1) {
+            $distributor = null;
+        }
+
         $split = commission_split($form, $dealer, $distributor);
+
+        /* A partner code that matched nothing is worth saying out loud: without
+           it the office sees a sale attributed to nobody and has to guess
+           whether somebody mistyped a code or never had one. No column of its
+           own — the note is where a human reads it. */
+        if ($quotedPartner !== '' && !$dealer && !$distributor) {
+            $columns['admin_note'] = trim(($columns['admin_note'] ?? '')
+                . ' Partner code ' . $quotedPartner . ' was quoted and matched no active partner.');
+        }
 
         $columns['dealer_id']              = $dealer ? (int) $dealer['id'] : null;
         $columns['dealer_commission']      = $split['dealer'];

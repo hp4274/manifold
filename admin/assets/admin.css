@@ -27,14 +27,26 @@
   --shadow-card:0 10px 34px rgba(10,45,80,.07);
 
   --ff:"Figtree","Poppins","Segoe UI",system-ui,-apple-system,sans-serif;
-  --t-title:24px;
-  --t-sub:18px;
+
+  /* Type and spacing follow the viewport between roughly 1100px and 1600px,
+     which is the range a 1600px monitor moves through as Windows display
+     scaling goes 100% → 125% → 150%. Each is a floor, a size that tracks the
+     screen, and a ceiling: at 100% everything is exactly what it was, and at
+     125% it steps down instead of running off the edge. */
+  --t-title:clamp(20px, 0.5vw + 15px, 24px);
+  --t-sub:clamp(15px, 0.38vw + 11.4px, 18px);
   --t-title-lh:1.35;
   --t-sub-lh:1.7;
-  --t-ui:15px;
-  --t-micro:11px;
+  --t-ui:clamp(13px, 0.25vw + 10px, 15px);
+  --t-micro:clamp(11px, 0.13vw + 9.9px, 12px);
 
-  --sidebar:290px;
+  /* the rail keeps its proportions rather than its pixels */
+  --sidebar:clamp(212px, 17vw, 290px);
+
+  /* one gutter for the page, the panels and the cells */
+  --gutter:clamp(16px, 1.6vw, 34px);
+  --cell-y:clamp(10px, 0.8vw, 14px);
+  --cell-x:clamp(10px, 1.1vw, 18px);
 }
 
 *{box-sizing:border-box}
@@ -86,8 +98,12 @@ ul{list-style:none;margin:0;padding:0}
 .login-card h1{margin-bottom:8px}
 .login-card__lead{margin-bottom:28px;color:var(--body)}
 
-/* ---------- shell ---------- */
-.shell{display:flex;min-height:100vh}
+/* ---------- shell ----------
+   admin.js sets `zoom` here and the same number as --zoom, so anything measured
+   against the window has to be divided by it: inside a box drawn at 80%, 100vh
+   is 80% of the window's height. */
+:root{--zoom:1}
+.shell{display:flex;min-height:calc(100vh / var(--zoom))}
 
 .sidebar{
   flex:none;
@@ -97,7 +113,7 @@ ul{list-style:none;margin:0;padding:0}
   position:sticky;
   top:0;
   align-self:flex-start;
-  height:100vh;
+  height:calc(100vh / var(--zoom));
   overflow-y:auto;
   padding:20px 16px;
   background:var(--navy-800);
@@ -148,7 +164,7 @@ ul{list-style:none;margin:0;padding:0}
 }
 .sidebar__user strong{display:block;color:#fff}
 
-.main{flex:1 1 auto;min-width:0;padding:30px 34px 60px}
+.main{flex:1 1 auto;min-width:0;padding:30px var(--gutter) 60px}
 
 .topbar{
   display:flex;
@@ -444,7 +460,7 @@ ul{list-style:none;margin:0;padding:0}
 .blog-actions form{display:contents}
 .blog-actions .btn{white-space:nowrap}
 
-.data-table--blog{min-width:900px}
+.data-table--blog{min-width:min(900px,100%)}
 .data-table--admins{min-width:820px}
 .data-table--admins td{vertical-align:top}
 .data-table--blog td{vertical-align:top}
@@ -475,7 +491,7 @@ ul{list-style:none;margin:0;padding:0}
 
 /* six columns of real content: rows run to three lines, so cells line up at
    the top and the padding comes in to buy the columns some width */
-.data-table--dealers{min-width:1180px}
+.data-table--dealers{min-width:min(1180px,100%)}
 /* the action cell holds circles, not prose: the wide cell padding is what
    pushed this table into a sideways scroll */
 .data-table--dealers .td-actions{padding-inline:14px}
@@ -486,10 +502,7 @@ ul{list-style:none;margin:0;padding:0}
 
 /* Details is not one of the three actions — it opens a panel rather than
    changing anything, so it sits apart from them behind a hairline */
-/* the action cell carries three icons and a Details button: it needs the room
-   before the table starts scrolling sideways */
-.data-table--dealers .td-actions .row-actions{justify-content:flex-end}
-.data-table--referrals{min-width:1180px}
+.data-table--referrals{min-width:min(1180px,100%)}
 .data-table--referrals td{vertical-align:top}
 .data-table--referrals td strong{line-height:1.35}
 .data-table--referrals .td-amount{white-space:nowrap}
@@ -682,9 +695,14 @@ ul{list-style:none;margin:0;padding:0}
    x-coordinate their cell scrolled to, and stretch the document sideways.
    That was 45px of horizontal scroll on the dealers list. */
 .table-wrap{overflow-x:auto;position:relative}
-table{width:100%;border-collapse:collapse;min-width:760px}
+table{width:100%;border-collapse:collapse;min-width:min(760px,100%)}
 th,td{
-  padding:16px 24px;
+  /* 24px either side across eight columns spent nearly a third of the table on
+     padding, which is what pushed the Details button off the right-hand edge.
+     18px is still comfortable and gives the columns back 96px — and it comes
+     down with the viewport, so a scaled screen loses padding before it loses
+     a column. */
+  padding:var(--cell-y) var(--cell-x);
   text-align:left;
   vertical-align:middle;
   font-size:var(--t-ui);
@@ -724,7 +742,7 @@ td strong{color:var(--ink);font-size:var(--t-sub)}
 .table--fixed td{overflow-wrap:anywhere}
 .table--fixed .td-actions{white-space:nowrap;overflow:visible}
 
-.data-table{table-layout:fixed;min-width:980px}
+.data-table{table-layout:fixed;min-width:min(980px,100%)}
 .data-table th,
 .data-table td{overflow-wrap:anywhere}
 .data-table .td-actions{white-space:nowrap;overflow:visible}
@@ -779,7 +797,9 @@ a.th-filter{text-decoration:none}
 .th-picker{display:block;margin:0}
 .th-select{
   width:100%;
-  padding:16px 38px 16px 18px;
+  /* the arrow sits closer than a form control's would: this is a table header,
+     and every pixel it takes is a pixel off the label beside it */
+  padding:16px 30px 16px 18px;
   margin:0;
   border:0;
   border-radius:0;
@@ -788,7 +808,7 @@ a.th-filter{text-decoration:none}
   background-color:transparent;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23768ba0'%3E%3Cpath d='M7.247 4.86 4.451 8.596C4.199 8.933 4.44 9.4 4.86 9.4h6.28c.42 0 .66-.467.408-.804L8.753 4.86a.5.5 0 0 0-.756 0z' transform='rotate(180 8 7.13)'/%3E%3C/svg%3E");
   background-repeat:no-repeat;
-  background-position:right 16px center;
+  background-position:right 11px center;
   background-size:13px 13px;
   font-family:inherit;
   font-size:var(--t-micro);
@@ -868,7 +888,12 @@ tr.is-flagged td{background:rgba(75,180,83,.09)}
 /* ---------- row actions: accept · contact · reject · delete ---------- */
 /* Five icons in a cell sized for three is a row that runs off its own column,
    so they wrap onto a second line rather than out of the table. */
-.row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;row-gap:6px}
+/* Right-aligned, because how many icons a row carries depends on the status it
+   is at: a new enquiry has four and a settled one has only Delete. Aligned
+   from the left, Delete sat under Accept one row down — the trash moving to
+   wherever Accept had just been is a mis-click waiting to happen. Anchored on
+   the right it never moves, and the set grows away from it. */
+.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;row-gap:6px}
 .row-actions form{display:contents}
 
 .icon-btn{
@@ -1561,16 +1586,24 @@ a.pay-item__proof:focus-visible{
    twelve links scrolls the links rather than pushing Sign out off the end. */
 .sidebar__brand{
   position:sticky;
-  top:0;
+  /* The rail's own 20px of top padding scrolls with the links, so a sticky
+     block at top:0 leaves a transparent strip above itself and the nav is seen
+     travelling through it. Sticking at -20px and taking that padding onto the
+     block itself closes the gap; the negative side margins put its background
+     across the full width of the rail rather than inside the padding. */
+  top:-20px;
   z-index:2;
-  padding-bottom:8px;
+  margin:-20px -16px 0;
+  padding:20px 16px 8px;
   background:var(--navy-800);
 }
 .sidebar__foot{
   position:sticky;
-  bottom:0;
+  /* the same at the other end, over the rail's bottom padding */
+  bottom:-20px;
   z-index:2;
-  padding-top:10px;
+  margin:0 -16px -20px;
+  padding:10px 16px 20px;
   background:var(--navy-800);
 }
 
@@ -1698,7 +1731,7 @@ body.has-modal{overflow:hidden}
 .panel__head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .inline-form{display:inline-flex;margin:0}
 
-.data-table--raffle{min-width:900px}
+.data-table--raffle{min-width:min(900px,100%)}
 .data-table--raffle td{vertical-align:top}
 /* .data-table breaks long words anywhere, which turned "Place" into three lines */
 .data-table--raffle th:first-child,
@@ -2713,7 +2746,7 @@ body.has-ask{overflow:hidden}
   background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
 }
 
-.data-table--dealer-clients{min-width:900px}
+.data-table--dealer-clients{min-width:min(900px,100%)}
 .data-table--dealer-payouts{min-width:640px}
 
 /* ---------- commission rates ---------- */
@@ -2777,8 +2810,12 @@ body.has-ask{overflow:hidden}
   font-weight:700;
 }
 .drawer-actions--end{justify-content:flex-end}
-/* the same table with a distributor column: one more column, one more inch */
-.data-table--dealers.has-distributor{min-width:1320px}
+/* The same table with a distributor column. 1320px was wider than the panel
+   itself on a 1600px screen — the table did not overflow because the content
+   needed the room, it overflowed because it was told to be that wide, and the
+   Details button went off the edge. With 18px cell padding the columns fit in
+   1180; below that the wrapper scrolls, which is what it is for. */
+.data-table--dealers.has-distributor{min-width:min(1180px,100%)}
 
 /* ---------- looking at an uploaded file ----------
    Sits above the drawer and the dialogs, because it is opened from inside both
@@ -2891,4 +2928,72 @@ input[name*="email"]{text-transform:lowercase}
   font-family:"bootstrap-icons";
   font-display:swap;
   src:url("../../assets/vendor/bootstrap-icons/font/fonts/bootstrap-icons-subset.woff2") format("woff2");
+}
+
+/* ---------- 30. the list tables, tightened ----------
+   Measured at 1600px: the dealers table ran 80px past its own panel, so the
+   Details button was cut in half; the money column was narrow enough that
+   ₹10,500.00 wrapped onto two lines; and the two share links stacked, which
+   set every row 128px tall. Each of those is a column that was the wrong
+   width, not a table that needed to scroll. */
+
+/* money never wraps — a figure broken over two lines is a figure misread */
+.td-amount,
+.data-table td strong{white-space:nowrap}
+
+/* nor does a date: "1 Sep 2026, 23:35" is one thing, not two */
+.td-when{white-space:nowrap}
+
+/* An address breaks between its own parts rather than mid-word: `anywhere`
+   split qa.reject.001@example.co / m, which reads as two addresses. */
+.data-table td{overflow-wrap:break-word}
+.data-table td{word-break:normal}
+
+/* the two share links sit side by side, so a row is one line tall */
+.dealer-link{gap:8px;flex-wrap:nowrap}
+.dealer-link .btn--sm{padding:7px 12px;white-space:nowrap}
+
+/* the row's actions keep their own width and stay on one line */
+.data-table .td-actions{padding-left:10px;padding-right:14px}
+.data-table .td-actions .btn--sm{padding:8px 12px}
+
+/* an icon-only action is a circle, not a pill */
+.data-table .td-actions .icon-btn{width:36px;height:36px}
+
+
+/* ---------- 31. the last column, on a scaled screen ----------
+   Everything above shrinks with the viewport except a row's actions, which are
+   held on one line so the icons and the Details button stay together. At 125%
+   scaling that one line is what is left sticking out of the panel — 12 to 48
+   pixels of it, which is enough to raise a scrollbar. Below 1300px they are
+   allowed to wrap instead, and the table fits again. */
+@media (max-width:1300px){
+  .data-table .td-actions{white-space:normal}
+  .row-actions{flex-wrap:wrap;row-gap:6px}
+  .row-actions .btn--sm{padding:7px 10px}
+
+  /* the Details button gives up its side padding before the table gives up a
+     column — the word and the chevron both stay */
+  .row-toggle{padding:9px 12px;gap:6px}
+
+  /* the referral payout buttons stack rather than hold the column open: side by
+     side they are the widest thing in the row, and the column was carrying 12px
+     of them outside the panel */
+  .reward-form{gap:6px;flex-direction:column;align-items:stretch}
+  .reward-form .btn{padding:7px 10px;width:100%;justify-content:center}
+
+  /* The last column holds one control and its own padding. On a scaled screen
+     the two together were a dozen pixels wider than the column the browser
+     gave them — which is the whole of the overflow. The padding goes first. */
+  .data-table td:last-child,
+  .data-table th:last-child{padding-inline:8px}
+}
+
+/* Under about 1120px the word goes and the chevron stays: at that width the
+   button is the only thing left that can shrink, and a circle with an arrow in
+   it is still unmistakably "open this row". The label is kept for a screen
+   reader. */
+@media (max-width:1120px){
+  .row-toggle{font-size:0;gap:0;padding:9px 11px}
+  .row-toggle i{font-size:var(--t-ui)}
 }

@@ -86,13 +86,13 @@ require __DIR__ . '/partials/layout-top.php';
       <table class="data-table is-filterable" id="latestTable">
         <!-- fixed widths so switching a filter label cannot reflow the columns -->
         <colgroup>
-          <col style="width:6%">
-          <col style="width:17%">
-          <col style="width:24%">
-          <col style="width:14%">
+          <col style="width:5%">
+          <col style="width:16%">
+          <col style="width:23%">
           <col style="width:13%">
+          <col style="width:12%">
           <col style="width:17%">
-          <col style="width:9%">
+          <col style="width:14%">
         </colgroup>
         <thead>
           <tr>

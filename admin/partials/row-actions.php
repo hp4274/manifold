@@ -8,17 +8,25 @@ declare(strict_types=1);
 
 $isApplication = type_config($rowType)['table'] === 'applications';
 
-/* An accepted enquiry or signup is settled — nothing left to decide on it. */
-$isSettled = !$isApplication && $row['status'] === 'accepted';
+/* Accepted or turned down, an enquiry or a signup is decided — nothing left on
+   it but Delete. Leaving the buttons up on a rejected row put a wall of icons
+   next to a single live one, which read as broken rather than as finished. */
+$isSettled = !$isApplication && in_array($row['status'], ['accepted', 'rejected'], true);
 
 /* Applications are decided in the Details drawer, where the receipt can be
    seen — the row only offers what makes sense at the stage it has reached.
-   The other two forms keep their set until they are accepted. */
+   The other two forms keep their set until they are decided. */
 $actions = ($isApplication || $isSettled) ? [] : [
     'accepted'  => ['icon' => 'bi-check-lg',  'label' => 'Accept',  'class' => 'is-accept'],
     'contacted' => ['icon' => 'bi-telephone', 'label' => 'Contact', 'class' => 'is-contact'],
     'rejected'  => ['icon' => 'bi-x-lg',      'label' => 'Reject',  'class' => 'is-reject'],
 ];
+
+/* A newsletter signup is an email address and nothing else — there is no phone
+   number on the record to ring, so the row does not offer to ring it. */
+if (!isset($row['phone'])) {
+    unset($actions['contacted']);
+}
 ?>
 <div class="row-actions">
   <?php /* The one decision on an application that is not a payment: whether we
@@ -110,7 +118,8 @@ $actions = ($isApplication || $isSettled) ? [] : [
 
   <?php /* the Status column already says "accepted" — no need to repeat it here */ ?>
   <?php foreach ($actions as $status => $action): ?>
-    <?php $isCurrent = $row['status'] === $status; ?>
+    <?php /* the status it is already at is not something to click */ ?>
+    <?php if ($row['status'] === $status) continue; ?>
     <form method="post" action="status.php">
       <?= csrf_field() ?>
       <input type="hidden" name="type" value="<?= e($rowType) ?>">
@@ -118,10 +127,8 @@ $actions = ($isApplication || $isSettled) ? [] : [
       <input type="hidden" name="return" value="<?= e($returnUrl) ?>">
       <input type="hidden" name="status" value="<?= e($status) ?>">
 
-      <button type="submit"
-              class="icon-btn <?= e($action['class']) ?><?= $isCurrent ? ' is-current' : '' ?>"
-              title="<?= e($action['label']) ?><?= $isCurrent ? ' (current status)' : '' ?>"
-              <?= $isCurrent ? 'disabled' : '' ?>>
+      <button type="submit" class="icon-btn <?= e($action['class']) ?>"
+              title="<?= e($action['label']) ?>">
         <i class="bi <?= e($action['icon']) ?>" aria-hidden="true"></i>
         <span class="visually-hidden"><?= e($action['label']) ?> submission <?= (int) $row['id'] ?></span>
       </button>

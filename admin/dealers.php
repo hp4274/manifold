@@ -382,15 +382,19 @@ require __DIR__ . '/partials/layout-top.php';
                  Action carries three icons and the Details button, which is why
                  it takes the largest share. */ ?>
         <colgroup>
-          <col style="width:16%">
+          <col style="width:18%">
           <col style="width:8%">
-          <col style="width:12%">
-          <col style="width:17%">
+          <?php /* wide enough for "All distributors" and its count: at 13% the
+                   header truncated to "All distributo…" while the columns
+                   either side of it sat half empty */ ?>
+          <col style="width:16%">
+          <col style="width:13%">
+          <?php /* 7% could not fit the word "Sales" — it came out as "Sal…" */ ?>
           <col style="width:9%">
           <col style="width:11%">
           <?php /* a dealer waiting on the office carries two more icons in
                    here — the decision — so the column is sized for five */ ?>
-          <col style="width:17%">
+          <col style="width:15%">
           <col style="width:10%">
         </colgroup>
         <thead>

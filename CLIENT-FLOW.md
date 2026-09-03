@@ -188,9 +188,32 @@ rows that already carry it are historic and still display correctly.
 
 ---
 
-## 4. What the code in the box does to a website application
+## 4. What the two code boxes do to a website application
+
+The form asks two separate questions, because they are two separate questions:
+
+| Box | Name | Answers |
+|---|---|---|
+| **Dealer or distributor code** | `partner_code` | **who sold it** — whose commission, and whose distributor's override |
+| **Referral code** | `referral_code` | **who sent them** — whose ₹500 reward |
+
+A shared link fills whichever box the code belongs to: `?code=MD……` the first,
+`?ref=MF……` the second, and a customer's own share link carries **both** —
+`client_referral_link()` appends their dealer's code to their own, so the sale
+stays with the partner who found them while the reward is theirs. A link from
+before there were two boxes (`?ref=MD……`) still works: the code lands in the
+box it belongs to.
 
 Resolved in `submit.php` at submission, in this order:
+
+0. **The partner box, if it is answered.** An approved and active `MD……` sets
+   `dealer_id` and freezes the override for that dealer's own distributor; an
+   active `MX……` sets `distributor_id` at the direct rate with no dealer. This
+   **wins over anything the referral box implies**, which is what lets a
+   customer of one dealer send somebody to a dealer in another network — see the
+   worked cases below. A code that matches nothing books nobody, and the office
+   is told so in the application's note rather than left to guess.
+
 
 1. **Empty** — no reward, no commission. The sale earns nobody anything.
 2. **`MF……`, a live customer code** — `referred_by_id` and `referred_by_code`
@@ -210,6 +233,11 @@ Resolved in `submit.php` at submission, in this order:
    dealer to anyone **it** refers, with no limit on depth. The **reward** does
    not: it is paid to the direct referrer only. If C4 refers C5 and C5 refers
    C6, C5 is paid on C6 and C4 is paid nothing — one level, every time.
+
+   Inheritance only happens when the partner box is empty. Name a partner and
+   the sale is theirs: C1 (a customer of D1, under Dis1) can send somebody who
+   buys from D5 under Dis2, and then **D5 takes the dealer commission, Dis2 the
+   override, C1 the reward, and D1 and Dis1 nothing** — they did not sell it.
 3. **`MD……`, an approved and active dealer** — `dealer_id` set, the dealer's
    commission for that product frozen onto the row, and the override frozen for
    the distributor that dealer answers to. Every dealer has one, so every dealer sale books an
@@ -357,20 +385,30 @@ Stock moves _down_ the chain one tier at a time and money moves _up_ it, and
 each tier only ever deals with the tier next to it.
 
 ```
-   office ──────units─────▶ distributor ─────units─────▶ dealer
+   office ──────units─────▶ distributor ─────units─────▶ dealer ─────unit────▶ client
           ◀─────money──────             ◀─────money─────
-       admin/stock.php            distributor/stock.php
-       releases the units         releases the units
+       admin/stock.php            distributor/stock.php     the client pays the
+       releases the units         releases the units        company, not the dealer
 ```
 
 The office never sells to a dealer, and a dealer never buys from the office.
 
-**Nothing comes off a shelf for a client sale any more.** Since Route B was
-removed (§3) every client pays the company and the company ships the unit, so
-the ledger's `sale` side has no writer left — `stock_take_for_sale()` still
-exists and the historic `sale` rows still read correctly, but nothing calls it.
-What a partner holds is now inventory they have bought, and how it is drawn
-down is an open question for the office rather than something the code decides.
+**A unit comes off the shelf of whoever's code sold it.** A dealer's or a
+distributor's code on the apply form is what makes the sale theirs (§4), and the
+unit the customer ends up with came out of their stock — so
+`stock_take_on_completion()`, called from `sync_application_status()`, writes the
+`sale` movement the moment the delivery payment is verified. A sale attributed to
+nobody takes nothing off anybody: the company shipped it.
+
+Three things follow from doing it at completion rather than at the sale:
+
+- an application the office turns down, or one a customer cancels, **costs the
+  partner no stock**;
+- it cannot happen twice — the ledger row carries the application it was for,
+  and every payment verification runs the status machine over the sale again;
+- a partner who has sold more than they bought goes **negative**, with a note on
+  the movement saying so, rather than the balance quietly stopping at zero and
+  hiding it.
 
 ---
 
@@ -517,21 +555,21 @@ units twice.
 
 ### 8.5 Selling to a client — what comes off
 
-**Nothing, as the code now stands.** Every client pays Manifold and the company
-ships the unit, so no path deducts from a partner's shelf.
+`stock_take_on_completion()` writes one `sale` row: `-units` at cost, carrying
+the `application_id` — which is what ties a missing unit to the client who has
+it. It runs from `sync_application_status()` when a sale reaches `complete`.
 
-For the record, what the sale side of the ledger did while Route B existed, and
-what the historic rows mean:
+- **Whose shelf**: the sale's `dealer_id` if it has one, otherwise its
+  `distributor_id`. Neither, and nothing moves.
+- **At what cost**: `stock_unit_cost()` — **the average of what that partner
+  actually paid**, or `held value ÷ held units`. Two orders at different prices
+  leave a blended cost, so a sale can never deduct more value than the units
+  were bought for.
+- **How many**: the application's `units_required`, at least one.
 
-- `stock_take_for_sale()` wrote a `sale` row of `-units` at cost, carrying the
-  `application_id` — which is what ties a missing unit to the client who has it.
-- Cost is `stock_unit_cost()`: **the average of what the partner actually
-  paid**, or `held value ÷ held units`. Two orders at different prices leave a
-  blended cost, so a sale could never deduct more value than the units were
-  bought for.
-
-Two applications in the current database carry `sale_channel = 'direct'` and a
-matching `sale` ledger row each. They are history, and they still add up.
+`stock_take_for_sale()` is the other way in — it refuses when the shelf is short
+and is what the partner-facing screens used to call before a sale was written.
+Nothing calls it now; completion is the only moment a unit leaves.
 
 ---
 

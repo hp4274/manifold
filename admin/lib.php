@@ -488,7 +488,71 @@ function sync_application_status(int $applicationId): string
     /* what each partner has earned on this sale, rebuilt from what is verified */
     commission_write_lines($applicationId);
 
+    /* and the unit itself comes off the shelf of whoever sold it, once the
+       customer has taken delivery */
+    if ($next === 'complete') {
+        stock_take_on_completion($applicationId);
+    }
+
     return $next;
+}
+
+/**
+ * Takes a completed sale's units off the shelf of the partner who sold it.
+ *
+ * A dealer's or a distributor's code on the form is what makes the sale theirs,
+ * and the unit the customer ends up with came out of their stock — so the
+ * ledger follows the sale rather than waiting for somebody to adjust it by
+ * hand. A dealer sale comes off the dealer; a distributor's own sale off the
+ * distributor; a sale with no partner comes off nobody, because the company
+ * shipped it.
+ *
+ * Safe to call twice: the ledger row carries the application it was for, and
+ * every payment verification runs the status machine over the sale again.
+ *
+ * The movement is written even when the shelf is short, which shows as a
+ * negative balance. That is deliberate — the unit demonstrably left, and a
+ * balance that quietly stops at zero hides a partner who has sold more than
+ * they bought.
+ */
+function stock_take_on_completion(int $applicationId): void
+{
+    $stmt = db()->prepare(
+        'SELECT id, product, units_required, dealer_id, distributor_id
+           FROM applications WHERE id = ?'
+    );
+    $stmt->execute([$applicationId]);
+    $app = $stmt->fetch();
+
+    if (!$app) {
+        return;
+    }
+
+    $owner   = $app['dealer_id'] ? 'dealer' : ($app['distributor_id'] ? 'distributor' : '');
+    $ownerId = (int) ($app['dealer_id'] ?: $app['distributor_id'] ?: 0);
+
+    if ($owner === '' || $ownerId === 0) {
+        return;
+    }
+
+    $done = db()->prepare(
+        "SELECT 1 FROM stock_ledger WHERE application_id = ? AND reason = 'sale' LIMIT 1"
+    );
+    $done->execute([$applicationId]);
+
+    if ($done->fetchColumn()) {
+        return;
+    }
+
+    $product = (string) $app['product'];
+    $units   = max(1, (int) $app['units_required']);
+    $cost    = stock_unit_cost($owner, $ownerId, $product);
+    $short   = stock_units($owner, $ownerId, $product) < $units;
+
+    stock_move(
+        $owner, $ownerId, $product, -$units, -round($cost * $units, 2), 'sale', null, $applicationId,
+        $short ? 'Sold beyond the units held — order to bring the shelf back' : null
+    );
 }
 
 /**
@@ -624,7 +688,42 @@ function referral_link(string $code, string $product = 'stove'): string
 {
     $page = $product === 'tuktuk' ? 'apply-tuktuk' : 'apply-stove';
 
-    return base_url() . '/' . $page . '?ref=' . rawurlencode($code);
+    /* A partner's code names the seller, a customer's names the referrer, and
+       the form has a box for each — so a partner's link fills the partner box
+       and a customer's fills the referral box. */
+    $param = strncasecmp($code, 'MF', 2) === 0 ? 'ref' : 'code';
+
+    return base_url() . '/' . $page . '?' . $param . '=' . rawurlencode($code);
+}
+
+/**
+ * A customer's share link, carrying their own code and their dealer's.
+ *
+ * The reward is theirs and the sale stays with the partner who found them, which
+ * is what the two parameters say. Where nobody sold that first application —
+ * a customer who came in off the website with no code — only their own goes.
+ */
+function client_referral_link(array $app, string $product = 'stove'): string
+{
+    $link = referral_link((string) $app['referral_code'], $product);
+
+    $partner = '';
+
+    if (!empty($app['dealer_id'])) {
+        $dealer = dealer_by_id((int) $app['dealer_id']);
+
+        if ($dealer && (int) $dealer['is_active'] === 1 && $dealer['approval_status'] === 'approved') {
+            $partner = (string) $dealer['dealer_code'];
+        }
+    } elseif (!empty($app['distributor_id'])) {
+        $distributor = distributor_by_id((int) $app['distributor_id']);
+
+        if ($distributor && (int) $distributor['is_active'] === 1) {
+            $partner = (string) $distributor['distributor_code'];
+        }
+    }
+
+    return $partner === '' ? $link : $link . '&code=' . rawurlencode($partner);
 }
 
 /** Everyone who has applied with one application's code, newest first. */

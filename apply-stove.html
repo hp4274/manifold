@@ -29,8 +29,8 @@
 <link rel="stylesheet" href="assets/vendor/figtree/figtree.css">
 <link rel="stylesheet" href="assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
 
-<link rel="stylesheet" href="assets/css/style.css?v=1788418718">
-<link rel="stylesheet" href="assets/css/datepicker.css?v=1788418718">
+<link rel="stylesheet" href="assets/css/style.css?v=1788434754">
+<link rel="stylesheet" href="assets/css/datepicker.css?v=1788434754">
 </head>
 <body>
 <a class="skip-link" href="#top">Skip to content</a>
@@ -1202,11 +1202,20 @@
           </div>
 
           <div class="field">
+            <label for="partner_code">Dealer or distributor code (optional)</label>
+            <input id="partner_code" name="partner_code" type="text" maxlength="20"
+                   autocapitalize="characters" spellcheck="false" placeholder="e.g. MD7K2QP4">
+            <span class="field-hint">The code of the dealer or distributor you are buying through.
+              A code from their own link arrives here already filled in.</span>
+          </div>
+
+          <div class="field">
             <label for="referral_code">Referral code (optional)</label>
             <input id="referral_code" name="referral_code" type="text" maxlength="20"
                    autocapitalize="characters" spellcheck="false" placeholder="e.g. MFAB3K7P">
             <span class="field-hint">Have a code from someone who already owns a Manifold unit?
-              Enter it here — what you pay is unchanged, and they are rewarded once your booking payment is verified.</span>
+              Enter it here — what you pay is unchanged, and they are rewarded once your booking payment
+              is verified. It is a different code from the dealer's above; both can be used together.</span>
           </div>
         </div>
       </section>
@@ -1287,7 +1296,14 @@
           <span>I have read and accept the Terms &amp; Conditions above. <span class="req" aria-hidden="true">*</span></span>
         </label>
       </section>
-</form>
+
+      <div class="form-actions">
+        <p class="form-note">We use your information only to process this application. Our team reviews
+          every one by hand — expect a call or an email within two working days.</p>
+        <button type="submit" class="btn-pill btn-pill--accent form-x__submit">Submit application <i class="bi bi-send"></i></button>
+      </div>
+
+    </form>
   </div>
 </section>
 
@@ -1467,8 +1483,8 @@
   </button>
 </footer>
 
-<script src="assets/js/datepicker.js?v=1788418718"></script>
-<script src="assets/js/main.js?v=1788418718"></script>
-<script src="assets/js/apply.js?v=1788418718"></script>
+<script src="assets/js/datepicker.js?v=1788434754"></script>
+<script src="assets/js/main.js?v=1788434754"></script>
+<script src="assets/js/apply.js?v=1788434754"></script>
 </body>
 </html>

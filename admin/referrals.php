@@ -194,7 +194,10 @@ foreach ($paymentTally->fetchAll() as $tally) {
     $paymentCounts[''] += (int) $tally['n'];
 }
 
-/* the referred application on the left, the person who earns on the right */
+/* The referred application on the left, the person who earns on the right, and
+   newest first: a referral that has just come in is the one somebody is looking
+   for. It used to group by reward status, which buried a new one under every
+   pending reward already on the list. The status chips above still narrow it. */
 $rowStmt = db()->prepare(
     "SELECT a.id, a.reference_code, a.full_name, a.email, a.product, a.status,
             a.created_at, a.booking_paid_at, a.referred_by_code, a.referral_reward,
@@ -204,7 +207,7 @@ $rowStmt = db()->prepare(
        FROM applications a
        JOIN applications r ON r.id = a.referred_by_id
       WHERE 1 = 1" . $filter . "
-      ORDER BY FIELD(a.referral_reward_status, 'pending', 'sent', 'cancelled'), a.created_at DESC
+      ORDER BY a.created_at DESC
       LIMIT " . LIST_PER_PAGE . ' OFFSET ' . $paging['offset']
 );
 $rowStmt->execute($params);
@@ -288,12 +291,12 @@ require __DIR__ . '/partials/layout-top.php';
       <table class="data-table data-table--referrals">
         <!-- fixed layout, so the columns need telling how to share the width -->
         <colgroup>
-          <col style="width:21%">
-          <col style="width:21%">
+          <col style="width:20%">
+          <col style="width:20%">
+          <col style="width:15%">
+          <col style="width:8%">
           <col style="width:16%">
-          <col style="width:9%">
-          <col style="width:17%">
-          <col style="width:16%">
+          <col style="width:21%">
         </colgroup>
         <thead>
           <tr>
