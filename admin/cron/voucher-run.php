@@ -4,7 +4,7 @@
  *
  * Every dealer with something to claim gets a voucher to their distributor, and
  * every distributor then bundles whatever they have approved along with their
- * own claim and sends it to R&F.
+ * own claim and sends it to C&F.
  *
  * Safe to run twice. Nothing is raised for a partner who already has a claim in
  * flight, so a retry, a restarted machine or a doubled schedule all produce

@@ -19,7 +19,7 @@ require_once __DIR__ . '/../../distributor/lib.php';
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="../assets/vendor/figtree/figtree.css">
 <link rel="stylesheet" href="../assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
-<link rel="stylesheet" href="../assets/css/style.css?v=1788434754">
+<link rel="stylesheet" href="../assets/css/style.css?v=1788602023">
 </head>
 <body>
 <a class="skip-link" href="#top">Skip to content</a>

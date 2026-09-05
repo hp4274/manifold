@@ -25,6 +25,11 @@ RewriteRule ^portal/(session|prefill|receipt)\.php$ - [L]
 
 RewriteRule ^distributor/proof\.php$ - [L]
 
+# The paying agent's desk was /rf/ before it was renamed C&F. Anything still
+# pointing at the old path is sent on to the new one rather than 404ing.
+RewriteRule ^rf/?$ /cf/ [R=301,L]
+RewriteRule ^rf/(.*)$ /cf/$1 [R=301,L]
+
 
 # ==========================================================================
 # 2. Redirect .html and .php URLs to clean URLs

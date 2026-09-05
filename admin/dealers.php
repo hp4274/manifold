@@ -424,10 +424,13 @@ require __DIR__ . '/partials/layout-top.php';
                 <select id="distPick" name="dist"
                         class="th-select<?= $dist === '' ? '' : ' is-filtered' ?>">
                   <?php foreach ($distOptions as $optValue => $optLabel): ?>
+                    <?php /* the count is its own element so it can sit against the
+                             right edge of the row; a browser that flattens an
+                             option to text still reads "Name 12" as before */ ?>
                     <option value="<?= e((string) $optValue) ?>"
                             <?= (string) $optValue === $dist ? 'selected' : '' ?>>
                       <?= e($optValue === '' ? 'All distributors' : $optLabel) ?>
-                      <?= (int) ($distCounts[$optValue] ?? 0) ?>
+                      <span class="opt-count"><?= (int) ($distCounts[$optValue] ?? 0) ?></span>
                     </option>
                   <?php endforeach; ?>
                 </select>

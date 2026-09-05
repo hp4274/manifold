@@ -30,7 +30,7 @@ const ADMIN_PAGES = [
   '/admin/settings',
 ];
 
-const RF_PAGES = ['/rf/', '/rf/history'];
+const CF_PAGES = ['/cf/', '/cf/history'];
 
 async function signIn(page, email, password) {
   /* a live session redirects the login page away from its own form, so the
@@ -159,12 +159,12 @@ async function inspect(page, url, size) {
 
     /* the admin only at desktop, which is where it is used */
     if (!size.mobile) {
-      const asRf = await signIn(page, 'rf@manifold.com', 'rf123');
+      const asCf = await signIn(page, 'cf@manifold.com', 'rf123');
 
-      if (asRf) {
-        for (const url of RF_PAGES) rows.push(await inspect(page, url, size));
+      if (asCf) {
+        for (const url of CF_PAGES) rows.push(await inspect(page, url, size));
       } else {
-        rows.push({ url: '/rf/', size: size.name, ms: 0, problems: ['could not sign in as R&F'] });
+        rows.push({ url: '/cf/', size: size.name, ms: 0, problems: ['could not sign in as R&F'] });
       }
 
       const pass = process.env.ADMIN_PASS;

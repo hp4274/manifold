@@ -247,10 +247,6 @@ ul{list-style:none;margin:0;padding:0}
 .field select option{font-size:var(--t-sub);color:var(--ink);padding:6px 8px}
 .field select:hover{border-color:#c3d3df}
 .field select:disabled{background-color:var(--tint);color:var(--muted);cursor:not-allowed}
-/* one placeholder colour, stated rather than left to the browser — the default
-   varies enough between them to read as a different shade of grey per field */
-.field input::placeholder,
-.field textarea::placeholder{color:var(--muted);opacity:1}
 
 /* --- file field ---
    The box around it is themed by .field input above; the button inside it is
@@ -577,6 +573,16 @@ ul{list-style:none;margin:0;padding:0}
 }
 .panel__body{padding:24px}
 
+/* A settings panel ends with its own Save. The note above it is running text in
+   a `<span>`, so a button placed after that span flows inline and lands in the
+   middle of the sentence. The action belongs on its own line, against the right
+   edge of the panel. */
+form.panel__body > .btn{
+  display:block;
+  margin-top:20px;
+  margin-left:auto;
+}
+
 /* ---------- exporting a list ----------
    The button sits beside Add on the panel head; everything it asks for is in
    the dialog, so the head stays a head. */
@@ -741,6 +747,20 @@ td strong{color:var(--ink);font-size:var(--t-sub)}
 .table--fixed th,
 .table--fixed td{overflow-wrap:anywhere}
 .table--fixed .td-actions{white-space:nowrap;overflow:visible}
+
+/* A name, a company or an address can arrive as 160 characters of one unbroken
+   word. Wrapping it turns a table row into a nine-line paragraph and drags the
+   date, the status and the buttons out of line with every other row, so a cell
+   shows two lines and stops. Nothing is lost: the whole value is on the record
+   in the drawer, and the cell carries it as a tooltip. */
+.table--fixed td strong,
+.table--fixed td a:not([class]),
+.table--fixed td .cell-stack span{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  overflow:hidden;
+}
 
 .data-table{table-layout:fixed;min-width:min(980px,100%)}
 .data-table th,
@@ -2997,3 +3017,135 @@ input[name*="email"]{text-transform:lowercase}
   .row-toggle{font-size:0;gap:0;padding:9px 11px}
   .row-toggle i{font-size:var(--t-ui)}
 }
+
+/* --- the open list ---
+   Same upgrade as the public site: `appearance:base-select` replaces the
+   operating system's grey panel with one that matches the field it hangs from.
+   Browsers without it keep the native panel. */
+@supports (appearance: base-select){
+  .field select,
+  .field select::picker(select),
+  .th-select,
+  .th-select::picker(select){
+    appearance:base-select;
+  }
+
+  .field select,
+  .th-select{
+    background-image:none;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    /* base-select lets the chosen text wrap, which makes the control two lines
+       tall and out of step with the inputs beside it — it truncates instead */
+    /* nowrap alone holds the height; without `overflow:hidden` nothing can clip
+       the arrow as it turns */
+    white-space:nowrap;
+    /* the admin fields carry no line-height of their own, so the flex row the
+       picker turns the control into is given the one the inputs end up with */
+    line-height:normal;
+  }
+  .field select::picker-icon,
+  .th-select::picker-icon{
+    /* the same chevron the closed field has always used */
+    content:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0.29 16 16' fill='%23768ba0'%3E%3Cpath d='M3.2 5.6a1 1 0 0 1 1.4 0L8 9l3.4-3.4a1 1 0 1 1 1.4 1.4l-4.1 4.1a1 1 0 0 1-1.4 0L3.2 7a1 1 0 0 1 0-1.4z'/%3E%3C/svg%3E");
+    flex:none;
+    width:14px;
+    height:14px;
+    /* it turns on its own centre, so the chevron stays where it is rather than
+       swinging around the field */
+    transform-origin:50% 50%;
+    transition:transform .3s ease;
+    /* No optical nudge here: the viewBox above already puts the chevron's centre
+       at the centre of this box. A one-pixel lift only suits the closed arrow —
+       once it turns, the same pixel makes the open one ride high. */
+  }
+  /* A half turn about its own centre. The viewBox above is shifted so the
+     chevron's centre and the box's centre are the same point, which is what
+     keeps the turn on the spot instead of swinging the glyph around. */
+  .field select:open::picker-icon,
+  .th-select:open::picker-icon{transform:rotate(180deg)}
+  .field select:open{border-color:var(--accent-deep)}
+  .th-select:open{background-color:#eef4f9;color:var(--ink-soft)}
+
+  .field select::picker(select),
+  .th-select::picker(select){
+    margin-block-start:6px;
+    padding:6px;
+    border:1px solid var(--line);
+    border-radius:var(--radius-sm);
+    background:#fff;
+    box-shadow:var(--shadow-card);
+    max-height:min(340px,60vh);
+    opacity:0;
+    translate:0 -4px;
+    transition:opacity .16s ease,translate .16s ease,
+               overlay .16s allow-discrete,display .16s allow-discrete;
+  }
+  .field select:open::picker(select),
+  .th-select:open::picker(select){opacity:1;translate:0 0}
+  @starting-style{
+    .field select:open::picker(select),
+    .th-select:open::picker(select){opacity:0;translate:0 -4px}
+  }
+
+  .field select option,
+  .th-select option{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    white-space:normal;
+    padding:10px 12px;
+    border-radius:6px;
+    font-size:var(--t-sub);
+    line-height:1.4;
+    color:var(--ink);
+  }
+  .field select option:hover,
+  .field select option:focus,
+  .th-select option:hover,
+  .th-select option:focus{background:var(--tint);outline:none}
+  /* the chosen row is marked by a solid tick in the place every other list on
+     the machine puts it — the picker's own outline glyph is thin enough to be
+     missed against the option text */
+  .field select option:checked,
+  .th-select option:checked{background:var(--tint)}
+  .field select option:disabled{color:var(--muted)}
+  /* the tick is drawn, not fetched: two borders on a box turned 45 degrees, so
+     its weight is a border-width rather than an image to ship and scale */
+  .field select option::checkmark,
+  .th-select option::checkmark{display:none}
+  .field select option:checked::checkmark,
+  .th-select option:checked::checkmark{
+    display:block;
+    content:"";
+    flex:none;
+    width:7px;
+    height:12px;
+    margin:0 6px 3px 2px;
+    border:solid var(--ink);
+    border-width:0 3px 3px 0;
+    transform:rotate(45deg);
+  }
+
+  /* the tally each distributor carries is a figure, not part of the name: it
+     sits against the right edge so the numbers read as a column */
+  .th-select option .opt-count{
+    margin-left:auto;
+    padding-left:14px;
+    color:var(--muted);
+    font-variant-numeric:tabular-nums;
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .field select::picker(select),
+    .th-select::picker(select),
+    .field select::picker-icon,
+    .th-select::picker-icon{transition:none}
+  }
+}
+
+/* one placeholder colour, stated rather than left to the browser — the default
+   varies enough between them to read as a different shade of grey per field */
+.field input::placeholder,
+.field textarea::placeholder{color:var(--muted);opacity:1}

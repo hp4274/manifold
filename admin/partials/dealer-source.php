@@ -104,7 +104,7 @@ $srcAskedBy = $srcWaiting
         </dl>
         <span class="field-hint">
           Commission is paid against a voucher, not from here: the dealer claims it, their
-          distributor approves it, R&amp;F presents it and pays it once the office funds it.
+          distributor approves it, C&amp;F presents it and pays it once the office funds it.
           What lands that way is listed under Payouts.
         </span>
 
@@ -239,7 +239,7 @@ $srcAskedBy = $srcWaiting
         </p>
 
         <?php if (!$srcPayouts): ?>
-          <p class="empty">Nothing has been paid to this dealer yet. A payout appears here when R&amp;F
+          <p class="empty">Nothing has been paid to this dealer yet. A payout appears here when C&amp;F
             settles a voucher they are on.</p>
         <?php else: ?>
           <div class="table-wrap">

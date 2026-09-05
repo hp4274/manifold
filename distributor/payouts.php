@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($error === '') {
             $_SESSION['distributor_flash'] = $action === 'approve_dealer_voucher'
-                ? 'Approved. It goes to R&F in your next bundle.'
+                ? 'Approved. It goes to C&F in your next bundle.'
                 : 'Turned down. Those sales can be claimed again.';
 
             header('Location: payouts');
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         [$bundleId, $error] = voucher_bundle($distId, $dist['full_name']);
 
         if ($error === '') {
-            $_SESSION['distributor_flash'] = 'Bundle sent to R&F — your own claim and every dealer '
+            $_SESSION['distributor_flash'] = 'Bundle sent to C&F — your own claim and every dealer '
                 . 'voucher you had approved.';
 
             header('Location: payouts');

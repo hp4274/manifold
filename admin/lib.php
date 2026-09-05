@@ -810,7 +810,7 @@ function reward_is_payable(array $referral): bool
  *
  * $kind is 'dealer', 'override' or 'direct'. Stored in `settings` as
  * commission_<kind>_<product>, and edited from Settings — by the office or by
- * R&F, who pay it.
+ * C&F, who pay it.
  */
 function commission_value(string $kind, string $product): float
 {
@@ -1638,7 +1638,7 @@ const COMMISSION_STAGES = ['booking', 'loan', 'delivery'];
 /**
  * Saves the commission amounts, or says why it did not.
  *
- * The office and R&F both set these, from their own Settings, and a figure that
+ * The office and C&F both set these, from their own Settings, and a figure that
  * was right in one place and wrong in the other would pay two schemes at once —
  * so the reading and the checking live here rather than on either page.
  *
@@ -1924,11 +1924,11 @@ function commission_pipeline(string $partyType, int $partyId): float
 /* ---------- commission vouchers ----------
    Commission is earned when a sale completes. Getting it into a partner's bank
    is a separate journey: the claim travels up the chain and the money comes
-   back down through R&F, the paying agent.
+   back down through C&F, the paying agent.
 
-     dealer ──▶ distributor ──▶ R&F ──▶ office
+     dealer ──▶ distributor ──▶ C&F ──▶ office
                                           │
-     dealer and distributor ◀── paid by R&F
+     dealer and distributor ◀── paid by C&F
 
    A voucher is that claim. What stops a sale being paid twice is not a running
    total but the lines: a voucher names the applications it covers, and an
@@ -1944,7 +1944,7 @@ function voucher_status_label(string $status): string
     $labels = [
         'with_distributor' => 'With your distributor',
         'bundled'          => 'In a bundle',
-        'with_rf'          => 'With R&F',
+        'with_rf'          => 'With C&F',
         'with_admin'       => 'With the office',
         'funded'           => 'Funded — paying',
         'paid'             => 'Paid',
@@ -2191,7 +2191,7 @@ function voucher_dealer_claims(int $distributorId, array $statuses = ['with_dist
  *
  * Called after every step of the chain (§10). A claim that changes hands in
  * silence is a claim somebody chases by phone, so each move is a letter: to the
- * distributor when a dealer raises one, to the office and R&F as it travels,
+ * distributor when a dealer raises one, to the office and C&F as it travels,
  * and to the partner when the money is actually sent.
  */
 function voucher_notify(int $voucherId, string $step, string $note = ''): void
@@ -2215,28 +2215,28 @@ function voucher_notify(int $voucherId, string $step, string $note = ''): void
 
     /* who hears about this step, what it says, and where it opens */
     $office = base_url() . '/admin/vouchers';
-    $rf     = base_url() . '/rf/';
+    $cf     = base_url() . '/cf/';
 
     $plan = [
         'raised' => $voucher['party_type'] === 'dealer'
             ? ['to' => 'distributor-of-dealer',
                'subject' => 'A dealer has claimed their commission',
                'line' => e((string) ($party['full_name'] ?? 'A dealer'))
-                   . ' has raised a claim. Approve it and it goes on your next bundle to R&amp;F.',
+                   . ' has raised a claim. Approve it and it goes on your next bundle to C&amp;F.',
                'link' => base_url() . '/distributor/payouts']
             : null,
-        'bundled' => ['to' => 'rf',
+        'bundled' => ['to' => 'cf',
                       'subject' => 'A commission bundle is with you',
                       'line' => 'A distributor has sent their bundle. Check it and send it to the office.',
-                      'link' => $rf],
+                      'link' => $cf],
         'with_admin' => ['to' => 'office',
-                         'subject' => 'R&F has sent a commission claim over',
-                         'line' => 'R&amp;F has checked this bundle. Funding it lets them pay the partners.',
+                         'subject' => 'C&F has sent a commission claim over',
+                         'line' => 'C&amp;F has checked this bundle. Funding it lets them pay the partners.',
                          'link' => $office],
-        'funded' => ['to' => 'rf',
+        'funded' => ['to' => 'cf',
                      'subject' => 'The office has funded a bundle',
                      'line' => 'The office has funded this bundle. It can be paid out now.',
-                     'link' => $rf],
+                     'link' => $cf],
         'paid' => ['to' => 'party',
                    'subject' => 'Your commission has been paid',
                    'line' => 'Your commission has been transferred. It shows against you as a payout.',
@@ -2266,8 +2266,8 @@ function voucher_notify(int $voucherId, string $step, string $note = ''): void
 
         $to = '';
 
-        if ($step['to'] === 'rf') {
-            $stmt = db()->query("SELECT email FROM admin_users WHERE role = 'rf' AND is_active = 1 LIMIT 1");
+        if ($step['to'] === 'cf') {
+            $stmt = db()->query("SELECT email FROM admin_users WHERE role = 'cf' AND is_active = 1 LIMIT 1");
             $to   = (string) ($stmt->fetchColumn() ?: '');
         } elseif ($step['to'] === 'party') {
             $to = (string) ($party['email'] ?? '');
@@ -2299,7 +2299,7 @@ function vouchers_for(string $partyType, int $partyId): array
  * A distributor approving one of their dealers' vouchers.
  *
  * Approved is not yet claimed money — it waits at `bundled` for the bundle that
- * carries it to R&F, which is raised separately.
+ * carries it to C&F, which is raised separately.
  */
 function voucher_approve_dealer(int $voucherId, int $distributorId, string $actor): string
 {
@@ -2367,7 +2367,7 @@ function voucher_reject(int $voucherId, string $actor, string $reason = '', stri
 
 /**
  * The distributor's bundle: their own claim plus every dealer voucher they have
- * approved, sent to R&F as one document.
+ * approved, sent to C&F as one document.
  *
  * Returns [voucherId, error].
  */
@@ -2437,7 +2437,7 @@ function voucher_bundle(int $distributorId, string $actor, ?string $cycle = null
         . ' and ' . money($own) . ' of their own');
 
     foreach ($approved as $child) {
-        voucher_event((int) $child['id'], 'bundled', 'with_rf', $actor, 'Sent to R&F in a bundle');
+        voucher_event((int) $child['id'], 'bundled', 'with_rf', $actor, 'Sent to C&F in a bundle');
     }
 
     voucher_notify($bundleId, 'bundled');
@@ -2494,7 +2494,7 @@ function voucher_bundles(array $statuses): array
  * Moves a bundle and everything in it to one status.
  *
  * The children travel with the bundle because they are the same document from
- * every point but the dealer's — one thing for R&F to pay, one thing for the
+ * every point but the dealer's — one thing for C&F to pay, one thing for the
  * office to look at.
  */
 function voucher_move_bundle(int $bundleId, string $to, string $actor, array $from, ?string $note = null): string
@@ -2523,7 +2523,7 @@ function voucher_move_bundle(int $bundleId, string $to, string $actor, array $fr
         voucher_event((int) $child['id'], (string) $child['status'], $to, $actor, $note);
 
         /* a dealer inside a bundle is told when the money is actually sent —
-           the steps before it are between the distributor, R&F and the office */
+           the steps before it are between the distributor, C&F and the office */
         if ($to === 'paid') {
             voucher_notify((int) $child['id'], 'paid');
         }
@@ -2535,7 +2535,7 @@ function voucher_move_bundle(int $bundleId, string $to, string $actor, array $fr
 }
 
 /**
- * R&F paying a funded bundle out.
+ * C&F paying a funded bundle out.
  *
  * Writes a payout row for the distributor and for every dealer in it, which is
  * what makes "still owed" on the existing screens come down. The payout tables
@@ -3493,7 +3493,7 @@ function current_user(): ?array
 /**
  * The office's own pages.
  *
- * R&F signs in at the same door and is a different job entirely — they see
+ * C&F signs in at the same door and is a different job entirely — they see
  * vouchers and nothing else — so landing on an office page sends them to their
  * own. One sign-in, two destinations.
  */
@@ -3506,15 +3506,15 @@ function require_login(): array
         exit;
     }
 
-    if (($user['role'] ?? 'admin') === 'rf') {
-        header('Location: ' . rtrim(dirname($_SERVER['PHP_SELF']), '/\\') . '/../rf/');
+    if (($user['role'] ?? 'admin') === 'cf') {
+        header('Location: ' . rtrim(dirname($_SERVER['PHP_SELF']), '/\\') . '/../cf/');
         exit;
     }
 
     return $user;
 }
 
-/** The R&F pages, the other way round. */
+/** The C&F pages, the other way round. */
 function require_rf(): array
 {
     $user = current_user();
@@ -3524,7 +3524,7 @@ function require_rf(): array
         exit;
     }
 
-    if (($user['role'] ?? 'admin') !== 'rf') {
+    if (($user['role'] ?? 'admin') !== 'cf') {
         header('Location: ../admin/');
         exit;
     }
@@ -3535,7 +3535,7 @@ function require_rf(): array
 /** Where a signed-in account belongs. */
 function role_landing(string $role): string
 {
-    return $role === 'rf' ? '../rf/' : './';
+    return $role === 'cf' ? '../cf/' : './';
 }
 
 function log_status_change(string $entity, int $id, ?string $old, string $new, ?int $userId): void

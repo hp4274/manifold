@@ -3,7 +3,7 @@
  * The commission chain, end to end, against the live database.
  *
  * Tranches earn as their payments are verified (§9), a voucher claims them, and
- * the money comes back down through R&F (§10). Everything this writes it
+ * the money comes back down through C&F (§10). Everything this writes it
  * deletes again — run it any time:
  *
  *   C:\xampp\php\php.exe C:\xampp\htdocs\manifold\admin\tests\voucher-chain.php
@@ -111,14 +111,14 @@ $ok(voucher_reject($vB, 'Dist', 'Not this week') === '', 'and turns B down');
 $ok(count(voucher_claimable('dealer', $dealerIds[1])) === 1, 'B can claim that sale again');
 
 [$bundle, $err] = voucher_bundle($distId, 'Dist');
-$ok($err === '' && voucher($bundle)['status'] === 'with_rf', 'the bundle goes to R&F: ' . $err);
+$ok($err === '' && voucher($bundle)['status'] === 'with_rf', 'the bundle goes to C&F: ' . $err);
 $ok(voucher($vA)['status'] === 'with_rf', 'carrying the dealer voucher');
 
-$ok(voucher_move_bundle($bundle, 'with_admin', 'R&F', ['with_rf']) === '', 'R&F forwards it');
+$ok(voucher_move_bundle($bundle, 'with_admin', 'C&F', ['with_rf']) === '', 'C&F forwards it');
 $ok(voucher_move_bundle($bundle, 'funded', 'Office', ['with_admin']) === '', 'the office funds it');
 
 $paidBefore = dealer_totals($dealerIds[0])['paid'];
-$ok(voucher_pay($bundle, 'R&F', 'UTR-CHAIN') === '', 'R&F pays it');
+$ok(voucher_pay($bundle, 'C&F', 'UTR-CHAIN') === '', 'C&F pays it');
 $ok(dealer_totals($dealerIds[0])['paid'] > $paidBefore, 'the payout lands');
 $ok($near(dealer_totals($dealerIds[0])['remaining'], $saleShare),
     'and what is left owed is the sale that completed after the claim');

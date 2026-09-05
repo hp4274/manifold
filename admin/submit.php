@@ -498,11 +498,32 @@ try {
             respond(false, 'Name, email, phone and message are required.');
         }
 
+        /* The country code is chosen beside the number here too, and is stored in
+           front of it, so a row in the admin can be dialled as it stands. Same
+           rules as the application forms: an absurd code falls back to the one
+           the business is run from, and how long a number runs to is the
+           country's business. */
+        $digits = static fn (?string $value): string => preg_replace('/\D/', '', (string) $value);
+
+        $phoneDial = $digits(field('phone_code', 6));
+        if ($phoneDial === '' || strlen($phoneDial) > 4) {
+            $phoneDial = DEFAULT_DIAL_CODE;
+        }
+
+        [$phoneMin, $phoneMax] = dial_digits($phoneDial);
+        $phoneLength           = strlen($digits(field('phone', 32)));
+
+        if ($phoneLength < $phoneMin || $phoneLength > $phoneMax) {
+            respond(false, 'The phone number has to be '
+                . ($phoneMin === $phoneMax ? $phoneMin . ' digits' : $phoneMin . ' to ' . $phoneMax . ' digits')
+                . ' for +' . $phoneDial . ' — no country code, no spaces.');
+        }
+
         $enquiry = [
             'name'     => field('name', 160),
             'company'  => field('company', 160),
             'email'    => field('email', 190),
-            'phone'    => field('phone', 32),
+            'phone'    => '+' . $phoneDial . $digits(field('phone', 32)),
             'interest' => field('interest', 60),
             'city'     => field('city', 120),
             'message'  => field('message', 5000),

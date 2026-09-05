@@ -2,13 +2,13 @@
 /**
  * The commission amounts, as a form.
  *
- * The office sets these under Settings and R&F sets the same ones from their own
+ * The office sets these under Settings and C&F sets the same ones from their own
  * desk, so the fields and the wording live here rather than in two places that
  * could drift apart.
  *
  * A flat amount per sale, per product — not a percentage. Set
  * $rateHasPartnerPages to false where the reader cannot open the Dealers and
- * Distributors pages; R&F cannot.
+ * Distributors pages; C&F cannot.
  */
 
 declare(strict_types=1);

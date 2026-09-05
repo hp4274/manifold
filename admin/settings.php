@@ -35,17 +35,17 @@ function settings_done(string $message): void
 $editingAdmin = null;
 $openAccountModal = false;
 
-/* What an account can be. The office runs everything; R&F sees the commission
+/* What an account can be. The office runs everything; C&F sees the commission
    claims and nothing else. */
 const ADMIN_ROLES = [
     'admin' => 'Office',
-    'rf'    => 'R&F',
+    'cf'    => 'C&F',
 ];
 
 /**
  * How many office accounts could still sign in if this one were gone.
  *
- * Only the office counts: an R&F account cannot reach Settings, so leaving R&F
+ * Only the office counts: an C&F account cannot reach Settings, so leaving C&F
  * as the last account standing locks everybody out of the admin.
  */
 function other_active_admins(int $exceptId): int
@@ -146,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($id === (int) $user['id'] && $role !== 'admin') {
             $error = 'You cannot move your own account out of the office — you would lock yourself out.';
         } elseif ($id > 0 && $role !== 'admin' && other_active_admins($id) === 0) {
-            $error = 'That is the only office account left. Add another before moving this one to R&F.';
+            $error = 'That is the only office account left. Add another before moving this one to C&F.';
         } elseif ($id > 0) {
             $sql = 'UPDATE admin_users SET name = ?, email = ?, role = ?'
                  . ($password === '' ? '' : ', password_hash = ?')
@@ -174,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([$name, $email, $role, password_hash($password, PASSWORD_DEFAULT)]);
 
             settings_done('Account created. ' . $name . ' can sign in now, '
-                . ($role === 'rf' ? 'and lands on the R&F commission screens.' : 'as the office.'));
+                . ($role === 'cf' ? 'and lands on the C&F commission screens.' : 'as the office.'));
         }
     } elseif ($action === 'admin_toggle') {
         if ($id === (int) $user['id']) {
@@ -512,7 +512,7 @@ require __DIR__ . '/partials/layout-top.php';
           <?php endforeach; ?>
         </select>
         <span class="field-hint">
-          The office runs everything here. R&F signs in at the same door and lands on the commission
+          The office runs everything here. C&F signs in at the same door and lands on the commission
           claims — no clients, no stock, no forms.
         </span>
       </div>

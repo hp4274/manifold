@@ -42,3 +42,17 @@ graphify-out
 .reticle
 # Logs & Temporary files
 *.log
+
+# Playwright
+node_modules/
+test-results/
+playwright-report/
+tests/.state.json
+tests/.fixtures/
+.env
+tests
+test-results
+generate-qa-report.js
+package-lock.json
+package.json
+playwright.config.js

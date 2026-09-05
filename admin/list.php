@@ -211,7 +211,10 @@ require __DIR__ . '/partials/layout-top.php';
             <?php $rowId = (int) $row['id']; $seq++; ?>
             <tr id="row-<?= $rowId ?>" class="<?= $savedId === $rowId ? 'is-flagged' : '' ?>">
               <td class="td-seq"><?= $seq ?></td>
-              <td><strong><?= e(record_title($type, $row)) ?></strong></td>
+              <?php /* the cell clamps to two lines, so the full value rides along
+                       as a tooltip for the long ones */ ?>
+              <?php $rowTitle = record_title($type, $row); ?>
+              <td><strong title="<?= e($rowTitle) ?>"><?= e($rowTitle) ?></strong></td>
               <?php if ($type !== 'newsletter'): ?>
                 <td>
                   <a href="mailto:<?= e($row['email']) ?>"><?= e($row['email']) ?></a>

@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db()->prepare('DELETE FROM login_attempts WHERE email = ?')->execute([$email]);
 
             /* one sign-in, two destinations: the office lands on the
-               dashboard, R&F on their own */
+               dashboard, C&F on their own */
             header('Location: ' . role_landing((string) ($user['role'] ?? 'admin')));
             exit;
         }

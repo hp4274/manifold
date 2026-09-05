@@ -5,7 +5,7 @@
  * the same on both sides — only who it goes to differs.
  *
  * A distributor also gets the two things a dealer never sees: their dealers'
- * claims to decide on, and the bundle that carries the approved ones to R&F.
+ * claims to decide on, and the bundle that carries the approved ones to C&F.
  *
  * Expects $voucherKind ('dealer' or 'distributor'), $claimable, $claimTotal,
  * $openVoucher, $myVouchers — and for a distributor, $dealerAsks and
@@ -113,7 +113,7 @@ $vcIsDist = ($voucherKind ?? 'dealer') === 'distributor';
 <div class="panel">
   <div class="panel__head">
     <div class="panel__head-text">
-      <h2><?= $vcIsDist ? 'Send a bundle to R&amp;F' : 'Claim your commission' ?></h2>
+      <h2><?= $vcIsDist ? 'Send a bundle to C&amp;F' : 'Claim your commission' ?></h2>
       <span class="eyebrow">
         <?= $vcIsDist
             ? 'Your own claim and every dealer voucher you have approved, as one document'
@@ -153,8 +153,8 @@ $vcIsDist = ($voucherKind ?? 'dealer') === 'distributor';
                 . (count($approvedAsks) === 1 ? '' : 's')
               : '' ?>.
           <?= $vcIsDist
-              ? 'R&amp;F check it, the office funds it, and R&amp;F pay everybody in it.'
-              : 'Your distributor checks it first, then it travels to R&amp;F and the office.' ?>
+              ? 'C&amp;F check it, the office funds it, and C&amp;F pay everybody in it.'
+              : 'Your distributor checks it first, then it travels to C&amp;F and the office.' ?>
         </span>
       </div>
 
@@ -196,7 +196,7 @@ $vcIsDist = ($voucherKind ?? 'dealer') === 'distributor';
         <input type="hidden" name="action" value="<?= $vcIsDist ? 'bundle' : 'raise' ?>">
         <button type="submit" class="btn btn--primary">
           <i class="bi bi-send" aria-hidden="true"></i>
-          <?= $vcIsDist ? 'Send the bundle to R&amp;F' : 'Raise the voucher' ?>
+          <?= $vcIsDist ? 'Send the bundle to C&amp;F' : 'Raise the voucher' ?>
         </button>
       </form>
     <?php endif; ?>

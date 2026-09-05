@@ -12,9 +12,9 @@
 --
 -- Then sign in at /manifold/admin/login.php with
 --   the office     admin  (or admin@manifold.com)  password admin12345
---   R&F            rf@manifold.com                 password rf123
+--   C&F            cf@manifold.com                 password <set on install>
 --
--- One sign-in, two destinations: the office lands on the dashboard, R&F on
+-- One sign-in, two destinations: the office lands on the dashboard, C&F on
 -- their own commission screens.
 --
 -- CHANGE BOTH PASSWORDS before this touches a real server.
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(120) NOT NULL,
   `email` varchar(190) NOT NULL,
-  `role` enum('admin','rf') NOT NULL DEFAULT 'admin',
+  `role` enum('admin','cf') NOT NULL DEFAULT 'admin',
   `password_hash` varchar(255) NOT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `last_login_at` datetime DEFAULT NULL,
@@ -625,10 +625,10 @@ INSERT INTO `settings` (`name`, `value`) VALUES
 -- The two accounts you start with.
 --
 --   admin@manifold.com  password admin12345  — the office, /admin
---   rf@manifold.com     password rf123       — the paying agent, /rf
+--   cf@manifold.com     password <set on install>  — the paying agent, /cf
 --
 -- Both sign in at the same door, /manifold/admin/login.php, and land in
--- different places: `role` is what decides which. R&F sees commission vouchers
+-- different places: `role` is what decides which. C&F sees commission vouchers
 -- and nothing else — no clients, no stock, no settings.
 --
 -- CHANGE BOTH PASSWORDS before this touches a real server. They are written in
@@ -636,7 +636,7 @@ INSERT INTO `settings` (`name`, `value`) VALUES
 -- --------------------------------------------------------------------------
 INSERT INTO `admin_users` (`name`, `email`, `role`, `password_hash`) VALUES
   ('admin', 'admin@manifold.com', 'admin', '$2y$10$UoO.3dsFFzlN0PsyNNbAjOAJ0yITCnUYzPcyiBX6nQNPLk6WPPJC6'),
-  ('R&F',   'rf@manifold.com',    'rf',    '$2y$12$lZyHI3M1i5w1MIrlC/tJHOTelCSNU5vQClGBgwtHhVkpI5c8mJ4MK');
+  ('C&F',   'cf@manifold.com',    'cf',    '$2y$12$lZyHI3M1i5w1MIrlC/tJHOTelCSNU5vQClGBgwtHhVkpI5c8mJ4MK');
 
 -- ---------------------------------------------------------------------------
 -- Stock: what a partner has bought from the tier above them, and what is left

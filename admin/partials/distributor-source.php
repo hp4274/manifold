@@ -76,7 +76,7 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
         </dl>
         <span class="field-hint">
           Commission is paid against a voucher, not from here: they bundle their own claim with their
-          dealers' approved ones, R&amp;F presents it and pays it once the office funds it. What lands
+          dealers' approved ones, C&amp;F presents it and pays it once the office funds it. What lands
           that way is listed under Payouts.
         </span>
 

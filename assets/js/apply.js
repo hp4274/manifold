@@ -618,51 +618,6 @@
 
   var stepped = buildWizard();
 
-  /* ---------- what went wrong, all in one place ----------
-     A banner above the form listing every field still wanting an answer, each
-     a link that opens the step it lives on and puts the cursor in it. */
-  function summarise(bad) {
-    var old = form.querySelector('.form-errors');
-    if (old) old.remove();
-    if (!bad.length) return;
-
-    var box = document.createElement('div');
-    box.className = 'form-errors';
-    box.setAttribute('role', 'alert');
-    box.setAttribute('tabindex', '-1');
-
-    var heading = document.createElement('p');
-    heading.className = 'form-errors__title';
-    heading.innerHTML = '<i class="bi bi-exclamation-triangle" aria-hidden="true"></i> ' +
-      bad.length + (bad.length === 1 ? ' field needs' : ' fields need') + ' attention';
-    box.appendChild(heading);
-
-    var list = document.createElement('ul');
-
-    bad.forEach(function (el) {
-      var item = document.createElement('li');
-      var link = document.createElement('a');
-      var where = stepOf(el);
-
-      link.href = el.id ? '#' + el.id : '#';
-      link.textContent = (labelOf(el) || el.name) + ' — ' + why(el);
-      link.addEventListener('click', function (e) {
-        e.preventDefault();
-        if (stepped && where > -1) show(where, false);
-        el.focus();
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-
-      item.appendChild(link);
-      list.appendChild(item);
-    });
-
-    box.appendChild(list);
-    form.insertBefore(box, form.firstChild);
-    box.focus();
-    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-
   /* ---------- keep what has been typed ----------
      Sixty fields is more than anyone wants to lose to a closed tab. Everything
      but the files, the honeypot and the hidden fields is kept in this browser
@@ -772,12 +727,22 @@
     });
 
     if (bad.length) {
-      summarise(bad);
-      say(bad.length + (bad.length === 1 ? ' field needs' : ' fields need') + ' attention before this can be sent.', 'error');
+      /* The field says what is wrong with it, in red, under itself — that is
+         the whole message. A banner repeating all of them at the top of the
+         form said the same thing twice and put the reading of it a scroll away
+         from the fixing of it. Going to the first one is the useful half.
+
+         An empty upload is not marked on the way through the wizard, only
+         here, so the first wrong field can be sitting on a step that is not
+         the one on screen — open it, or the focus lands on something nobody
+         can see. */
+      var where = stepOf(bad[0]);
+      if (stepped && where > -1) show(where, false);
+
+      bad[0].focus();
+      bad[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-
-    summarise([]);
 
     var payload = new FormData(form);
     var button = form.querySelector('button[type="submit"]');
@@ -801,8 +766,9 @@
         throw new Error((result && result.message) || 'Submission failed.');
       })
       .catch(function (err) {
+        /* not a field problem — the send itself failed, and nothing on the
+           page would show that on its own */
         say(err.message || 'Submission failed. Please call +91 97251 54186.', 'error');
-        summarise(fieldsIn(form).filter(function (el) { return !grade(el); }));
         if (button) {
           button.disabled = false;
           button.textContent = 'Submit application';

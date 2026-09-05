@@ -2,8 +2,8 @@
 /**
  * Commission claims, as the office sees them.
  *
- * R&F checks a bundle and puts it here. The office is the only party that can
- * say the money is owed — approving releases the funds to R&F, who make the
+ * C&F checks a bundle and puts it here. The office is the only party that can
+ * say the money is owed — approving releases the funds to C&F, who make the
  * transfers and record them. Rejecting sends the whole thing back and the
  * dealers' vouchers return to their distributor rather than dying.
  */
@@ -42,11 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$bundle) {
         $error = 'That bundle no longer exists.';
     } elseif ($action === 'fund') {
-        /* one transfer against the whole bundle: R&F splits it from there */
+        /* one transfer against the whole bundle: C&F splits it from there */
         $error = voucher_move_bundle($bundleId, 'funded', $actor, ['with_admin'], 'Approved and funded');
 
         if ($error === '') {
-            vouchers_done('Funded. R&F can pay the partners in that bundle now.');
+            vouchers_done('Funded. C&F can pay the partners in that bundle now.');
         }
     } elseif ($action === 'reject') {
         $error = voucher_reject($bundleId, $actor, (string) ($_POST['reason'] ?? ''));
@@ -105,7 +105,7 @@ require __DIR__ . '/partials/layout-top.php';
     <span class="eyebrow">Funded, not yet paid</span>
     <strong class="stock-figure"><?= count($funded) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat"><?= e(money($sum($funded))) ?> with R&amp;F</span>
+      <span class="tile__stat"><?= e(money($sum($funded))) ?> with C&amp;F</span>
     </span>
   </span>
   <span class="tile">
@@ -127,13 +127,13 @@ require __DIR__ . '/partials/layout-top.php';
 <div class="panel">
   <div class="panel__head">
     <div class="panel__head-text">
-      <h2>Presented by R&amp;F</h2>
+      <h2>Presented by C&amp;F</h2>
       <span class="eyebrow">Approve to release the money, or send it back</span>
     </div>
   </div>
 
   <?php if (!$waiting): ?>
-    <p class="empty">Nothing waiting. Claims appear here once R&amp;F has checked them.</p>
+    <p class="empty">Nothing waiting. Claims appear here once C&amp;F has checked them.</p>
   <?php else: ?>
     <div class="panel__body">
       <?php foreach ($waiting as $bundle): ?>
@@ -216,7 +216,7 @@ require __DIR__ . '/partials/layout-top.php';
 
           <div class="voucher__actions">
             <form method="post"
-                  data-confirm="Fund this bundle? R&amp;F pays the partners from it.">
+                  data-confirm="Fund this bundle? C&amp;F pays the partners from it.">
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="fund">
               <input type="hidden" name="bundle_id" value="<?= $bundleId ?>">

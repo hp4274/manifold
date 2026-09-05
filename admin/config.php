@@ -8,10 +8,10 @@
 
 declare(strict_types=1);
 
-const DB_HOST = '127.0.0.1';
-const DB_NAME = 'manifold';
-const DB_USER = 'root';
-const DB_PASS = '';
+const DB_HOST = 'srv964.hstgr.io';
+const DB_NAME = 'u768511311_test_manifold';
+const DB_USER = 'u768511311_manifold';
+const DB_PASS = 'Manifold@2210';
 const DB_PORT = 3306;
 
 /** Absolute path where uploaded application documents are stored. */
@@ -242,7 +242,7 @@ const REFERRAL_REWARD_DEFAULT = 500;
  *
  * A flat amount, not a share: a stove and a kit are different sales and pay
  * different money. Starting values only — the live figures live in the
- * `settings` table and are edited from Settings, by the office or by R&F.
+ * `settings` table and are edited from Settings, by the office or by C&F.
  * The whole amount is earned when the delivery payment is verified.
  */
 const COMMISSION_DEFAULTS = [

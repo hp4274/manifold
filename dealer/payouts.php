@@ -4,7 +4,7 @@
  *
  * A dealer cannot pay themselves. What they can do is raise a voucher: a claim
  * for the commission they have earned and not been paid, which goes to their
- * distributor, then to R&F, then to the office, and comes back as money. See
+ * distributor, then to C&F, then to the office, and comes back as money. See
  * CLIENT-FLOW.md §10.
  */
 
