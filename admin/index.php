@@ -111,7 +111,7 @@ require __DIR__ . '/partials/layout-top.php';
                 <i class="bi bi-chevron-expand" aria-hidden="true"></i>
               </button>
             </th>
-            <th>Actions</th>
+            <th class="th-actions">Actions</th>
             <th></th>
           </tr>
         </thead>

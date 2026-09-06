@@ -923,6 +923,11 @@ tr.is-flagged td{background:rgba(75,180,83,.09)}
 .row-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;row-gap:6px}
 .row-actions form{display:contents}
 
+/* and the header that names them sits over them. Left-aligned it was the
+   default a <th> comes with, which left the word ACTIONS a hundred pixels
+   clear of the buttons it labelled and reading as the column before it. */
+.th-actions{text-align:right}
+
 .icon-btn{
   display:flex;align-items:center;justify-content:center;
   width:36px;height:36px;

@@ -457,7 +457,7 @@ require __DIR__ . '/partials/layout-top.php';
                 <i class="bi bi-chevron-expand" aria-hidden="true"></i>
               </a>
             </th>
-            <th>Action</th>
+            <th class="th-actions">Action</th>
             <th></th>
           </tr>
         </thead>
