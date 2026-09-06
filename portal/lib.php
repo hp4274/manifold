@@ -356,6 +356,10 @@ function verify_otp(string $email, string $code, string $audience = 'any'): stri
 
     session_regenerate_id(true);
 
+    /* signing into a portal ends any office session sharing this browser, so an
+       admin who handed the machine over does not leave the dashboard reachable */
+    unset($_SESSION['admin']);
+
     /* every role the address holds is opened at once — the person is the same
        either way, and asking them to sign in twice to see both would be theatre */
     foreach ($roles as $role) {

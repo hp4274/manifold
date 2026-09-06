@@ -21,6 +21,11 @@
   --muted:#5c7389;         /* 4.92:1 on white, 4.66:1 on --tint */
   --accent:#4bb453;
   --accent-2:#17b0a6;
+  /* the primary-button fill: darkened from the raw accent gradient so white
+     text on it clears WCAG AA (5.8:1 and 4.7:1, vs 2.6:1 before). The accent
+     tokens above keep their bright values for borders, highlights and fills
+     that carry no text. */
+  --grad-accent:linear-gradient(100deg,#2a7330 0%,#0d8188 100%);
   --accent-deep:#0e8f96;
   --accent-on-dark:#7fe0c8;   /* accents on the navy bands */
   --accent-ink:#2e7d34;       /* the green dark enough to read as small text on white */
@@ -275,7 +280,7 @@ p{margin:0}
 .btn-pill:hover i{transform:translateX(3px)}
 
 .btn-pill--accent{
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   color:#fff;
   box-shadow:0 6px 18px rgba(35,190,175,.28);
 }
@@ -382,113 +387,6 @@ p{margin:0}
 .reveal:has(summary){transform:none}
 @media (prefers-reduced-motion:reduce){
   .reveal{opacity:1;transform:none;transition:none}
-}
-
-/* ---------- 2b. Loan offer flash ----------
-   Above the top bar on the home page: the loan is open to the first 1,00,000
-   customers and closes on 15 September 2026, so the bar states both and counts
-   the days down. main.js reveals it, hides it once the date has passed, and
-   remembers a dismissal — nothing here is shown without that check. */
-.offer-flash{
-  position:relative;
-  overflow:hidden;
-  background:linear-gradient(100deg,var(--navy-800) 0%,var(--navy-600) 58%,#0a4a52 100%);
-  color:#fff;
-}
-.offer-flash[hidden]{display:none}
-
-/* a slow sheen crossing the bar — the flash, without anything blinking */
-.offer-flash::after{
-  content:"";
-  position:absolute;
-  inset:0 auto 0 -40%;
-  width:34%;
-  background:linear-gradient(100deg,transparent 0%,rgba(127,224,200,.16) 46%,transparent 100%);
-  transform:skewX(-16deg);
-  animation:offer-sheen 7s ease-in-out 1.6s infinite;
-  pointer-events:none;
-}
-@keyframes offer-sheen{
-  0%,72%   {transform:translateX(0) skewX(-16deg)}
-  100%     {transform:translateX(420%) skewX(-16deg)}
-}
-
-.offer-flash__inner{
-  position:relative;
-  z-index:1;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:18px;
-  flex-wrap:wrap;
-  padding-block:11px;
-}
-.offer-flash__line{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  flex-wrap:wrap;
-  margin:0;
-  font-size:var(--t-ui);
-  line-height:1.5;
-  color:rgba(255,255,255,.86);
-}
-.offer-flash__line strong{color:#fff;font-weight:700}
-.offer-flash__tag{
-  padding:5px 12px;
-  border-radius:999px;
-  background:rgba(127,224,200,.16);
-  border:1px solid rgba(127,224,200,.34);
-  font-size:var(--t-micro);
-  font-weight:700;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  color:var(--accent-on-dark);
-  white-space:nowrap;
-}
-.offer-flash__left{
-  font-weight:700;
-  color:var(--accent-on-dark);
-  white-space:nowrap;
-}
-.offer-flash__left[hidden]{display:none}
-.offer-flash__side{display:flex;align-items:center;gap:14px}
-.offer-flash__cta{
-  display:inline-flex;
-  align-items:center;
-  /* a thumb needs somewhere to land — the text alone is 26px tall */
-  min-height:32px;
-  gap:7px;
-  font-size:var(--t-ui);
-  font-weight:700;
-  color:#fff;
-  white-space:nowrap;
-}
-.offer-flash__cta:hover{color:var(--accent-on-dark)}
-.offer-flash__cta i{transition:transform .22s ease}
-.offer-flash__cta:hover i{transform:translateX(3px)}
-.offer-flash__close{
-  display:grid;
-  place-items:center;
-  width:30px;height:30px;
-  border:1px solid rgba(255,255,255,.26);
-  border-radius:50%;
-  background:transparent;
-  color:rgba(255,255,255,.8);
-  font-size:12px;
-  cursor:pointer;
-  transition:background .2s ease,color .2s ease;
-}
-.offer-flash__close:hover{background:rgba(255,255,255,.14);color:#fff}
-
-@media (prefers-reduced-motion:reduce){
-  .offer-flash::after{animation:none;opacity:0}
-}
-
-@media (max-width:767px){
-  .offer-flash__inner{gap:10px;padding-block:10px}
-  .offer-flash__line{gap:8px}
-  .offer-flash__side{margin-left:auto}
 }
 
 /* ---------- 3. Header ---------- */
@@ -674,7 +572,7 @@ p{margin:0}
   display:flex;align-items:center;justify-content:center;
   width:28px;height:28px;
   border-radius:50%;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   color:#fff;
   font-size:13px;
   font-weight:700;
@@ -749,19 +647,44 @@ p{margin:0}
 .nav-toggle{
   display:none;
   margin-left:auto;
-  width:46px;height:46px;
-  background:none;
-  border:1px solid #d5e0e9;
-  border-radius:9px;
-  padding:9px 10px;
+  /* 38px reads as a control beside the logo rather than an empty box; the
+     44px press area is added by the ::after in the touch-target section, so
+     the target stays compliant while the button itself gets smaller */
+  width:38px;height:38px;
+  align-items:center;
+  justify-content:center;
   flex-direction:column;
-  justify-content:space-between;
+  gap:5px;
+  background:var(--white);
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
   cursor:pointer;
+  touch-action:manipulation;
+  transition:box-shadow .2s ease,background .2s ease,transform .18s ease;
 }
-.nav-toggle span{display:block;height:2px;background:var(--nav-ink);border-radius:2px;transition:.28s ease}
+.nav-toggle:hover{box-shadow:0 1px 3px rgba(15,60,95,.08)}
+/* presses in place — the bounds never move, so the header cannot jitter */
+.nav-toggle:active{transform:scale(.96);background:var(--tint)}
+.nav-toggle:focus-visible{outline:2px solid var(--accent-ink-2);outline-offset:2px}
+/* 18px bars on a 5px rhythm: the three lines read as one mark instead of
+   three separate rules, and the 7px collapse below still lands on centre */
+.nav-toggle span{
+  display:block;
+  width:18px;height:2px;
+  background:var(--nav-ink);
+  border-radius:2px;
+  transition:transform .28s ease,opacity .2s ease;
+}
 .nav-toggle[aria-expanded="true"] span:nth-child(1){transform:translateY(7px) rotate(45deg)}
 .nav-toggle[aria-expanded="true"] span:nth-child(2){opacity:0}
 .nav-toggle[aria-expanded="true"] span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+
+/* the mark still becomes an X — only the travel to it is dropped */
+@media (prefers-reduced-motion:reduce){
+  .nav-toggle,
+  .nav-toggle span{transition:none}
+  .nav-toggle:active{transform:none}
+}
 
 /* ---------- 4. Hero ---------- */
 .hero{
@@ -1730,7 +1653,7 @@ p{margin:0}
   width:34px;height:3px;
   border-radius:2px;
   margin-bottom:18px;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
 }
 .proof-card__text{
   font-size:var(--t-sub);
@@ -1782,6 +1705,9 @@ p{margin:0}
   color:rgba(255,255,255,.8);
   transition:border-color .25s ease,transform .25s ease,color .25s ease,background .25s ease;
 }
+/* the label is one flex item, so the subscript flows inline; only the uppercase
+   tracking has to be taken off it or CO2 reads with a gap before the 2 */
+.proof-tag sub{letter-spacing:normal;font-size:.72em}
 .proof-tag i{
   font-size:15px;
   line-height:1;
@@ -1789,15 +1715,22 @@ p{margin:0}
 }
 /* Once the row has to wrap, growing the pills would leave a lone one stretched
    across the whole width. Below the width where all five fit, they keep their
-   own size and simply wrap. */
+   own size and simply wrap — and the group is centred, or the short last rows
+   leave a ragged staircase down the left edge. */
 @media (max-width:1199.98px){
   .proof-tag{flex:0 1 auto}
+  .proof-tags{justify-content:center}
 }
 .proof-tag:hover{
   transform:translateY(-2px);
   border-color:rgba(127,224,200,.5);
   background:rgba(255,255,255,.12);
   color:#fff;
+}
+/* they are list items, not links: on a touch screen the lift fires on tap and
+   reads as a button that does nothing */
+@media (hover:none){
+  .proof-tag:hover{transform:none}
 }
 
 /* ---------- 9c. Delivery date ----------
@@ -2606,7 +2539,7 @@ body.is-consent-gated{overflow:hidden}
   transition:background .2s ease,border-color .2s ease,color .2s ease,transform .2s ease;
 }
 .consent-btn--accept{
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   color:var(--white);
 }
 .consent-btn--accept:hover{transform:translateY(-1px);filter:brightness(1.06)}
@@ -3139,7 +3072,7 @@ body.has-consent-bar .to-top{bottom:calc(26px + var(--consent-h,86px))}
   width:44px;height:44px;
   margin-bottom:18px;
   border-radius:50%;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   color:var(--white);
   font-size:var(--t-micro);
   font-weight:700;
@@ -3754,7 +3687,7 @@ body.has-consent-bar .to-top{bottom:calc(26px + var(--consent-h,86px))}
   display:flex;align-items:center;justify-content:center;line-height:1;
   width:46px;height:46px;
   border-radius:50%;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   color:#fff;
   font-size:var(--t-sub);
   font-weight:700;
@@ -4097,7 +4030,7 @@ fieldset.field legend{margin-bottom:2px}
   width:72px;height:72px;
   margin:0 auto 26px;
   border-radius:50%;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   color:#fff;
   font-size:32px;
 }
@@ -4672,7 +4605,7 @@ fieldset.field legend{margin-bottom:2px}
   width:46px;height:46px;
   margin-bottom:18px;
   border-radius:50%;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   color:var(--white);
   font-size:var(--t-micro);
   font-weight:700;
@@ -4773,7 +4706,7 @@ fieldset.field legend{margin-bottom:2px}
 }
 .metric__bar b{font-size:var(--t-ui);font-weight:700;white-space:nowrap}
 .metric__bar--ours{
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   box-shadow:0 10px 26px rgba(4,34,58,.28);
 }
 
@@ -4950,7 +4883,7 @@ fieldset.field legend{margin-bottom:2px}
   left:0;right:0;bottom:0;
   height:13px;
   border-radius:0 0 var(--radius-lg) var(--radius-lg);
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
 }
 .safety-card__foot::after{
   content:"";
@@ -5147,7 +5080,10 @@ fieldset.field legend{margin-bottom:2px}
     opacity:0;
     visibility:hidden;
     transition:.3s ease;
+    /* vh is frozen at the tallest viewport, so the panel jumped when the URL
+       bar collapsed mid-scroll; dvh tracks the real one, vh stays as fallback */
     max-height:calc(100vh - var(--header-offset));
+    max-height:calc(100dvh - var(--header-offset));
     overflow-y:auto;
   }
   .main-nav.is-open{transform:none;opacity:1;visibility:visible}
@@ -5265,10 +5201,18 @@ fieldset.field legend{margin-bottom:2px}
 
 @media (max-width:767px){
   .hero{min-height:600px}
-  .top-bar__email span{display:none}
-  /* the address is dropped and the icon carries the link, so the link has to
-     stay big enough to press — a 14px-wide envelope is not */
-  .top-bar__email{font-size:0;min-width:32px;min-height:32px;justify-content:center}
+  /* the address stays readable on a phone: it is the one way to reach us that
+     does not need a form, so it is shrunk rather than dropped, and truncates
+     with an ellipsis if a narrow screen cannot take all of it */
+  .top-bar__email{font-size:12px;gap:6px;min-height:32px;min-width:0;flex:0 1 auto;overflow:hidden}
+  .top-bar__email i{font-size:13px;flex:0 0 auto}
+  .top-bar__email span{
+    display:inline-block;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
 
   .hero-media::after{
     background:
@@ -5398,11 +5342,23 @@ body{overflow-x:hidden}
 
 @media (max-width:575px){
   .container-x{padding-inline:16px}
-  .container-x .row{--bs-gutter-x:2rem}
+  /* both names, or the row keeps the 2.5rem negative margin against 16px of
+     container padding and hangs 4px off each edge */
+  .container-x .row{--gutter-x:2rem;--bs-gutter-x:2rem}
   .btn-pill{padding:12px 18px}
   .why-card{padding:22px 18px}
   .proof-card{padding:22px 18px}
-  .proof-tag{padding:10px 16px;font-size:var(--t-micro)}
+  /* Five labels of five different lengths never settle on a narrow screen:
+     centred they made an arrow, left-aligned a staircase. One column of equal
+     rows lines the icons up on a rail and reads as the list it is. The softer
+     radius keeps them from looking like five full-width CTAs. */
+  .proof-tags{display:grid;grid-template-columns:1fr;gap:8px}
+  .proof-tag{
+    justify-content:flex-start;
+    padding:11px 14px;
+    border-radius:var(--radius);
+    font-size:var(--t-micro);
+  }
   .app-card__body{padding:16px 16px 14px}
   .terms-box{padding:18px 16px}
   .upload{padding:12px 14px}
@@ -5607,6 +5563,30 @@ body{overflow-x:hidden}
 }
 .portal-referral__stat strong{color:var(--ink)}
 
+/* --- request the reward payout, like a dealer raising a voucher --- */
+.portal-referral__claim{
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid var(--line);
+}
+.portal-referral__claim-note{
+  margin:0 0 12px;
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--body);
+}
+.portal-referral__claim-note strong{color:var(--ink)}
+/* the resting state, after a request has gone in */
+.portal-referral__claim-note--sent{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0;
+  color:var(--accent-ink-2);
+  font-weight:600;
+}
+.portal-referral__claim-note--sent i{font-size:16px;line-height:1}
+
 /* --- what we already knew about a returning applicant --- */
 .form-prefill{
   display:flex;
@@ -5694,7 +5674,7 @@ body{overflow-x:hidden}
   display:block;
   height:100%;
   border-radius:99px;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   transition:width .4s ease;
 }
 
@@ -6027,11 +6007,11 @@ input[name*="email"]{text-transform:lowercase}
 .top-bar__social a,
 .top-bar__email,
 .footer-social a,
-.offer-flash__cta{position:relative}
+.nav-toggle{position:relative}
 .top-bar__social a::after,
 .top-bar__email::after,
 .footer-social a::after,
-.offer-flash__cta::after{
+.nav-toggle::after{
   content:"";
   position:absolute;
   left:50%;top:50%;
@@ -6060,10 +6040,6 @@ input[name*="email"]{text-transform:lowercase}
 
 .blog-card__more,
 .blog-more__link{min-height:44px;display:inline-flex;align-items:center;gap:8px}
-
-.offer-flash__close{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center}
-
-.offer-flash__cta{min-height:44px;display:inline-flex;align-items:center}
 
 .skip-link{min-height:44px;display:inline-flex;align-items:center}
 
@@ -6167,27 +6143,7 @@ button{cursor:pointer}
   border:0 !important;
 }
 
-/* ---------- 25. the open menu's own close button ----------
-   Only drawn while the panel is a panel; on a wide screen the nav is a row in
-   the header and there is nothing to close. */
-.nav-close{display:none}
-
 @media (max-width:991px){
-  .main-nav.is-open .nav-close{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    align-self:flex-end;
-    width:48px;
-    height:48px;
-    margin:-4px -4px 4px;
-    border:1px solid var(--line);
-    border-radius:50%;
-    background:#fff;
-    color:var(--ink);
-    font-size:17px;
-  }
-
   /* rows a thumb can hit without aiming */
   .main-nav.is-open a,
   .main-nav.is-open summary{min-height:48px;display:flex;align-items:center}
@@ -6379,4 +6335,97 @@ button{cursor:pointer}
   background-position:right 17px center;
   background-size:17px 17px;
   cursor:pointer;
+}
+
+/* ---------- 30. Footer density on a phone ----------
+   The footer is six link columns; stacked one per row they inherited desktop
+   rhythm (70px above, 64px between blocks, 22px under every heading) and ran
+   past 2900px. The spacing is stepped down to an 8pt scale for small screens
+   only — nothing above 767px changes, and no link loses its 44px row. */
+@media (max-width:767px){
+  .site-footer{padding-top:44px}
+  .footer-top{gap:24px;padding-bottom:32px}
+  .footer-cols{gap:24px 20px;padding-bottom:28px}
+  .site-footer h2{margin-bottom:14px}
+  .footer-links{gap:10px}
+  .footer-brand{margin-bottom:16px}
+  .footer-legal{margin-bottom:12px}
+  .footer-bottom{gap:12px;padding:20px 0 24px}
+}
+
+/* ---------- 31. hover lifts do not belong on a touch screen ----------
+   :hover latches on touch: the finger that starts a scroll lands on a card
+   or a button, that element lifts, and it stays lifted after the finger has
+   gone. Dragging down the page therefore left a trail of raised, stretched
+   looking buttons. Only the movement is dropped — colour and shadow still
+   answer a tap, and pointer devices keep the lift. */
+@media (hover:none){
+  
+  .top-bar__social a:hover,
+  .btn-pill:hover i,
+  .btn-pill--accent:hover,
+  .btn-pill--white:hover,
+  .btn-dark:hover,
+  .nav-dropdown:hover .nav-dropdown__menu, .nav-dropdown:focus-within .nav-dropdown__menu, .nav-dropdown[open] .nav-dropdown__menu,
+  /* nothing to lead into, so the icon stays put on hover */ .nav-raffle:hover i,
+  .app-card:hover,
+  .app-card:hover img,
+  .app-card:hover .round-arrow,
+  .product-card:hover,
+  .product-card:hover .product-card__media img,
+  .btn-pill--grad:hover,
+  .why-card:hover,
+  .proof-card:hover,
+  .proof-card__link:hover i,
+  .proof-tag:hover,
+  .btn-pill--ghost-ink:hover,
+  .partner-row img:hover,
+  .blog-more__link:hover i,
+  .blog-card:hover,
+  .blog-card:hover .blog-card__media img,
+  .blog-card__more:hover i,
+  .post-drawer__close:hover,
+  .btn-pill--teal:hover,
+  .footer-subscribe__btn:hover,
+  .footer-social a:hover,
+  .consent-btn--accept:hover,
+  .icon-card:hover,
+  .shot:hover,
+  .contact-card:hover,
+  .btn-pill:disabled:hover, .btn-pill.is-locked:hover,
+  .btn-pill:disabled:hover i, .btn-pill.is-locked:hover i,
+  .form-nav [data-step-prev]:hover i,
+  .form-nav [data-step-prev]:disabled:hover,
+  .soon-link:hover,
+  .safety-card:hover,
+  .portal-referral__copy:hover, .portal-referral__link:hover,
+  .role-card:hover
+  {transform:none}
+  /* this one centres itself with the same property — put the base back */
+  .flow-step:hover .flow-orb::before{transform:translate(-50%,-50%)}
+}
+
+/* ---------- 32. no floating back-to-top on a phone ----------
+   It is fixed to the corner of the viewport, so on a narrow screen it rides
+   over the page as you scroll and lands on whatever is under it — on the
+   contact form that is the right-hand end of the input you are trying to tap.
+   Fading and sliding in and out on every scroll is what read as buttons
+   glitching and sticking to the screen. A phone scrolls back up fine without
+   it; the button stays for pointer-sized screens. */
+@media (max-width:767px){
+  .to-top{display:none}
+}
+
+/* ---------- 33. scroll reveal does not travel on a phone ----------
+   .reveal rises 22px as it enters. On a desktop the page is still while that
+   plays; on a phone the finger is mid-scroll, so the block is moving up while
+   the page moves down and it reads as the thing stretching in the direction of
+   travel — the map, the subscribe row and every button did it.
+
+   The :has() list above patched this element by element (button, input,
+   select, summary) and could only ever miss things: an <iframe> is in none of
+   those, which is why the map still slid. On a small screen the travel itself
+   is the problem, so it goes for everything and the fade carries the reveal. */
+@media (max-width:767px){
+  .reveal{transform:none}
 }

@@ -125,7 +125,11 @@ require __DIR__ . '/partials/layout-top.php';
           <?php $seq = 0; ?>
           <?php foreach ($recent as $row): ?>
             <?php $seq++; ?>
-            <tr id="row-<?= (int) $row['id'] ?>"
+            <?php /* the dashboard unions three forms, so a bare row-<id> would
+                     collide (a contact and an application can share an id). The
+                     type keeps every id on this page unique; the anchor links in
+                     emails point at the per-form lists, not here. */ ?>
+            <tr id="row-<?= e($row['type']) ?>-<?= (int) $row['id'] ?>"
                 data-form="<?= e($row['type']) ?>"
                 data-form-label="<?= e($types[$row['type']]['label']) ?>"
                 data-status="<?= e($row['status']) ?>"
@@ -134,8 +138,10 @@ require __DIR__ . '/partials/layout-top.php';
               <td><?= e($types[$row['type']]['label']) ?></td>
               <td>
                 <?php /* a newsletter signup has nothing but an address, so show it once */ ?>
+                <?php /* the cell clamps to two lines, so the full value rides
+                         along as a tooltip for the long ones */ ?>
                 <?php if ($row['title'] !== $row['email']): ?>
-                  <strong><?= e($row['title']) ?></strong><br>
+                  <strong title="<?= e($row['title']) ?>"><?= e($row['title']) ?></strong>
                 <?php endif; ?>
                 <a href="mailto:<?= e($row['email']) ?>"><?= e($row['email']) ?></a>
               </td>

@@ -13,6 +13,11 @@
   --muted:#8499ac;
   --accent:#4bb453;
   --accent-2:#17b0a6;
+  /* the primary-button fill: darkened from the raw accent gradient so white
+     text on it clears WCAG AA (5.8:1 and 4.7:1, vs 2.6:1 before). The accent
+     tokens above keep their bright values for borders, highlights and fills
+     that carry no text. */
+  --grad-accent:linear-gradient(100deg,#2a7330 0%,#0d8188 100%);
   --accent-deep:#0e8f96;
   --tint:#f6f9fc;
   --line:#e3ebf2;
@@ -199,7 +204,7 @@ ul{list-style:none;margin:0;padding:0}
 }
 /* flat: the colour carries the button, nothing floats above the page */
 .btn--primary{
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   color:#fff;
 }
 .btn--primary:hover{transform:translateY(-1px);filter:brightness(1.06)}
@@ -755,7 +760,9 @@ td strong{color:var(--ink);font-size:var(--t-sub)}
    in the drawer, and the cell carries it as a tooltip. */
 .table--fixed td strong,
 .table--fixed td a:not([class]),
-.table--fixed td .cell-stack span{
+.table--fixed td .cell-stack span,
+.data-table td a:not([class]),
+.data-table td .cell-stack span{
   display:-webkit-box;
   -webkit-box-orient:vertical;
   -webkit-line-clamp:2;
@@ -1413,7 +1420,7 @@ body.has-drawer{overflow:hidden}
   display:block;
   height:100%;
   border-radius:99px;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
 }
 
 .pay-list{display:grid;gap:10px;margin-bottom:18px}
@@ -1699,7 +1706,7 @@ body.has-modal{overflow:hidden}
   padding:9px 18px 9px 14px;
   border:0;
   border-radius:999px;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   font-family:inherit;
   font-size:var(--t-ui);
   font-weight:700;
@@ -1920,7 +1927,7 @@ body.has-modal{overflow:hidden}
   transition:transform .22s ease;
 }
 .toggle input:checked + .toggle__track{
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
 }
 .toggle input:checked + .toggle__track .toggle__knob{transform:translateX(20px)}
 .toggle input:focus-visible + .toggle__track{outline:2px solid var(--accent-2);outline-offset:3px}
@@ -1998,7 +2005,7 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
 /* where you are */
 .pager__page.is-here{
   border-color:transparent;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
   color:#fff;
 }
 /* the end of the run: still there, so the row does not jump about */
@@ -2763,7 +2770,7 @@ body.has-ask{overflow:hidden}
   display:block;
   height:100%;
   border-radius:999px;
-  background:linear-gradient(100deg,var(--accent) 0%,var(--accent-2) 100%);
+  background:var(--grad-accent);
 }
 
 .data-table--dealer-clients{min-width:min(900px,100%)}
@@ -2960,6 +2967,21 @@ input[name*="email"]{text-transform:lowercase}
 /* money never wraps — a figure broken over two lines is a figure misread */
 .td-amount,
 .data-table td strong{white-space:nowrap}
+
+/* The same `strong` also holds a name, and a name can arrive as 160 characters
+   of one unbroken word. Held to one line it ran straight across the date, the
+   status and the buttons, so it is cut off at the edge of its own cell instead.
+   A figure is never long enough to reach the ellipsis, so money is untouched. */
+.data-table td strong{
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* a name with its address under it is one pair, so the two sit a line apart
+   rather than a whole empty line apart */
+.data-table td strong + a{display:block;margin-top:3px}
 
 /* nor does a date: "1 Sep 2026, 23:35" is one thing, not two */
 .td-when{white-space:nowrap}

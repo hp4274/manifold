@@ -750,7 +750,21 @@ function referral_stats(int $applicationId): array
                 COALESCE(SUM(CASE WHEN referral_reward_status = 'sent'
                                   THEN referral_reward ELSE 0 END), 0) AS paid,
                 COALESCE(SUM(CASE WHEN referral_reward_status = 'pending'
-                                  THEN referral_reward ELSE 0 END), 0) AS pending
+                                  THEN referral_reward ELSE 0 END), 0) AS pending,
+                /* payable is the subset of pending the office can actually send:
+                   the referred client has paid their booking and was not turned
+                   down. This is what a payout claim may ask for. */
+                COALESCE(SUM(CASE WHEN referral_reward_status = 'pending'
+                                   AND booking_paid_at IS NOT NULL
+                                   AND status <> 'rejected'
+                                  THEN referral_reward ELSE 0 END), 0) AS payable,
+                /* and how many rows make up that amount, so the office is told
+                   '2 referrals due' rather than every booking-paid referral it
+                   has already settled */
+                COALESCE(SUM(CASE WHEN referral_reward_status = 'pending'
+                                   AND booking_paid_at IS NOT NULL
+                                   AND status <> 'rejected'
+                                  THEN 1 ELSE 0 END), 0) AS payable_count
            FROM applications
           WHERE referred_by_id = ?"
     );
@@ -762,7 +776,44 @@ function referral_stats(int $applicationId): array
         'completed' => (int) ($row['completed'] ?? 0),
         'paid'      => (float) ($row['paid'] ?? 0),
         'pending'   => (float) ($row['pending'] ?? 0),
+        'payable'   => (float) ($row['payable'] ?? 0),
+        'payable_count' => (int) ($row['payable_count'] ?? 0),
     ];
+}
+
+/**
+ * Whether a referrer may ask the office to pay them again.
+ *
+ * True if they have never asked, or the cooldown since their last ask has run
+ * out. Keyed off `referral_payout_requested_at` on their own application row.
+ */
+function referral_claim_ready(array $app): bool
+{
+    $last = $app['referral_payout_requested_at'] ?? null;
+
+    if (empty($last)) {
+        return true;
+    }
+
+    return (strtotime((string) $last) + REFERRAL_CLAIM_COOLDOWN_HOURS * 3600) <= time();
+}
+
+/** How long until the referral request button wakes up, said in plain words. */
+function referral_claim_wait_label(array $app): string
+{
+    $ready = strtotime((string) ($app['referral_payout_requested_at'] ?? 'now'))
+        + REFERRAL_CLAIM_COOLDOWN_HOURS * 3600;
+    $left  = max(0, $ready - time());
+
+    if ($left <= 0) {
+        return 'now';
+    }
+
+    /* round, not ceil: a few seconds of clock drift between PHP and MySQL would
+       otherwise turn a ten-hour wait into "about 11 hours" the instant it is set */
+    $hours = max(1, (int) round($left / 3600));
+
+    return $hours === 1 ? 'in about an hour' : 'in about ' . $hours . ' hours';
 }
 
 /**

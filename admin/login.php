@@ -58,6 +58,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($user && password_verify($password, $user['password_hash'])) {
             session_regenerate_id(true);
 
+            /* This browser is now the office. A portal session sharing it — a
+               partner or applicant who signed in on the same machine — is dropped
+               so the two identities never overlap in one PHP session. */
+            unset(
+                $_SESSION['applicant_email'],
+                $_SESSION['dealer_id'],
+                $_SESSION['distributor_id'],
+                $_SESSION['portal_roles']
+            );
+
             $_SESSION['admin'] = [
                 'id'    => (int) $user['id'],
                 'name'  => $user['name'],

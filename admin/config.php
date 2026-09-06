@@ -268,6 +268,14 @@ const DEALER_LIMIT_DEFAULT = 10;
 const DEFAULT_DIAL_CODE = '91';
 
 /**
+ * After a client asks the office to pay their referral reward, the request
+ * button rests this many hours before it can be pressed again — long enough
+ * that a keen referrer cannot send the same claim ten times in a minute, short
+ * enough that a genuine second nudge the next day still gets through.
+ */
+const REFERRAL_CLAIM_COOLDOWN_HOURS = 10;
+
+/**
  * How many digits a national number runs to, by dial code.
  *
  * Ten digits is India, not the world: a British mobile is ten but a landline

@@ -5,8 +5,9 @@ the order they happen in real life, so a run can go straight down the list and
 each step leaves the data the next one needs. Every mail address used is a
 YOPmail address.
 
-Legend: **A** admin (`/admin`), **C** client/applicant (`/portal`),
-**D** dealer (`/dealer`), **X** distributor (`/distributor`), **P** public site.
+Legend: **A** admin/office (`/admin`), **F** C&F paying agent (`/cf`),
+**C** client/applicant (`/portal`), **D** dealer (`/dealer`),
+**X** distributor (`/distributor`), **P** public site.
 
 ---
 
@@ -22,6 +23,8 @@ Legend: **A** admin (`/admin`), **C** client/applicant (`/portal`),
 | 0.6 | `/dealer/login.php` | 302 to `/portal/` — one sign-in for everybody now |
 | 0.7 | Fill the honeypot field `website` on any public form | silently accepted, nothing stored |
 | 0.8 | Submit the same public form many times in a row from one IP | throttled by `submit.php` |
+| 0.9 | Sign into a portal while an admin session is open in the same browser | the admin session is dropped — one PHP session never holds both an office and a portal identity (and admin sign-in drops any portal session the same way) |
+| 0.10 | A session id before vs after any sign-in | regenerated on every login (`session_regenerate_id(true)`) |
 
 ---
 
@@ -87,6 +90,9 @@ Legend: **A** admin (`/admin`), **C** client/applicant (`/portal`),
 | 2.5 | Blank email or password | "Enter both an email address and a password." |
 | 2.6 | A disabled admin account | refused |
 | 2.7 | Sign out, then press Back into a list | back at the sign-in page |
+| 2.8 | A C&F account (`role = 'cf'`) signs in at the same `/admin/login` | lands on `/cf/`, not the dashboard |
+| 2.9 | That C&F session opens `/admin/`, `/admin/settings`, `/admin/dealers`, `/admin/vouchers` | every one bounces back to `/cf/` — C&F reaches only the commission screens |
+| 2.10 | An office account opens `/cf/` | bounced to `/admin/` — the guard runs both ways |
 
 ---
 
@@ -96,11 +102,11 @@ Legend: **A** admin (`/admin`), **C** client/applicant (`/portal`),
 
 | # | Scenario | Expected |
 |---|---|---|
-| 3.1.1 | Create a distributor with name only | created — everything except the name can be added later |
-| 3.1.2 | Create with full details and a YOPmail address | row shows the address and a generated distributor code |
+| 3.1.1 | Create a distributor with only a name | refused, one required field at a time — "An address is required.", then "A PAN is required." The server does not take a half-filled partner |
+| 3.1.2 | Create with the full set (name, email, mobile, address, PAN, GST, bank, IFSC, UPI) and a YOPmail address | created; the row shows the address and a generated distributor code (e.g. `MX……`) |
 | 3.1.3 | Edit the distributor | changes stick; the code does not change |
 | 3.1.4 | Toggle the distributor off | code stops working on the apply forms |
-| 3.1.5 | Delete a distributor that has dealers under it | either refused or the dealers are detached — whichever the code does, it must not orphan a dealer silently |
+| 3.1.5 | Delete a distributor that still has a dealer under it | refused — "That distributor still holds N dealer(s). Delete those dealers first." Delete the dealers, then the distributor deletes cleanly |
 | 3.1.6 | Copy the share link from the row | link points at an apply page carrying `code=` |
 
 ### 3.2 Dealer
@@ -205,9 +211,9 @@ with `cancelled` and `rejected` sitting outside the line.
 | 7.2.3 | Approve a dealer's stock order (`approve`) | units move from the distributor's shelf to the dealer's |
 | 7.2.4 | Approve more than is on the shelf | refused |
 | 7.2.5 | Reject a dealer's stock order (`reject`) | order rejected, no units move |
-| 7.3.1 | `payouts.php` → `approve_dealer_voucher` | that dealer's voucher moves on toward R&F |
+| 7.3.1 | `payouts.php` → `approve_dealer_voucher` | that dealer's voucher moves on toward C&F |
 | 7.3.2 | `payouts.php` → `reject_dealer_voucher` | voucher sent back to the dealer, not destroyed |
-| 7.3.3 | `bundle` several approved vouchers plus own commission | one bundle at **with_rf** carrying the children |
+| 7.3.3 | `bundle` several approved vouchers plus own commission | one bundle at **with_rf** (shown as "With C&F") carrying the children |
 | 7.3.4 | Bundle with nothing approved | refused |
 | 7.4 | `profile.php` → `save_profile` | bank details stick |
 
@@ -226,31 +232,66 @@ with `cancelled` and `rejected` sitting outside the line.
 
 ---
 
-## 9. Admin: commission and vouchers (A)
+## 9. Commission and vouchers — office and C&F (A / F)
 
-Voucher states: `with_distributor → bundled → with_rf → with_admin → funded`.
+The money runs down a chain, and two desks take turns: the distributor bundles,
+**C&F** checks and forwards it, the **office** funds it, then **C&F** pays it.
+
+Voucher states: `with_distributor → bundled → with_rf → with_admin → funded → paid`,
+with the labels **With C&F** (`with_rf`), **With the office** (`with_admin`),
+**Funded — paying** (`funded`) and **Paid** along the way.
+
+### 9.1 C&F desk (F) — `/cf/`
 
 | # | Scenario | Expected |
 |---|---|---|
-| 9.1 | Commission page | bundles waiting, with what each is made of |
-| 9.2 | `fund` a bundle | one transfer recorded against the whole bundle, state **funded**, each child marked |
-| 9.3 | `reject` a bundle | the whole thing goes back and the dealers' vouchers return to their distributor |
-| 9.4 | Act on a bundle that no longer exists | "That bundle no longer exists." |
-| 9.5 | Change commission rates in `settings` (`commission`) | new sales use the new rate; already-earned commission is unchanged |
-| 9.6 | Follow one sale from client to funded voucher | every hop appears in the voucher event history |
+| 9.1.1 | C&F home | four tiles (to check / with the office / to pay / paid so far) and three panels; nothing it cannot act on |
+| 9.1.2 | `forward` a bundle sitting at **with_rf** | moves to **with_admin**, now waiting on the office |
+| 9.1.3 | `send_back` a bundle with a reason | the dealers' vouchers return to their distributor — "Sent back…" |
+| 9.1.4 | `pay` a **funded** bundle with a payment reference | a payout is recorded against every partner in it, state **paid**, the reference shows in History, and "Paid so far" rises by the bundle total |
+| 9.1.5 | Every C&F POST without the CSRF token | rejected |
+
+### 9.2 Office (A) — `admin/vouchers.php`
+
+| # | Scenario | Expected |
+|---|---|---|
+| 9.2.1 | Commission page | bundles waiting at **with_admin**, with what each is made of |
+| 9.2.2 | `fund` a bundle | one transfer recorded against the whole bundle, state **funded**, each child marked; C&F can now pay it |
+| 9.2.3 | `reject` a bundle | the whole thing goes back and the dealers' vouchers return to their distributor |
+| 9.2.4 | Act on a bundle that no longer exists | "That bundle no longer exists." |
+| 9.2.5 | Change commission rates in `settings` (`commission`) — office **or** C&F, same shared form | new sales use the new rate; already-earned commission is unchanged |
+| 9.2.6 | Follow one sale from client to paid voucher | every hop (raise → bundle → C&F forward → office fund → C&F pay) appears in the voucher event history |
 
 ---
 
-## 10. Admin: referrals (A)
+## 10. Referrals — office and client (A / C)
+
+### 10.1 Office (A) — `admin/referrals.php`
 
 | # | Scenario | Expected |
 |---|---|---|
-| 10.1 | Referrals page | one row per application that quoted a code, newest first |
-| 10.2 | Mark a reward `sent` | referrer emailed that the money is on its way |
-| 10.3 | Mark a reward `cancelled` | row closed, no mail promising money |
-| 10.4 | Put a reward back to `pending` | row reopens |
-| 10.5 | Change the reward amount in `settings` (`reward`) | new referrals use the new amount |
-| 10.6 | A referral whose application is later rejected | not payable |
+| 10.1.1 | Referrals page | one row per application that quoted a code, newest first |
+| 10.1.2 | Filter `?payout=payable` | only rewards the office can actually send — `pending`, the referred client's booking verified, not rejected |
+| 10.1.3 | Mark a reward `sent` | referrer emailed that the money is on its way |
+| 10.1.4 | Mark a reward `cancelled` | row closed, no mail promising money |
+| 10.1.5 | Put a reward back to `pending` | row reopens |
+| 10.1.6 | Change the reward amount in `settings` (`reward`) | new referrals use the new amount |
+| 10.1.7 | A referral whose application is later rejected | not payable |
+
+### 10.2 Client side (C) — the referral programme in `/portal/status`
+
+The referral card only appears once the client's **own** booking payment is
+verified and their application carries a `referral_code`.
+
+| # | Scenario | Expected |
+|---|---|---|
+| 10.2.1 | A client with a verified booking opens the portal | sees their referral code, two share links (stove / tuktuk, both codes carried), and a list of everyone who applied with their code |
+| 10.2.2 | Each referred client's row | its state: "Waiting for their booking payment" (not yet paid), "Pending payout" (paid, awaiting the office), "Sent" (paid to the referrer) or "Cancelled" |
+| 10.2.3 | A referred client has paid their booking and it is verified (`payable > 0`) | a "Request my ₹X payout" button appears, where **X is the payable sum only** — never rewards for referred clients who have not paid their own booking yet |
+| 10.2.4 | Press "Request payout" | office emailed a payout request; the page shows "Payout requested — the office is on it. You can ask again in about 10 hours"; the button is gone |
+| 10.2.5 | Press again within the cooldown (or double-click) | nothing extra happens — the request time is set once, only the first press emails the office (`REFERRAL_CLAIM_COOLDOWN_HOURS`, default 10) |
+| 10.2.6 | Ask again after the cooldown passes | the button returns |
+| 10.2.7 | A client whose only referred clients have **not** paid their booking | no payout button — there is nothing payable to ask for |
 
 ---
 
@@ -289,7 +330,7 @@ Voucher states: `with_distributor → bundled → with_rf → with_admin → fun
 | 12.14 | Settings: `admin_save` a new admin | can sign in |
 | 12.15 | Settings: `admin_toggle` | that admin can no longer sign in |
 | 12.16 | Settings: `admin_delete` | account gone; you cannot delete the last one / yourself |
-| 12.17 | Settings: `dealer_limit`, `rf`, `commission`, `reward`, `stock_prices` | each saves and takes effect where it is used |
+| 12.17 | Settings: `dealer_limit`, `commission`, `reward`, `stock_prices` | each saves and takes effect where it is used (commission and stock-price changes never rewrite what was already earned or ordered) |
 | 12.18 | `error-log.php` | recent PHP errors readable |
 | 12.19 | `file.php` for an upload | serves the file; a path outside the upload directory is refused |
 | 12.20 | Admin at 125% and 150% Windows scaling | layout scales, no horizontal overflow, no overlapping controls |
@@ -312,7 +353,8 @@ Each of these should be checked by opening the inbox, not by trusting the UI.
 | 13.8 | Payment reminder | the amount still due |
 | 13.9 | Portal sign-in requested | six-digit one-time code |
 | 13.10 | Referral reward marked sent | the referrer told |
-| 13.11 | Every mail | one-click unsubscribe header where it applies, and no broken links |
+| 13.11 | Client presses "Request payout" in the portal | the office is emailed a payout request naming the referrer, their code, the payable amount and the count, linking to `referrals.php?payout=payable` |
+| 13.12 | Every mail | one-click unsubscribe header where it applies, and no broken links |
 
 ---
 
@@ -334,14 +376,16 @@ Each of these should be checked by opening the inbox, not by trusting the UI.
 ## Suggested run order
 
 1. §1 public + forms (creates a contact, a newsletter address, nothing else)
-2. §2 admin sign-in, §3 partners (creates distributor and dealer, gives you the codes)
+2. §2 admin sign-in (office **and** C&F), §3 partners (creates distributor and dealer, gives you the codes)
 3. §1.8 application quoting the dealer code (creates the client)
-4. §4 the whole lifecycle, alternating admin and portal
-5. §6 and §7 dealer and distributor portals (stock and vouchers)
-6. §8–§10 admin stock, commission, referrals against what §6/§7 raised
-7. §11–§12 raffle, lists, exports, blog, settings
-8. §13 mail check for everything the run triggered
-9. §14 negatives last — they leave data in odd states
+4. §4 the whole lifecycle, alternating admin and portal, through to a verified booking
+5. §10.2 the client's referral programme once their booking is verified (code, referred list, request payout)
+6. §6 and §7 dealer and distributor portals (stock, then raise → approve → bundle vouchers)
+7. §9 the bundle's journey: §9.1 C&F forwards it, §9.2 office funds it, §9.1.4 C&F pays it
+8. §8, §10.1 admin stock and referral payouts against what §6/§7 raised
+9. §11–§12 raffle, lists, exports, blog, settings
+10. §13 mail check for everything the run triggered
+11. §14 negatives last — they leave data in odd states
 
 Everything the run creates is named `QA …` and addressed at `@yopmail.com`, so a
 cleanup is a search for `QA ` in each admin list.

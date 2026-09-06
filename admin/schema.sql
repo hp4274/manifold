@@ -164,6 +164,10 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `referral_reward_sent_at` datetime DEFAULT NULL,
   `referral_reward_note` varchar(255) DEFAULT NULL,
   `referral_reward_by` int(10) unsigned DEFAULT NULL,
+  -- when this referrer last asked the office to pay their pending referral
+  -- reward; the portal button then rests for REFERRAL_CLAIM_COOLDOWN_HOURS so
+  -- one person cannot pester the office with the same claim
+  `referral_payout_requested_at` datetime DEFAULT NULL,
   `full_name` varchar(160) NOT NULL,
   `date_of_birth` date DEFAULT NULL,
   `nationality` varchar(80) DEFAULT NULL,

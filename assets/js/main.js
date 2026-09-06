@@ -19,38 +19,18 @@
     });
   }
 
-  /* A closed <details> keeps its two links out of the tab order, so a keyboard
-     could never reach Apply Now > TukTuk without opening the summary first.
-     Focus opens it, leaving it closes it again. */
-  Array.prototype.forEach.call(nav.querySelectorAll('.nav-dropdown'), function (drop) {
-    drop.addEventListener('focusin', function () { drop.open = true; });
-    drop.addEventListener('focusout', function (e) {
-      /* relatedTarget, not activeElement: during focusout the document has not
-         handed focus over yet, so activeElement is still the body */
-      if (!drop.contains(e.relatedTarget)) drop.open = false;
-    });
-  });
+  /* Opening the dropdown on focus cost a tap: the touch focused the summary,
+     this set open, and the click that followed toggled it straight back shut.
+     A keyboard does not need it either — .nav-dropdown:focus-within already
+     reveals the menu in CSS, and Enter on the summary opens it natively. */
 
   if (toggle) {
-    /* The panel covers the page, and the only way out was the same hamburger,
-       now behind it. This is a close button inside the panel itself. */
-    var navClose = document.createElement('button');
-    navClose.type = 'button';
-    navClose.className = 'nav-close';
-    navClose.setAttribute('aria-label', 'Close menu');
-    navClose.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
-    navClose.addEventListener('click', function () {
-      closeMenu();
-      toggle.focus();
-    });
-    nav.insertBefore(navClose, nav.firstChild);
-
+    /* No close button inside the panel: the hamburger stays visible above it and
+       becomes the X, so injecting one here just put two crosses on the screen. */
     toggle.addEventListener('click', function () {
       var open = nav.classList.toggle('is-open');
       toggle.setAttribute('aria-expanded', String(open));
       toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
-
-      if (open) navClose.focus();
     });
 
     /* Escape closes it, the way every other panel on the site closes */
@@ -1283,14 +1263,6 @@
   if (offers.length) {
     var toClosing = daysUntil(2026, 8, 15);   /* the 15th itself still counts */
     var isOpen    = toClosing >= 0;
-    var dismissed = false;
-
-    try {
-      dismissed = window.localStorage.getItem('manifold.loanOffer.hidden') === '2026-09-15';
-    } catch (e) {
-      /* private browsing: treat it as never dismissed */
-    }
-
     Array.prototype.forEach.call(offers, function (offer) {
       var left   = offer.querySelector('[data-offer-left]');
       var open   = offer.querySelector('[data-offer-open]');
@@ -1307,28 +1279,7 @@
 
       if (open)   { open.hidden   = !isOpen; }
       if (closed) { closed.hidden = isOpen; }
-
-      /* the bar is a promotion, not a term: it goes once the offer closes */
-      if (offer.classList.contains('offer-flash')) {
-        offer.hidden = !isOpen || dismissed;
-      }
     });
-
-    var dismiss = document.querySelector('[data-offer-dismiss]');
-
-    if (dismiss) {
-      dismiss.addEventListener('click', function () {
-        var bar = dismiss.closest('.offer-flash');
-
-        if (bar) bar.hidden = true;
-
-        try {
-          window.localStorage.setItem('manifold.loanOffer.hidden', '2026-09-15');
-        } catch (e) {
-          /* nothing to remember it with — the bar is back next visit */
-        }
-      });
-    }
   }
 
   /* ---------- Consent gate ----------

@@ -871,6 +871,39 @@ function send_payment_received_admin(array $app): bool
     );
 }
 
+/**
+ * A client has asked, from their portal, to be paid the referral reward they
+ * have earned and not yet been sent. Nothing about the money changes — this
+ * only puts the request in front of the office so nobody has to keep checking
+ * the Referrals page for who is waiting.
+ */
+function send_referral_claim_admin(array $referrer, float $amount, int $count): bool
+{
+    $link = base_url() . '/admin/referrals.php?payout=payable';
+
+    $rows = [
+        'Referrer'      => (string) $referrer['full_name'],
+        'Their code'    => (string) $referrer['referral_code'],
+        'Email'         => (string) $referrer['email'],
+        'Phone'         => (string) ($referrer['mobile_number'] ?? ''),
+        'Owed to them'  => money($amount),
+        'Referrals due' => (string) $count,
+    ];
+
+    $inner = '<p style="margin:0 0 16px;">A referrer has asked to be paid the reward they have earned. '
+        . 'Their referred clients have had their booking payments verified, so the money is theirs to send.</p>'
+        . email_rows($rows)
+        . email_button($link, 'Open the pending referrals')
+        . '<p style="margin:0;font-size:14px;color:#8499ac;">Pay them the usual way, then mark each referral as sent on the Referrals page.</p>';
+
+    return send_to_office(
+        'Referral payout requested - ' . $referrer['referral_code'] . ' (' . money($amount) . ')',
+        'Referral payout requested',
+        $inner,
+        'referral_claim'
+    );
+}
+
 /** One-time sign-in code for the applicant portal. */
 function send_otp_email(string $to, string $code): bool
 {
