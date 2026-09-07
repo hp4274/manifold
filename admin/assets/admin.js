@@ -33,6 +33,16 @@
     /* rounded, so a resize by one pixel does not repaint the whole page */
     zoom = Math.round(zoom * 100) / 100;
 
+    /* A phone is not a small desktop window. The partner portals lay themselves
+       out for one below 768px (section 32 in admin.css), so scaling them down as
+       well drew a 44px target at 33px and an 11px label at 8px. Under the
+       breakpoint they are left at 1:1 and the responsive rules do the work —
+       which is what the note above always intended by "falls back". The office
+       and C&F keep the scaling: their tables are the dense ones it is for. */
+    if (window.innerWidth <= 767 && shell.classList.contains('shell--partner')) {
+      zoom = 1;
+    }
+
     if (shell.dataset.zoom === String(zoom)) return;
 
     shell.dataset.zoom = String(zoom);

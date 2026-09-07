@@ -37,7 +37,7 @@ $navItems  = [
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 
-<div class="shell">
+<div class="shell shell--partner">
 
   <aside class="sidebar">
     <a class="sidebar__brand" href="./" aria-label="Manifold Clean Energy distributor portal">

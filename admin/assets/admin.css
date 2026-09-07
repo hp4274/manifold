@@ -3176,3 +3176,317 @@ input[name*="email"]{text-transform:lowercase}
    varies enough between them to read as a different shade of grey per field */
 .field input::placeholder,
 .field textarea::placeholder{color:var(--muted);opacity:1}
+
+/* ---------- 32. the partner portals on a phone ----------
+   A dealer opens this on a phone to check three things: what is on the shelf,
+   what they have earned, what is still owed. Stacking the desktop rail put 330px
+   of navigation above all of it — measured on a 390x844 screen the first figure
+   did not appear until 553px down, so two thirds of the first look was a list of
+   links the dealer had already read.
+
+   On a phone the rail becomes the chrome it should be: one sticky bar carrying
+   the brand, the code and the way out, and one strip of tabs pushed sideways
+   underneath. That gives back about 250px, which is the whole first row of
+   figures, and every target in it clears 44px.
+
+   Scoped to .shell--partner on purpose. The office (admin) and the C&F desk keep
+   the stacked rail: twelve destinations do not fit a strip, and those two are
+   worked at a desk. */
+@media (max-width:767px){
+
+  .shell--partner .sidebar{
+    position:sticky;
+    top:0;
+    z-index:40;
+    width:100%;
+    height:auto;
+    overflow:visible;
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr) auto;
+    grid-template-areas:
+      "brand user out"
+      "tabs  tabs tabs";
+    /* stated, not derived: letting the rows size to content collapsed the
+       targets to 33px because the strip is a scroll container */
+    grid-template-rows:56px 48px;
+    align-items:center;
+    gap:0 10px;
+    padding:0 10px;
+  }
+
+  /* The two wrappers stop being boxes so their children sit straight on the grid
+     above. The markup keeps its grouping; only the drawing changes. */
+  .shell--partner .sidebar > div{display:contents}
+
+  /* the rail's sticky brand and foot are desk furniture — flattened here */
+  .shell--partner .sidebar__brand{
+    grid-area:brand;
+    position:static;
+    margin:0;
+    padding:6px 0;
+    background:none;
+  }
+  .shell--partner .sidebar__brand img{height:30px}
+
+  /* "Your business" is a caption for a column, not for a bar */
+  .shell--partner .sidebar__label{display:none}
+
+  /* Which code is signed in. One line, ellipsised, so a long trading name can
+     never push the way out off the end of the bar. */
+  .shell--partner .sidebar__user{
+    grid-area:user;
+    position:static;
+    min-width:0;
+    margin:0;
+    padding:0;
+    background:none;
+    text-align:right;
+    font-size:var(--t-micro);
+    letter-spacing:.08em;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  /* the name is already on every page below; the code is the identifier */
+  .shell--partner .sidebar__user strong{display:none}
+
+  /* View website and Sign out, as two square targets held apart from the tabs —
+     signing out should never be a mis-tap on the way to Payouts. */
+  .shell--partner .sidebar__foot{
+    position:static;
+    margin:0;
+    padding:0;
+    background:none;
+  }
+  .shell--partner .sidebar__foot > .sidebar__nav{
+    grid-area:out;
+    display:flex;
+    align-items:center;
+    height:100%;
+    gap:2px;
+    margin:0;
+  }
+  .shell--partner .sidebar__foot > .sidebar__nav a{
+    width:44px;
+    height:44px;
+    padding:0;
+    gap:0;
+    justify-content:center;
+    /* the words stay in the accessible name, they just have nowhere to be drawn */
+    font-size:0;
+  }
+  .shell--partner .sidebar__foot > .sidebar__nav a i{font-size:17px}
+
+  /* The tabs: one line pushed sideways rather than five rows scrolled past.
+     Momentum scrolling is contained so a sideways flick cannot walk the page. */
+  .shell--partner .sidebar > div:not(.sidebar__foot) > .sidebar__nav{
+    grid-area:tabs;
+    display:flex;
+    align-items:stretch;
+    height:100%;
+    gap:2px;
+    margin:0;
+    padding:0;
+    overflow-x:auto;
+    overflow-y:hidden;
+    overscroll-behavior-x:contain;
+    scroll-snap-type:x proximity;
+    scrollbar-width:none;
+    border-top:1px solid rgba(255,255,255,.09);
+  }
+  .shell--partner .sidebar > div:not(.sidebar__foot) > .sidebar__nav::-webkit-scrollbar{display:none}
+  .shell--partner .sidebar > div:not(.sidebar__foot) > .sidebar__nav a{
+    flex:0 0 auto;
+    min-height:44px;
+    padding:0 13px;
+    gap:8px;
+    border-radius:0;
+    white-space:nowrap;
+    scroll-snap-align:start;
+    /* the underline is drawn on every tab so the active one does not change the
+       height of the strip when it lights up */
+    border-bottom:2px solid transparent;
+  }
+  .shell--partner .sidebar > div:not(.sidebar__foot) > .sidebar__nav a.is-active{
+    background:none;
+    color:#fff;
+    border-bottom-color:var(--accent);
+  }
+
+  /* The figures are the reason the page was opened, so they stay two-up. The
+     shared rule asks for 210px a column, which stopped fitting the moment the
+     portals stopped being drawn at 75% — five full-width cards is a lot of
+     thumb for five numbers. */
+  .shell--partner .tiles{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+    margin-bottom:22px;
+  }
+  .shell--partner .tile{padding:14px 13px}
+  .shell--partner .tile strong{font-size:23px}
+
+  /* A five-column table inside 362px gave Product 43px, which stacked
+     "Kinetic Hydrogen Cooking Stove" one letter per line and ran the status pill
+     under the amount. Below the breakpoint each row becomes a small record
+     instead: the client leads it, and every other cell states its own label.
+
+     The records are cards on a tinted strip, not rows divided by a rule. A
+     hairline between two five-line records is not enough to say where one client
+     ends and the next begins — an edge the whole way round is, and it costs the
+     same gutter the rule was already taking. */
+  .shell--partner .data-table--stack,
+  .shell--partner .data-table--stack tbody,
+  .shell--partner .data-table--stack tr,
+  .shell--partner .data-table--stack td{display:block;width:auto}
+  .shell--partner .data-table--stack{min-width:0;table-layout:auto;background:var(--tint)}
+  .shell--partner .data-table--stack colgroup{display:none}
+  .shell--partner .data-table--stack tbody{display:grid;gap:12px;padding:12px}
+  /* tbody, not tr: the header row is still a row, and the card styling drew it
+     as an empty 30px card above every list */
+  .shell--partner .data-table--stack tbody tr{
+    padding:13px 14px 15px;
+    border:1px solid var(--line);
+    border-radius:var(--radius-sm);
+    background:var(--white);
+    box-shadow:0 1px 2px rgba(10,45,80,.05);
+  }
+  /* the desk's row hover would knock the card's own surface out from under it */
+  .shell--partner .data-table--stack tbody tr:hover{background:var(--white)}
+  /* display:block above outranks the browser's own [hidden] rule, and both the
+     pager and the column filter hide rows by setting it — without this the
+     filtered-out records stay on screen */
+  .shell--partner .data-table--stack tr[hidden]{display:none}
+
+  /* A column header is desk furniture, but on two of these tables it is also
+     the filter. The row goes; the controls in it become chips above the cards,
+     so filtering does not quietly disappear on a phone. */
+  .shell--partner .data-table--stack thead,
+  .shell--partner .data-table--stack thead tr{display:block}
+  .shell--partner .data-table--stack thead th{display:none}
+  .shell--partner .data-table--stack thead th.th-filter-cell{
+    display:block;
+    padding:12px 12px 0;
+    border:0;
+    background:none;
+  }
+  .shell--partner .data-table--stack thead th.th-filter-cell .th-filter{
+    justify-content:space-between;
+    min-height:44px;
+    padding:11px 14px;
+    border:1px solid var(--line);
+    border-radius:var(--radius-sm);
+    background:var(--white);
+  }
+
+  /* every other cell states its label on the left and its value on the right */
+  .shell--partner .data-table--stack td{padding:0;border:0;white-space:normal}
+  .shell--partner .data-table--stack td[data-label]{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:2px 16px;
+    padding:4px 0;
+  }
+  /* An amount with a note after it: on the desk the note sits below the figure
+     inside the column. In a record the two are side by side, and the note ends
+     up as three words a line beside the money, so it takes its own line. Only
+     after a <strong> — a cell whose whole value is a .cell-sub (a date, a
+     reference) is the value itself and stays on the label's line. */
+  .shell--partner .data-table--stack td[data-label] > strong + .cell-sub{
+    flex:1 0 100%;
+    text-align:right;
+  }
+  .shell--partner .data-table--stack td[data-label]::before,
+  .shell--partner .data-table--stack td[data-block]::before{
+    content:attr(data-label);
+    flex:0 0 auto;
+    color:var(--muted);
+    font-size:var(--t-micro);
+    font-weight:600;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+  }
+  /* the name is the record's heading, not one of its fields — and the rule under
+     it separates who this is from what they have done */
+  .shell--partner .data-table--stack td[data-lead]{
+    padding-bottom:11px;
+    margin-bottom:7px;
+    border-bottom:1px solid var(--line);
+  }
+  .shell--partner .data-table--stack td[data-lead]::before{content:none}
+
+  /* a cell holding controls rather than a value: its label sits above them and
+     the control gets the full width, because a button is a target here */
+  .shell--partner .data-table--stack td[data-block]{
+    margin-top:11px;
+    padding-top:12px;
+    border-top:1px solid var(--line);
+    /* .td-actions right-aligns for the desk, which put the label in the far
+       corner away from the control it names */
+    text-align:left;
+  }
+  .shell--partner .data-table--stack td[data-block]::before{
+    content:attr(data-block);
+    display:block;
+    margin-bottom:9px;
+  }
+  .shell--partner .data-table--stack td[data-block] .btn{
+    width:100%;
+    min-height:44px;
+    justify-content:center;
+  }
+  .shell--partner .data-table--stack td[data-block] .decide__reason .btn{width:auto}
+
+  /* nothing found is a sentence, not a record */
+  .shell--partner .data-table--stack .row-empty td{padding:24px 14px;text-align:center}
+
+  /* the value side is free to wrap now, and money keeps its own line */
+  .shell--partner .data-table--stack td.td-amount{align-items:center;text-align:left}
+  .shell--partner .data-table--stack td strong{
+    display:inline;
+    max-width:none;
+    overflow:visible;
+    white-space:normal;
+  }
+  /* the desk clamps a cell to two lines because the row below has to line up.
+     A card has no row below it to line up with. */
+  .shell--partner .data-table--stack td .cell-stack span,
+  .shell--partner .data-table--stack td a:not([class]){
+    display:block;
+    overflow:visible;
+    -webkit-line-clamp:none;
+  }
+  .shell--partner .data-table--stack td[data-label] .cell-stack{justify-items:end;text-align:right}
+  .shell--partner .data-table--stack td[data-lead] .cell-stack,
+  .shell--partner .data-table--stack td[data-block] .cell-stack{justify-items:start;text-align:left}
+  .shell--partner .data-table--stack .progress-bar{width:150px}
+
+  /* Every control on these pages is worked with a thumb, but they were all
+     sized for a mouse: Copy and Open came out 29px tall, the pager 34, the
+     primary buttons 37, the menu 38. Under the breakpoint nothing tappable is
+     left below 44 — measured on the live pages, not assumed. */
+  .shell--partner .main .btn,
+  .shell--partner .main .menu__item{min-height:44px}
+  .shell--partner .pager__page,
+  .shell--partner .pager__step{height:44px}
+  .shell--partner .pager__page{min-width:44px}
+  .shell--partner .order-line__qty input{height:44px}
+  /* the proof of payment is one tap inside a record, so it is sized like one */
+  .shell--partner .data-table--stack .link-arrow{
+    display:inline-flex;
+    align-items:center;
+    min-height:44px;
+  }
+  /* An eyebrow is a two-word caption on a desk, and some of these run to a full
+     sentence. Three lines of tracked-out capitals is not something anyone reads
+     on a phone, so under the breakpoint it goes back to sentence case. */
+  .shell--partner .panel__head .eyebrow{
+    text-transform:none;
+    letter-spacing:.01em;
+    font-size:var(--t-ui);
+  }
+
+  /* the bar is now short chrome, so the page starts closer to it */
+  .shell--partner .main{padding:16px 14px 40px}
+}

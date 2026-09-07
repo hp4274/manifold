@@ -130,7 +130,7 @@ require __DIR__ . '/partials/layout-top.php';
     </p>
   <?php else: ?>
     <div class="table-wrap">
-      <table class="data-table data-table--dealer-payouts">
+      <table class="data-table data-table--dealer-payouts data-table--stack">
         <colgroup>
           <col style="width:26%">
           <col style="width:22%">
@@ -146,9 +146,9 @@ require __DIR__ . '/partials/layout-top.php';
         <tbody>
           <?php foreach ($payouts as $payout): ?>
             <tr>
-              <td><?= e(format_datetime($payout['paid_at'])) ?></td>
-              <td class="td-amount"><strong><?= e(money((float) $payout['amount'])) ?></strong></td>
-              <td><?= e($payout['note'] ?: '—') ?></td>
+              <td data-label="Paid on"><?= e(format_datetime($payout['paid_at'])) ?></td>
+              <td class="td-amount" data-label="Amount"><strong><?= e(money((float) $payout['amount'])) ?></strong></td>
+              <td data-label="Reference"><?= e($payout['note'] ?: '—') ?></td>
             </tr>
           <?php endforeach; ?>
         </tbody>

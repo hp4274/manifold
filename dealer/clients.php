@@ -93,7 +93,7 @@ require __DIR__ . '/partials/layout-top.php';
     </p>
   <?php else: ?>
     <div class="table-wrap">
-      <table class="data-table data-table--dealer-clients">
+      <table class="data-table data-table--dealer-clients data-table--stack">
         <colgroup>
           <col style="width:26%">
           <col style="width:15%">
@@ -114,7 +114,7 @@ require __DIR__ . '/partials/layout-top.php';
           <?php foreach ($clients as $client): ?>
             <?php $progress = partner_progress($client['status']); ?>
             <tr>
-              <td>
+              <td data-lead>
                 <div class="cell-stack">
                   <strong><?= e($client['full_name']) ?></strong>
                   <span class="cell-sub"><?= e($client['email']) ?></span>
@@ -123,14 +123,14 @@ require __DIR__ . '/partials/layout-top.php';
                   <?php endif; ?>
                 </div>
               </td>
-              <td>
+              <td data-label="Booking">
                 <div class="cell-stack">
                   <span class="drawer__code"><?= e($client['reference_code']) ?></span>
                   <span class="cell-sub"><?= e(format_datetime($client['created_at'])) ?></span>
                 </div>
               </td>
-              <td><?= e(product_label($client['product'])) ?></td>
-              <td>
+              <td data-label="Product"><?= e(product_label($client['product'])) ?></td>
+              <td data-label="Progress">
                 <div class="cell-stack">
                   <span class="pill pill--<?= e($client['status']) ?>"><?= e($progress['label']) ?></span>
                   <?php if ($progress['step'] > 0): ?>
@@ -145,7 +145,7 @@ require __DIR__ . '/partials/layout-top.php';
                   <?php endif; ?>
                 </div>
               </td>
-              <td class="td-amount">
+              <td class="td-amount" data-label="Commission">
                 <strong><?= e(money($client['dealer_commission'])) ?></strong>
                 <span class="cell-sub">
                   <?= $client['earned'] ? 'earned' : 'once the sale completes' ?>

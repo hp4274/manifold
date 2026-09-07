@@ -32,7 +32,7 @@ $vcIsDist = ($voucherKind ?? 'dealer') === 'distributor';
     </div>
 
     <div class="table-wrap">
-      <table class="data-table">
+      <table class="data-table data-table--stack">
         <colgroup>
           <col style="width:26%">
           <col style="width:16%">
@@ -58,18 +58,18 @@ $vcIsDist = ($voucherKind ?? 'dealer') === 'distributor';
 
           <?php foreach (array_merge($dealerAsks, $approvedAsks) as $vcAsk): ?>
             <tr>
-              <td>
+              <td data-lead>
                 <div class="cell-stack">
                   <strong><?= e($vcAsk['party_name']) ?></strong>
                   <span class="cell-sub"><?= e($vcAsk['party_code']) ?></span>
                 </div>
               </td>
-              <td class="td-amount stock-figure">
+              <td class="td-amount stock-figure" data-label="Claimed">
                 <strong><?= e(money((float) $vcAsk['amount'])) ?></strong>
               </td>
-              <td class="td-amount"><?= count(voucher_lines((int) $vcAsk['id'])) ?></td>
-              <td><span class="cell-sub"><?= e(format_datetime($vcAsk['raised_at'])) ?></span></td>
-              <td>
+              <td class="td-amount" data-label="Sales"><?= count(voucher_lines((int) $vcAsk['id'])) ?></td>
+              <td data-label="Raised"><span class="cell-sub"><?= e(format_datetime($vcAsk['raised_at'])) ?></span></td>
+              <td data-block="Decide">
                 <?php if ($vcAsk['status'] === 'with_distributor'): ?>
                   <div class="decide">
                     <form method="post">
@@ -160,7 +160,7 @@ $vcIsDist = ($voucherKind ?? 'dealer') === 'distributor';
 
       <?php if ($claimable): ?>
         <div class="table-wrap">
-          <table class="data-table" data-paged="10">
+          <table class="data-table data-table--stack" data-paged="10">
             <colgroup>
               <col style="width:24%">
               <col style="width:30%">
@@ -178,10 +178,10 @@ $vcIsDist = ($voucherKind ?? 'dealer') === 'distributor';
             <tbody>
               <?php foreach ($claimable as $vcRow): ?>
                 <tr>
-                  <td><span class="drawer__code"><?= e($vcRow['reference_code']) ?></span></td>
-                  <td><?= e($vcRow['full_name']) ?></td>
-                  <td><span class="cell-sub"><?= e(format_date($vcRow['completed_at'])) ?></span></td>
-                  <td class="td-amount stock-figure">
+                  <td data-label="Booking"><span class="drawer__code"><?= e($vcRow['reference_code']) ?></span></td>
+                  <td data-label="Client"><?= e($vcRow['full_name']) ?></td>
+                  <td data-label="Completed"><span class="cell-sub"><?= e(format_date($vcRow['completed_at'])) ?></span></td>
+                  <td class="td-amount stock-figure" data-label="Your share">
                     <strong><?= e(money((float) $vcRow['amount'])) ?></strong>
                   </td>
                 </tr>
@@ -212,7 +212,7 @@ $vcIsDist = ($voucherKind ?? 'dealer') === 'distributor';
   </div>
 
   <div class="table-wrap">
-    <table class="data-table" data-paged="10">
+    <table class="data-table data-table--stack" data-paged="10">
       <colgroup>
         <col style="width:10%">
         <col style="width:20%">
@@ -238,17 +238,17 @@ $vcIsDist = ($voucherKind ?? 'dealer') === 'distributor';
 
         <?php foreach ($myVouchers as $vcMine): ?>
           <tr>
-            <td><?= (int) $vcMine['id'] ?></td>
-            <td class="td-amount stock-figure">
+            <td data-label="Voucher"><?= (int) $vcMine['id'] ?></td>
+            <td class="td-amount stock-figure" data-label="Amount">
               <strong><?= e(money((float) $vcMine['amount'])) ?></strong>
             </td>
-            <td><span class="cell-sub"><?= e(format_datetime($vcMine['raised_at'])) ?></span></td>
-            <td>
+            <td data-label="Raised"><span class="cell-sub"><?= e(format_datetime($vcMine['raised_at'])) ?></span></td>
+            <td data-label="Where it is">
               <span class="pill pill--<?= e(voucher_status_pill((string) $vcMine['status'])) ?>">
                 <?= e(voucher_status_label((string) $vcMine['status'])) ?>
               </span>
             </td>
-            <td>
+            <td data-label="Reference">
               <span class="cell-sub">
                 <?= e($vcMine['payment_reference'] ?: ($vcMine['reject_reason'] ?: '—')) ?>
               </span>

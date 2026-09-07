@@ -9,7 +9,7 @@
 declare(strict_types=1);
 ?>
 <div class="table-wrap">
-  <table class="data-table" data-paged="10">
+  <table class="data-table data-table--stack" data-paged="10">
     <colgroup>
       <col style="width:22%">
       <col style="width:30%">
@@ -36,8 +36,8 @@ declare(strict_types=1);
       <?php foreach ($ledgerRows as $ledgerRow): ?>
         <?php $ledgerIn = (int) $ledgerRow['units'] >= 0; ?>
         <tr>
-          <td><?= e(format_datetime($ledgerRow['created_at'])) ?></td>
-          <td>
+          <td data-label="When"><?= e(format_datetime($ledgerRow['created_at'])) ?></td>
+          <td data-label="What">
             <div class="cell-stack">
               <span><?= e(stock_reason_label((string) $ledgerRow['reason'])) ?></span>
               <?php if (!empty($ledgerRow['note'])): ?>
@@ -45,15 +45,15 @@ declare(strict_types=1);
               <?php endif; ?>
             </div>
           </td>
-          <td><?= e(product_label((string) $ledgerRow['product'])) ?></td>
+          <td data-label="Product"><?= e(product_label((string) $ledgerRow['product'])) ?></td>
           <?php /* the sign carries the meaning, not the colour: a movement has
                    to read as in or out in greyscale too */ ?>
-          <td class="td-amount">
+          <td class="td-amount" data-label="Units">
             <strong class="stock-move stock-move--<?= $ledgerIn ? 'in' : 'out' ?>">
               <?= $ledgerIn ? '+' : '−' ?><?= abs((int) $ledgerRow['units']) ?>
             </strong>
           </td>
-          <td class="td-amount">
+          <td class="td-amount" data-label="Value">
             <span class="stock-move stock-move--<?= $ledgerIn ? 'in' : 'out' ?>">
               <?= $ledgerIn ? '+' : '−' ?><?= e(money(abs((float) $ledgerRow['value']))) ?>
             </span>

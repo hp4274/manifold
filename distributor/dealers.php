@@ -100,7 +100,7 @@ require __DIR__ . '/partials/layout-top.php';
     </p>
   <?php else: ?>
     <div class="table-wrap">
-      <table class="data-table data-table--dealer-clients is-filterable">
+      <table class="data-table data-table--dealer-clients data-table--stack is-filterable">
         <colgroup>
           <col style="width:23%">
           <col style="width:12%">
@@ -141,7 +141,7 @@ require __DIR__ . '/partials/layout-top.php';
             <tr data-state="<?= $dealer['is_active'] ? 'active' : 'stopped' ?>"
                 data-state-label="<?= $dealer['is_active'] ? 'Selling' : 'Stopped' ?>"
                 data-override="<?= e(number_format($dealer['override'], 2, '.', '')) ?>">
-              <td>
+              <td data-lead>
                 <div class="cell-stack">
                   <strong><?= e($dealer['full_name']) ?></strong>
                   <?php if ($dealer['company'] !== ''): ?>
@@ -155,7 +155,7 @@ require __DIR__ . '/partials/layout-top.php';
                   </span>
                 </div>
               </td>
-              <td>
+              <td data-label="Code">
                 <?php /* a dealer still waiting has no code — the office issues one
                          when it approves them */ ?>
                 <?php if ($dealer['dealer_code']): ?>
@@ -164,8 +164,8 @@ require __DIR__ . '/partials/layout-top.php';
                   <span class="cell-sub">on approval</span>
                 <?php endif; ?>
               </td>
-              <td><?= e($dealer['city'] ?: '—') ?></td>
-              <td>
+              <td data-label="Where"><?= e($dealer['city'] ?: '—') ?></td>
+              <td data-label="State">
                 <?php if ($dealer['approval_status'] !== 'approved'): ?>
                   <?php /* their code books nothing until the office decides */ ?>
                   <span class="pill pill--<?= $dealer['approval_status'] === 'pending'
@@ -178,11 +178,11 @@ require __DIR__ . '/partials/layout-top.php';
                   </span>
                 <?php endif; ?>
               </td>
-              <td class="td-amount">
+              <td class="td-amount" data-label="Sales">
                 <strong><?= (int) $dealer['confirmed'] ?></strong>
                 <span class="cell-sub">of <?= (int) $dealer['sales'] ?> applied</span>
               </td>
-              <td class="td-amount">
+              <td class="td-amount" data-label="Earned you">
                 <strong><?= e(money($dealer['override'])) ?></strong>
                 <?php if ($dealer['pipeline'] > 0): ?>
                   <?php /* what is still riding on their sales in progress — not owed
@@ -192,7 +192,7 @@ require __DIR__ . '/partials/layout-top.php';
                   <span class="cell-sub">nothing yet</span>
                 <?php endif; ?>
               </td>
-              <td class="td-actions">
+              <td class="td-actions" data-block="Manage">
                 <?php /* they signed this dealer up, so a wrong pin code or a
                          changed account is theirs to fix */ ?>
                 <a class="btn btn--ghost btn--sm" href="edit-dealer?id=<?= (int) $dealer['id'] ?>">

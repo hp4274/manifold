@@ -12,7 +12,7 @@ require_once __DIR__ . '/../admin/emails.php';
 /** How long a code stays valid, and how many guesses it allows. */
 const OTP_TTL_MINUTES = 10;
 const OTP_MAX_ATTEMPTS = 5;
-const OTP_MAX_PER_HOUR = 6;
+const OTP_MAX_PER_HOUR = 50;
 
 /**
  * Every role the person at this browser is currently signed in as.

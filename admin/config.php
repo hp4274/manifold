@@ -176,8 +176,8 @@ if (!defined('PUBLIC_BASE_URL')) { define('PUBLIC_BASE_URL', ''); }
  * one reader rendered it as coloured static. The company name beside it is live
  * text in the template, not part of the image.
  */
-if (!defined('SITE_PUBLIC_URL')) { define('SITE_PUBLIC_URL', ''); }
-if (!defined('EMAIL_LOGO_URL'))  { define('EMAIL_LOGO_URL',  ''); }
+if (!defined('SITE_PUBLIC_URL')) { define('SITE_PUBLIC_URL', 'https://manifoldcleanenergy.co.in'); }
+if (!defined('EMAIL_LOGO_URL'))  { define('EMAIL_LOGO_URL',  'https://manifoldcleanenergy.co.in/assets/images/favicon.png'); }
 
 /**
  * Payment QR code, relative to the site root. The first of these that exists

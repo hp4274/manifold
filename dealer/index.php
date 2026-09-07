@@ -118,7 +118,7 @@ require __DIR__ . '/partials/layout-top.php';
     <p class="empty">Nobody has applied through your link yet. Share it and they will appear here.</p>
   <?php else: ?>
     <div class="table-wrap">
-      <table class="data-table data-table--dealer-clients">
+      <table class="data-table data-table--dealer-clients data-table--stack">
         <colgroup>
           <col style="width:30%">
           <col style="width:18%">
@@ -139,18 +139,18 @@ require __DIR__ . '/partials/layout-top.php';
           <?php foreach ($recent as $client): ?>
             <?php $progress = partner_progress($client['status']); ?>
             <tr>
-              <td>
+              <td data-lead>
                 <div class="cell-stack">
                   <strong><?= e($client['full_name']) ?></strong>
                   <span class="cell-sub"><?= e(format_datetime($client['created_at'])) ?></span>
                 </div>
               </td>
-              <td><span class="drawer__code"><?= e($client['reference_code']) ?></span></td>
-              <td><?= e(product_label($client['product'])) ?></td>
-              <td>
+              <td data-label="Booking"><span class="drawer__code"><?= e($client['reference_code']) ?></span></td>
+              <td data-label="Product"><?= e(product_label($client['product'])) ?></td>
+              <td data-label="Progress">
                 <span class="pill pill--<?= e($client['status']) ?>"><?= e($progress['label']) ?></span>
               </td>
-              <td class="td-amount">
+              <td class="td-amount" data-label="Commission">
                 <strong><?= e(money($client['dealer_commission'])) ?></strong>
                 <?php if (!$client['earned']): ?>
                   <span class="cell-sub">not earned yet</span>

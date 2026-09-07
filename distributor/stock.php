@@ -160,7 +160,7 @@ require __DIR__ . '/partials/layout-top.php';
   </div>
 
   <div class="table-wrap">
-    <table class="data-table">
+    <table class="data-table data-table--stack">
       <colgroup>
         <col style="width:18%">
         <col style="width:18%">
@@ -188,13 +188,13 @@ require __DIR__ . '/partials/layout-top.php';
 
         <?php foreach ($dealerAsks as $ask): ?>
           <tr>
-            <td>
+            <td data-lead>
               <div class="cell-stack">
                 <strong><?= e($ask['buyer_name']) ?></strong>
                 <span class="cell-sub"><?= e($ask['buyer_code']) ?></span>
               </div>
             </td>
-            <td>
+            <td data-label="Ordered">
               <div class="cell-stack">
                 <?php foreach (stock_order_items((int) $ask['id']) as $askItem): ?>
                   <span>
@@ -205,11 +205,11 @@ require __DIR__ . '/partials/layout-top.php';
                 <span class="cell-sub"><?= e(format_datetime($ask['requested_at'])) ?></span>
               </div>
             </td>
-            <td class="td-amount stock-figure">
+            <td class="td-amount stock-figure" data-label="Units">
               <strong><?= stock_order_units((int) $ask['id']) ?></strong>
             </td>
-            <td class="td-amount"><strong><?= e(money((float) $ask['total_amount'])) ?></strong></td>
-            <td>
+            <td class="td-amount" data-label="They paid"><strong><?= e(money((float) $ask['total_amount'])) ?></strong></td>
+            <td data-label="Proof">
               <?php /* the proof is theirs to show and yours to check — it opens
                        over the page rather than in a tab of its own */ ?>
               <?php if (!empty($ask['proof_path'])): ?>
@@ -226,7 +226,7 @@ require __DIR__ . '/partials/layout-top.php';
                 <span class="cell-sub">none uploaded</span>
               <?php endif; ?>
             </td>
-            <td>
+            <td data-block="Decide">
               <?php if ($ask['status'] === 'pending'): ?>
                 <div class="decide">
                   <form method="post">

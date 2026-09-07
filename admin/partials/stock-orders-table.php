@@ -11,7 +11,7 @@
 declare(strict_types=1);
 ?>
 <div class="table-wrap">
-  <table class="data-table">
+  <table class="data-table data-table--stack">
     <colgroup>
       <col style="width:20%">
       <col style="width:28%">
@@ -37,8 +37,8 @@ declare(strict_types=1);
 
       <?php foreach ($ownOrders as $ownOrder): ?>
         <tr>
-          <td><?= e(format_datetime($ownOrder['requested_at'])) ?></td>
-          <td>
+          <td data-label="Ordered"><?= e(format_datetime($ownOrder['requested_at'])) ?></td>
+          <td data-label="Product">
             <div class="cell-stack">
               <?php foreach (stock_order_items((int) $ownOrder['id']) as $ownItem): ?>
                 <span>
@@ -48,13 +48,13 @@ declare(strict_types=1);
               <?php endforeach; ?>
             </div>
           </td>
-          <td class="td-amount stock-figure">
+          <td class="td-amount stock-figure" data-label="Units">
             <strong><?= stock_order_units((int) $ownOrder['id']) ?></strong>
           </td>
-          <td class="td-amount">
+          <td class="td-amount" data-label="Paid">
             <strong><?= e(money((float) $ownOrder['total_amount'])) ?></strong>
           </td>
-          <td>
+          <td data-label="Status">
             <div class="cell-stack">
               <span class="pill pill--<?= $ownOrder['status'] === 'approved'
                   ? 'accepted' : ($ownOrder['status'] === 'pending' ? 'booking_review' : 'rejected') ?>">

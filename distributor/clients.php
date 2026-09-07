@@ -96,7 +96,7 @@ require __DIR__ . '/partials/layout-top.php';
     </p>
   <?php else: ?>
     <div class="table-wrap">
-      <table class="data-table data-table--dealer-clients is-filterable">
+      <table class="data-table data-table--dealer-clients data-table--stack is-filterable">
         <colgroup>
           <col style="width:24%">
           <col style="width:14%">
@@ -126,7 +126,7 @@ require __DIR__ . '/partials/layout-top.php';
             <?php $progress = partner_progress($client['status']); ?>
             <tr data-progress="<?= e($client['status']) ?>"
                 data-progress-label="<?= e(status_short($client['status'])) ?>">
-              <td>
+              <td data-lead>
                 <div class="cell-stack">
                   <strong><?= e($client['full_name']) ?></strong>
                   <span class="cell-sub"><?= e($client['email']) ?></span>
@@ -135,13 +135,13 @@ require __DIR__ . '/partials/layout-top.php';
                   <?php endif; ?>
                 </div>
               </td>
-              <td>
+              <td data-label="Booking">
                 <div class="cell-stack">
                   <span class="drawer__code"><?= e($client['reference_code']) ?></span>
                   <span class="cell-sub"><?= e(format_datetime($client['created_at'])) ?></span>
                 </div>
               </td>
-              <td>
+              <td data-label="Sold by">
                 <?php if ($client['dealer_code'] !== ''): ?>
                   <div class="cell-stack">
                     <span><?= e($client['dealer_name']) ?></span>
@@ -151,7 +151,7 @@ require __DIR__ . '/partials/layout-top.php';
                   <span class="cell-sub">You · direct</span>
                 <?php endif; ?>
               </td>
-              <td>
+              <td data-label="Progress">
                 <div class="cell-stack">
                   <span class="pill pill--<?= e($client['status']) ?>"><?= e($progress['label']) ?></span>
                   <?php if ($progress['step'] > 0): ?>
@@ -166,7 +166,7 @@ require __DIR__ . '/partials/layout-top.php';
                   <?php endif; ?>
                 </div>
               </td>
-              <td class="td-amount">
+              <td class="td-amount" data-label="Your share">
                 <strong><?= e(money($client['distributor_commission'])) ?></strong>
                 <span class="cell-sub">
                   <?= $client['earned'] ? 'earned' : 'once the sale completes' ?>

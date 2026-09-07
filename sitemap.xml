@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Public pages only, and every URL is the extensionless form that each page's own
+  <link rel="canonical"> points at — .htaccess 301s /page.html to /page, so listing
+  the .html form would hand crawlers a redirect instead of the page.
+
+  Left out on purpose:
+    coming-soon  — carries <meta name="robots" content="noindex">
+    admin, portal, dealer, distributor, cf — behind a sign-in, nothing to index
+
+  changefreq and priority are omitted: Google ignores both, and they are one more
+  thing to keep honest for no gain.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <url>
+    <loc>https://manifoldcleanenergy.co.in/</loc>
+    <lastmod>2026-09-06</lastmod>
+  </url>
+
+  <url>
+    <loc>https://manifoldcleanenergy.co.in/stove</loc>
+    <lastmod>2026-09-06</lastmod>
+  </url>
+
+  <url>
+    <loc>https://manifoldcleanenergy.co.in/tuktuk</loc>
+    <lastmod>2026-09-06</lastmod>
+  </url>
+
+  <url>
+    <loc>https://manifoldcleanenergy.co.in/technology</loc>
+    <lastmod>2026-09-06</lastmod>
+  </url>
+
+  <url>
+    <loc>https://manifoldcleanenergy.co.in/apply-stove</loc>
+    <lastmod>2026-09-06</lastmod>
+  </url>
+
+  <url>
+    <loc>https://manifoldcleanenergy.co.in/apply-tuktuk</loc>
+    <lastmod>2026-09-06</lastmod>
+  </url>
+
+  <url>
+    <loc>https://manifoldcleanenergy.co.in/contact</loc>
+    <lastmod>2026-09-06</lastmod>
+  </url>
+
+  <url>
+    <loc>https://manifoldcleanenergy.co.in/blog</loc>
+    <lastmod>2026-09-06</lastmod>
+  </url>
+
+  <url>
+    <loc>https://manifoldcleanenergy.co.in/privacy-policy</loc>
+    <lastmod>2026-09-06</lastmod>
+  </url>
+
+</urlset>
