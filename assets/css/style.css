@@ -5562,6 +5562,7 @@ body{overflow-x:hidden}
   color:var(--body);
 }
 .portal-referral__stat strong{color:var(--ink)}
+.portal-referral__stat--muted{margin-top:8px;color:var(--muted)}
 
 /* --- request the reward payout, like a dealer raising a voucher --- */
 .portal-referral__claim{

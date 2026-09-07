@@ -3490,3 +3490,64 @@ input[name*="email"]{text-transform:lowercase}
   /* the bar is now short chrome, so the page starts closer to it */
   .shell--partner .main{padding:16px 14px 40px}
 }
+
+/* Premium Search Box Styles */
+.admin-search-box {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.admin-search-box svg {
+  position: absolute;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  pointer-events: none;
+  transition: color 0.2s ease;
+}
+
+.admin-search-input {
+  width: 260px;
+  padding: 8px 12px 8px 36px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--t-ui);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(10,45,80,.05);
+  transition: all 0.2s ease;
+}
+
+.admin-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(75,180,83,.15);
+}
+
+.admin-search-input:focus + svg,
+.admin-search-box:focus-within svg {
+  color: var(--accent);
+}
+
+.admin-search-input::placeholder {
+  color: var(--muted);
+}
+
+.admin-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238499ac' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><line x1='18' y1='6' x2='6' y2='18'></line><line x1='6' y1='6' x2='18' y2='18'></line></svg>");
+  background-size: 14px 14px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.admin-search-input::-webkit-search-cancel-button:hover {
+  opacity: 1;
+}

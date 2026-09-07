@@ -366,6 +366,22 @@ try {
             $columns['referral_reward_note'] = 'Own code — a customer cannot refer themselves.';
         }
 
+        /* A code that books no reward used to be swallowed whole: nothing on the
+           screen, nothing in the row, and the applicant found out months later
+           that their friend was never credited. Say it on both sides — a line
+           back to whoever typed it, and a note the office can read. */
+        $referralNote = '';
+
+        if ($quoted !== '' && !$referrer) {
+            $referralNote = ' The referral code ' . $quoted . ' did not match a customer whose own '
+                . 'booking payment is verified, so no reward was recorded against it.';
+            $columns['admin_note'] = trim(($columns['admin_note'] ?? '')
+                . ' Referral code ' . $quoted . ' was quoted and matched no eligible referrer.');
+        } elseif ($selfReferred) {
+            $referralNote = ' That is your own referral code, and a customer cannot refer themselves, '
+                . 'so no reward was recorded against it.';
+        }
+
         /* the price list is frozen onto the row, so a later change to the
            published price never rewrites what this application owes */
         $plan = payment_plan($form);
@@ -490,7 +506,7 @@ try {
         respond(true, 'Application received — your booking number is ' . $ref . '. '
             . 'Our team reviews it first, and we email you the payment details once it is approved. '
             . 'Nothing to pay yet.'
-            . ($referrer && !$selfReferred ? ' Your referral code has been recorded.' : ''));
+            . ($referrer && !$selfReferred ? ' Your referral code has been recorded.' : $referralNote));
     }
 
     if ($form === 'contact') {

@@ -19,6 +19,8 @@ if ($status !== '' && !in_array($status, statuses_for($type), true)) {
     $status = '';
 }
 
+$q = trim((string) ($_GET['q'] ?? ''));
+
 $where  = [];
 $params = [];
 
@@ -30,6 +32,12 @@ if ($config['table'] === 'applications') {
 if ($status !== '') {
     $where[]  = 'status = ?';
     $params[] = $status;
+}
+
+if ($q !== '') {
+    $where[]  = '(full_name LIKE ? OR email LIKE ? OR mobile LIKE ? OR partner_code LIKE ? OR referral_code LIKE ?)';
+    $like = '%' . $q . '%';
+    array_push($params, $like, $like, $like, $like, $like);
 }
 
 $clause = $where ? ' WHERE ' . implode(' AND ', $where) : '';
@@ -70,7 +78,9 @@ $deletedNote = (string) ($flash['deleted_note'] ?? '');
 $mailFlash = (string) ($flash['mail'] ?? '');
 $payFlash  = (string) ($flash['pay'] ?? '');
 /* without the page, saving a row on page 3 would come back to page 1 */
-$listUrl   = 'list?type=' . urlencode($type) . ($status !== '' ? '&status=' . urlencode($status) : '');
+$listUrl   = 'list?type=' . urlencode($type) 
+    . ($status !== '' ? '&status=' . urlencode($status) : '')
+    . ($q !== '' ? '&q=' . urlencode($q) : '');
 $returnUrl = $listUrl . ($page > 1 ? '&page=' . $page : '');
 
 [$attentionKeys, $attentionLabel] = attention_status($type);
@@ -86,9 +96,10 @@ $statusKeys = array_merge([''], statuses_for($type));
 $statusNext = $statusKeys[(array_search($status, $statusKeys, true) + 1) % count($statusKeys)];
 
 /** Where a header click goes: this list, one step along the status column. */
-$stepUrl = static function (string $toType, string $toStatus): string {
+$stepUrl = static function (string $toType, string $toStatus) use ($q): string {
     return 'list?type=' . urlencode($toType)
-        . ($toStatus === '' ? '' : '&status=' . urlencode($toStatus));
+        . ($toStatus === '' ? '' : '&status=' . urlencode($toStatus))
+        . ($q === '' ? '' : '&q=' . urlencode($q));
 };
 
 $attentionCount = array_sum(array_map(
@@ -120,24 +131,37 @@ require __DIR__ . '/partials/layout-top.php';
 <div class="panel">
   <div class="panel__head">
     <h2><?= $status === '' ? 'All submissions' : e(status_label($status)) ?></h2>
-    <span class="eyebrow">
-      <?php if ($total === 0): ?>
-        none
-      <?php elseif ($pages > 1): ?>
-        <?= $offset + 1 ?>–<?= $offset + count($rows) ?> of <?= (int) $total ?> · page <?= $page ?> of <?= $pages ?>
-      <?php else: ?>
-        <?= (int) $total ?> shown
-      <?php endif; ?>
-    </span>
+    <?php if ($type !== 'stove' && $type !== 'tuktuk'): ?>
+      <span class="eyebrow">
+        <?php if ($total === 0): ?>
+          none
+        <?php elseif ($pages > 1): ?>
+          <?= $offset + 1 ?>–<?= $offset + count($rows) ?> of <?= (int) $total ?> · page <?= $page ?> of <?= $pages ?>
+        <?php else: ?>
+          <?= (int) $total ?> shown
+        <?php endif; ?>
+      </span>
+    <?php endif; ?>
+    <div class="panel__head-tools">
+      <form method="get" action="list" class="admin-search-box" data-live-form>
+        <input type="hidden" name="type" value="<?= e($type) ?>">
+        <?php if ($status !== ''): ?>
+          <input type="hidden" name="status" value="<?= e($status) ?>">
+        <?php endif; ?>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="search" name="q" class="admin-search-input" value="<?= e($q) ?>" placeholder="Search by name, email, phone or code...">
+      </form>
+    </div>
   </div>
 
-  <?php /* The table is drawn whether or not it has rows: a filter that matches
-           nothing still has to show which columns it filtered, and the header
-           carries the status filter itself — hiding it left no way back. */ ?>
     <div class="table-wrap">
-      <?php /* Fixed widths, so switching a filter cannot move the columns: the
-               rows behind one status are shorter or longer than another's, and
-               an empty result has no cells to size at all. */ ?>
+
+  <?php /* Fixed widths, so switching a filter cannot move the columns: the
+           rows behind one status are shorter or longer than another's, and
+           an empty result has no cells to size at all. */ ?>
       <table class="table--fixed">
         <?php
           $hasSource = $type !== 'newsletter' && $type !== 'contact';
@@ -220,7 +244,7 @@ require __DIR__ . '/partials/layout-top.php';
                   <a href="mailto:<?= e($row['email']) ?>"><?= e($row['email']) ?></a>
                   <?php $phone = $row['mobile_number'] ?? $row['phone'] ?? ''; ?>
                   <?php if ($phone !== ''): ?>
-                    <br><a href="tel:<?= e(preg_replace('/\s+/', '', $phone)) ?>"><?= e($phone) ?></a>
+                    <a href="tel:<?= e(preg_replace('/\s+/', '', $phone)) ?>"><?= e($phone) ?></a>
                   <?php endif; ?>
                 </td>
               <?php endif; ?>

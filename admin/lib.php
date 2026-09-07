@@ -671,14 +671,22 @@ function referrer_for_code(string $code): ?array
     }
 
     /* what a quoted code is used for: who the reward belongs to, and which
-       partner made that first sale — never the applicant's paperwork */
+       partner made that first sale — never the applicant's paperwork
+
+       The booking number counts as well as the referral code. Both start MF and
+       both sit on the same portal page, so a referrer reading theirs down the
+       phone hands over whichever they happened to be looking at; matching only
+       one of them threw the reward away without a word to anybody. Stored
+       references carry a hyphen (MF-00000182) and the quoted code arrives
+       stripped of it, so the comparison drops it on both sides. */
     $stmt = db()->prepare(
-        'SELECT id, full_name, email, mobile_number, dealer_id, distributor_id, referral_code
+        "SELECT id, full_name, email, mobile_number, dealer_id, distributor_id, referral_code
            FROM applications
-          WHERE referral_code = ? AND booking_paid_at IS NOT NULL AND status <> ?
-          LIMIT 1'
+          WHERE (referral_code = ? OR REPLACE(reference_code, '-', '') = ?)
+            AND booking_paid_at IS NOT NULL AND status <> ?
+          LIMIT 1"
     );
-    $stmt->execute([$code, 'rejected']);
+    $stmt->execute([$code, $code, 'rejected']);
 
     return $stmt->fetch() ?: null;
 }

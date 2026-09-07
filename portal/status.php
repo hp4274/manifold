@@ -665,9 +665,23 @@ require __DIR__ . '/partials/head.php';
               <p class="portal-referral__stat">
                 <strong><?= (int) $rewards['total'] ?></strong>
                 <?= $rewards['total'] === 1 ? 'person has' : 'people have' ?> applied with your code
+                &middot; <strong><?= e(money($rewards['paid'] + $rewards['pending'])) ?></strong> earned
                 &middot; <strong><?= e(money($rewards['paid'])) ?></strong> paid to you
-                &middot; <strong><?= e(money($rewards['pending'])) ?></strong> pending.
+                &middot; <strong><?= e(money($rewards['pending'])) ?></strong> pending
+                <?php if ($rewards['payable'] > 0): ?>
+                  &middot; <strong><?= e(money($rewards['payable'])) ?></strong> ready to be sent
+                <?php endif; ?>.
               </p>
+
+              <?php /* The money side of the same list, read as a statement rather
+                       than a set of rows: what has been sent, what is still owed,
+                       and when the office was last asked for it. Without it a
+                       referrer had to add the rows up themselves. */ ?>
+              <?php if (!empty($app['referral_payout_requested_at'])): ?>
+                <p class="portal-referral__stat portal-referral__stat--muted">
+                  Last payout request: <?= e(format_datetime($app['referral_payout_requested_at'])) ?>.
+                </p>
+              <?php endif; ?>
 
               <ul class="portal-referral__list">
                 <?php foreach ($referrals as $referral): ?>
@@ -692,6 +706,10 @@ require __DIR__ . '/partials/head.php';
                   </li>
                 <?php endforeach; ?>
               </ul>
+            <?php else: ?>
+              <p class="portal-referral__stat portal-referral__stat--muted">
+                Nobody has applied with your code yet — nothing earned so far.
+              </p>
             <?php endif; ?>
 
             <?php /* Once there is a reward sitting verified-but-unpaid, the client

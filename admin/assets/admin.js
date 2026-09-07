@@ -1007,8 +1007,26 @@
             return;
           }
 
+          var active = document.activeElement;
+          var isSearch = active && active.classList.contains('admin-search-input');
+          var cursorStart = 0, cursorEnd = 0;
+          if (isSearch) {
+            cursorStart = active.selectionStart;
+            cursorEnd = active.selectionEnd;
+          }
+
           liveList.innerHTML = fresh.innerHTML;
           busy(false);
+
+          if (isSearch) {
+            var newSearch = liveList.querySelector('.admin-search-input');
+            if (newSearch) {
+              newSearch.focus();
+              try {
+                newSearch.setSelectionRange(cursorStart, cursorEnd);
+              } catch (e) {}
+            }
+          }
 
           /* A list marked data-live-quiet filters without touching the address
              bar: the office asked for the page to sit still. The cost is that
@@ -1040,7 +1058,34 @@
         }
       });
 
-      swapList(form.dataset.base + (query.length ? '?' + query.join('&') : ''), true);
+      var base = form.dataset.base || form.getAttribute('action') || window.location.pathname;
+      swapList(base + (query.length ? '?' + query.join('&') : ''), true);
+    });
+
+    var searchTimer = null;
+    liveList.addEventListener('input', function (e) {
+      if (!e.target.classList.contains('admin-search-input')) return;
+      var form = e.target.closest('form');
+      if (!form) return;
+
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () {
+        var query = [];
+        Array.prototype.forEach.call(form.elements, function (field) {
+          if (field.name && field.value !== '') {
+            query.push(encodeURIComponent(field.name) + '=' + encodeURIComponent(field.value));
+          }
+        });
+
+        var url = form.getAttribute('action') || window.location.pathname;
+        swapList(url + (query.length ? '?' + query.join('&') : ''), true);
+      }, 200);
+    });
+
+    liveList.addEventListener('submit', function (e) {
+      if (e.target.classList.contains('admin-search-box')) {
+        e.preventDefault();
+      }
     });
 
     liveList.addEventListener('click', function (e) {

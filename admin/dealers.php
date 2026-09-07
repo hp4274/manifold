@@ -169,10 +169,17 @@ if (!array_key_exists($dist, $distOptions)) {
     $dist = '';
 }
 
+$q = trim((string) ($_GET['q'] ?? ''));
+
 $where = [];
 
+if ($q !== '') {
+    $qEscaped = db()->quote('%' . $q . '%');
+    $where[] = '(d.full_name LIKE ' . $qEscaped . ' OR d.dealer_code LIKE ' . $qEscaped . ')';
+}
+
 if ($show !== '') {
-    $where[] = $show === 'active' ? 'd.is_active = 1' : 'd.is_active = 0';
+    $where[] = $show === 'waiting' ? "d.approval_status = 'pending'" : 'd.is_active = ' . ($show === 'active' ? '1' : '0');
 }
 
 if ($dist !== '') {
@@ -188,6 +195,12 @@ $distFilter = $dist === '' ? '' : 'd.distributor_id = ' . (int) $dist;
 $showFilter = $show === ''
     ? ''
     : ($show === 'waiting' ? "d.approval_status = 'pending'" : 'd.is_active = ' . ($show === 'active' ? '1' : '0'));
+
+if ($q !== '') {
+    $qCondition = '(d.full_name LIKE ' . $qEscaped . ' OR d.dealer_code LIKE ' . $qEscaped . ')';
+    $distFilter = $distFilter === '' ? $qCondition : $distFilter . ' AND ' . $qCondition;
+    $showFilter = $showFilter === '' ? $qCondition : $showFilter . ' AND ' . $qCondition;
+}
 
 $statusCounts = [
     ''        => (int) db()->query('SELECT COUNT(*) FROM dealers d'
@@ -273,9 +286,9 @@ $sortLabel = static function (string $column, string $default) use ($sort): stri
 };
 
 /** The same list with one control changed — paging starts over, as it must. */
-$dealerFilterUrl = static function (string $nextShow, string $nextDist, ?string $nextSort = null) use ($sort): string {
+$dealerFilterUrl = static function (string $nextShow, string $nextDist, ?string $nextSort = null) use ($sort, $q): string {
     $query = array_filter(
-        ['show' => $nextShow, 'dist' => $nextDist, 'sort' => $nextSort ?? $sort],
+        ['show' => $nextShow, 'dist' => $nextDist, 'sort' => $nextSort ?? $sort, 'q' => $q],
         static fn (string $v): bool => $v !== ''
     );
 
@@ -367,6 +380,22 @@ require __DIR__ . '/partials/layout-top.php';
       </span>
     </div>
     <div class="panel__head-tools">
+      <form method="get" action="dealers" class="admin-search-box" data-live-form>
+        <?php if ($show !== ''): ?>
+          <input type="hidden" name="show" value="<?= e($show) ?>">
+        <?php endif; ?>
+        <?php if ($dist !== ''): ?>
+          <input type="hidden" name="dist" value="<?= e($dist) ?>">
+        <?php endif; ?>
+        <?php if ($sort !== ''): ?>
+          <input type="hidden" name="sort" value="<?= e($sort) ?>">
+        <?php endif; ?>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="search" name="q" class="admin-search-input" value="<?= e($q) ?>" placeholder="Search dealers by name or code...">
+      </form>
       <?php $exportKind = 'dealers'; require __DIR__ . '/partials/export-bar.php'; ?>
     <button type="button" class="btn-add" data-modal-open="dealerModal">
       <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a dealer
@@ -497,8 +526,7 @@ require __DIR__ . '/partials/layout-top.php';
                     <span class="cell-sub"><?= e($dealer['company']) ?></span>
                   <?php endif; ?>
                   <span class="cell-sub">
-                    <?php if ($dealer['mobile_number']): ?><?= e($dealer['mobile_number']) ?> · <?php endif; ?>
-                    <?= e($dealer['email'] ?: 'no email') ?>
+                    <?php if ($dealer['mobile_number']): ?><?= e($dealer['mobile_number']) ?> · <?php endif; ?><?= e($dealer['email'] ?: 'no email') ?>
                   </span>
                   <?php if ($dealerWaiting || $dealer['approval_status'] === 'rejected' || !$dealer['is_active']): ?>
                     <span class="pill pill--<?= e($dealerState['pill']) ?>"><?= e($dealerState['label']) ?></span>

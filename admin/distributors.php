@@ -165,6 +165,7 @@ if (($_GET['edit'] ?? '') !== '') {
    of however many — sorting the ten on screen would sort a slice and call it
    the list. */
 $sort = (string) ($_GET['sort'] ?? '');
+$q = trim((string) ($_GET['q'] ?? ''));
 
 /* what "still owed" is, in one place: everything earned on completed sales,
    less everything already transferred */
@@ -189,20 +190,27 @@ if (!array_key_exists($sort, $sorts)) {
 
 $order = $sort === '' ? 'is_active DESC, full_name' : $sorts[$sort] . ', full_name';
 
-$distCount = (int) db()->query('SELECT COUNT(*) FROM distributors')->fetchColumn();
+$whereClause = '';
+if ($q !== '') {
+    $qEscaped = db()->quote('%' . $q . '%');
+    $whereClause = ' WHERE full_name LIKE ' . $qEscaped . ' OR distributor_code LIKE ' . $qEscaped;
+}
+
+$distCount = (int) db()->query('SELECT COUNT(*) FROM distributors' . $whereClause)->fetchColumn();
 $paging    = paged($distCount, $_GET['page'] ?? 1);
 
 $distributors = db()->query(
-    'SELECT * FROM distributors
+    'SELECT * FROM distributors' . $whereClause . '
       ORDER BY ' . $order . '
       LIMIT ' . LIST_PER_PAGE . ' OFFSET ' . $paging['offset']
 )->fetchAll();
 
-$distUrl = 'distributors' . ($sort === '' ? '' : '?sort=' . urlencode($sort));
+$distUrl = 'distributors' . ($sort === '' && $q === '' ? '' : '?' . http_build_query(array_filter(['sort' => $sort, 'q' => $q])));
 
 /** The same list ordered another way — paging starts over, as it must. */
-$distUrlFor = static function (string $next): string {
-    return 'distributors' . ($next === '' ? '' : '?sort=' . urlencode($next));
+$distUrlFor = static function (string $next) use ($q): string {
+    $query = array_filter(['sort' => $next, 'q' => $q]);
+    return 'distributors' . ($query ? '?' . http_build_query($query) : '');
 };
 
 /* a header click steps high to low, then low to high, then back to the
@@ -307,6 +315,16 @@ require __DIR__ . '/partials/layout-top.php';
       </span>
     </div>
     <div class="panel__head-tools">
+      <form method="get" action="distributors" class="admin-search-box" data-live-form>
+        <?php if ($sort !== ''): ?>
+          <input type="hidden" name="sort" value="<?= e($sort) ?>">
+        <?php endif; ?>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="search" name="q" class="admin-search-input" value="<?= e($q) ?>" placeholder="Search distributors by name or code...">
+      </form>
       <?php $exportKind = 'distributors'; require __DIR__ . '/partials/export-bar.php'; ?>
     <button type="button" class="btn-add" data-modal-open="distributorModal">
       <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a distributor
@@ -376,8 +394,7 @@ require __DIR__ . '/partials/layout-top.php';
                     <span class="cell-sub"><?= e($dist['company']) ?></span>
                   <?php endif; ?>
                   <span class="cell-sub">
-                    <?php if ($dist['mobile_number']): ?><?= e($dist['mobile_number']) ?> · <?php endif; ?>
-                    <?= e($dist['email'] ?: 'no email') ?>
+                    <?php if ($dist['mobile_number']): ?><?= e($dist['mobile_number']) ?> · <?php endif; ?><?= e($dist['email'] ?: 'no email') ?>
                   </span>
                   <?php if (!$dist['is_active']): ?>
                     <span class="pill pill--rejected">Switched off</span>
