@@ -239,6 +239,10 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `docs_rejected_at` datetime DEFAULT NULL,
   `docs_rejected_by` int(10) unsigned DEFAULT NULL,
   `docs_reject_reason` varchar(255) DEFAULT NULL,
+  /* and their answer to that: corrected documents sent from the portal. Later
+     than docs_rejected_at means the refusal is answered and finance has
+     something new to look at; verifying clears it with the rest. */
+  `docs_resent_at` datetime DEFAULT NULL,
   /* the client's own answer once the documents pass: build it, or refund me */
   `delivery_choice` enum('waiting','continue','cancel') NOT NULL DEFAULT 'waiting',
   `delivery_choice_at` datetime DEFAULT NULL,

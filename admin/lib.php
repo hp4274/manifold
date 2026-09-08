@@ -2587,6 +2587,36 @@ function voucher_bundles(array $statuses): array
 }
 
 /**
+ * Every claim at one of the stages before or after the office, whoever raised it.
+ *
+ * Top-level rows only: a dealer's voucher inside a bundle travels with that
+ * bundle and its worth is already counted in the bundle's total, so listing
+ * both would show the same money twice. `parent_id IS NULL` is what says a row
+ * stands on its own — a dealer's claim waiting on their distributor, one the
+ * distributor has approved but not yet sent, or a bundle on its way through
+ * C&F. Unlike voucher_bundles() this is not restricted to bundles, which is
+ * why the party is looked up in both tables.
+ */
+function vouchers_standalone(array $statuses): array
+{
+    $marks = implode(',', array_fill(0, count($statuses), '?'));
+
+    $stmt = db()->prepare(
+        "SELECT v.*,
+                COALESCE(x.full_name, d.full_name) AS party_name,
+                COALESCE(x.distributor_code, d.dealer_code) AS party_code
+           FROM commission_vouchers v
+           LEFT JOIN distributors x ON x.id = v.party_id AND v.party_type = 'distributor'
+           LEFT JOIN dealers d      ON d.id = v.party_id AND v.party_type = 'dealer'
+          WHERE v.parent_id IS NULL AND v.status IN (" . $marks . ')
+          ORDER BY v.raised_at DESC, v.id DESC'
+    );
+    $stmt->execute($statuses);
+
+    return $stmt->fetchAll();
+}
+
+/**
  * Moves a bundle and everything in it to one status.
  *
  * The children travel with the bundle because they are the same document from
@@ -2778,6 +2808,23 @@ const PARTNER_REQUIRED = [
     'upi_id'        => 'A UPI id',
 ];
 
+/**
+ * The national digits of a partner's number.
+ *
+ * A stored number carries the dial code in front of it, so a call can be made
+ * from the row; the form shows and sends the national digits on their own. An
+ * edit posts back what the row holds, which is why the code comes off again.
+ */
+function partner_mobile_digits(?string $number): string
+{
+    $digits = preg_replace('/\D+/', '', (string) $number);
+    $code   = DEFAULT_DIAL_CODE;
+
+    return strlen($digits) > dial_digits($code)[1] && str_starts_with($digits, $code)
+        ? substr($digits, strlen($code))
+        : $digits;
+}
+
 /** The codes that are issued in capitals, and how long each one is. */
 const PARTNER_CODE_FIELDS = [
     'pan_number' => ['label' => 'PAN',  'length' => 10],
@@ -2886,6 +2933,28 @@ function partner_values(array $post, string $role = '', int $id = 0): array
 
     if (!filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
         return [$values, 'That email address does not look right.'];
+    }
+
+    /* How long a number runs to is the country's business: dial_digits() is the
+       same table the apply form is held to. Checked here rather than in each of
+       the seven forms that call this, and stored with the code in front. */
+    [$dialMin, $dialMax] = dial_digits(DEFAULT_DIAL_CODE);
+    $dialSays = $dialMin === $dialMax ? $dialMin . ' digits' : $dialMin . ' to ' . $dialMax . ' digits';
+
+    foreach (['mobile_number' => 'The mobile number',
+              'alt_mobile_number' => 'The alternative mobile number'] as $field => $label) {
+        if ($values[$field] === null) {
+            continue;
+        }
+
+        $digits = partner_mobile_digits($values[$field]);
+
+        if (strlen($digits) < $dialMin || strlen($digits) > $dialMax) {
+            return [$values, $label . ' has to be ' . $dialSays
+                . ' — no country code, no spaces.'];
+        }
+
+        $values[$field] = '+' . DEFAULT_DIAL_CODE . $digits;
     }
 
     /* checked here rather than in each of the seven forms that call this: the
@@ -3364,6 +3433,32 @@ function blog_read_minutes(string $body): int
  *
  * Returns ['error' => …] or ['message' => …, 'status' => …].
  */
+/**
+ * Whether a refusal of the paperwork is still the last word on it.
+ *
+ * The applicant answers a refusal from their portal by sending corrected
+ * documents, which stamps `docs_resent_at` — so a refusal only still stands
+ * while nothing newer has arrived. Both sides read this: the portal draws the
+ * reason and the correction form from it, the office draws the red stage.
+ */
+function docs_refused(array $app): bool
+{
+    return empty($app['docs_verified_at'])
+        && !empty($app['docs_rejected_at'])
+        && !docs_resent($app);
+}
+
+/** The other half: corrected documents are in and finance has not looked yet. */
+function docs_resent(array $app): bool
+{
+    if (!empty($app['docs_verified_at']) || empty($app['docs_resent_at'])) {
+        return false;
+    }
+
+    return empty($app['docs_rejected_at'])
+        || strtotime((string) $app['docs_resent_at']) >= strtotime((string) $app['docs_rejected_at']);
+}
+
 function docs_verify(int $applicationId, int $adminId): array
 {
     $stmt = db()->prepare('SELECT id, status, docs_verified_at FROM applications WHERE id = ?');
@@ -3392,7 +3487,8 @@ function docs_verify(int $applicationId, int $adminId): array
     db()->prepare(
         'UPDATE applications
             SET docs_verified_at = NOW(), docs_verified_by = ?,
-                docs_rejected_at = NULL, docs_rejected_by = NULL, docs_reject_reason = NULL
+                docs_rejected_at = NULL, docs_rejected_by = NULL, docs_reject_reason = NULL,
+                docs_resent_at = NULL
           WHERE id = ?'
     )->execute([$adminId, $applicationId]);
 
@@ -3578,6 +3674,8 @@ function recent_activity(int $limit = 15): array
             SELECT a.product, a.id, sl.changed_at
               FROM status_log sl JOIN applications a ON a.id = sl.entity_id
              WHERE sl.entity = 'application'
+            UNION ALL
+            SELECT product, id, docs_resent_at FROM applications WHERE docs_resent_at IS NOT NULL
             UNION ALL
             SELECT 'contact', id, created_at FROM contact_messages
             UNION ALL

@@ -6008,6 +6008,47 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 }
 .portal-choice__cancel:hover{border-color:#c9a0a8;color:#a33a4e;background:#fff}
 
+/* the same answer, offered again in the corner of an order that has gone ahead */
+.portal-app__undo{
+  display:grid;
+  justify-items:end;
+  gap:6px;
+  margin:0;
+  flex:none;
+  text-align:right;
+}
+.portal-app__undo-note{
+  max-width:26ch;
+  font-size:var(--t-micro);
+  line-height:1.5;
+  color:var(--muted);
+}
+
+/* ---------- answering a refusal of the paperwork ----------
+   Sits under the reason it answers, inside the delivery stage that the refusal
+   holds shut, so the two read as one thing: what is wrong, and the box to put
+   it right in. */
+.portal-docs{
+  margin:14px 0 0;
+  padding:18px 20px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--tint);
+}
+.portal-docs__title{
+  margin:0 0 4px;
+  font-size:var(--t-sub);
+  font-weight:700;
+  color:var(--ink);
+}
+.portal-docs__note{
+  margin:0 0 16px;
+  font-size:var(--t-ui);
+  line-height:1.6;
+  color:var(--body);
+  max-width:64ch;
+}
+
 /* An address is case blind: the box shows it the way it is written down. */
 input[type="email"],
 input[name*="email"]{text-transform:lowercase}

@@ -26,6 +26,14 @@ $pCode   = $partnerCode ?? '';
 $pSelf   = $partnerSelf ?? false;
 $pWhose  = $pSelf ? 'you are' : 'they are';
 $pBlank  = $pKind === 'distributor' ? 'MX••••••' : 'MD••••••';
+
+/* The number is national digits here and stored with the dial code in front,
+   the same way the apply form works. dial_digits() decides the length, so the
+   box and partner_values() cannot disagree about it. */
+[$pTelMin, $pTelMax] = dial_digits(DEFAULT_DIAL_CODE);
+$pTelPattern = '[0-9]{' . ($pTelMin === $pTelMax ? $pTelMin : $pTelMin . ',' . $pTelMax) . '}';
+$pTelTitle   = ($pTelMin === $pTelMax ? $pTelMin . ' digits' : $pTelMin . ' to ' . $pTelMax . ' digits')
+    . ', no spaces or country code';
 ?>
         <?php /* A partner is paid by bank transfer, so the identity, the address
                  and the account are all wanted before the first sale rather than
@@ -59,14 +67,19 @@ $pBlank  = $pKind === 'distributor' ? 'MX••••••' : 'MD••••�
 
             <div class="field">
               <label for="<?= e($pKind) ?>_mobile">Mobile<span class="field__req" aria-hidden="true">*</span></label>
-              <input id="<?= e($pKind) ?>_mobile" name="mobile_number" type="text" maxlength="30" required
-                     value="<?= e($pf['mobile_number'] ?? '') ?>">
+              <input id="<?= e($pKind) ?>_mobile" name="mobile_number" type="tel" inputmode="numeric"
+                     autocomplete="off" maxlength="<?= $pTelMax ?>" pattern="<?= e($pTelPattern) ?>"
+                     title="<?= e($pTelTitle) ?>" required
+                     value="<?= e(partner_mobile_digits($pf['mobile_number'] ?? '')) ?>">
+              <span class="field-hint">+<?= e(DEFAULT_DIAL_CODE) ?> is put in front when it is saved.</span>
             </div>
 
             <div class="field">
               <label for="<?= e($pKind) ?>_alt_mobile">Alternative mobile</label>
-              <input id="<?= e($pKind) ?>_alt_mobile" name="alt_mobile_number" type="text" maxlength="30"
-                     value="<?= e($pf['alt_mobile_number'] ?? '') ?>">
+              <input id="<?= e($pKind) ?>_alt_mobile" name="alt_mobile_number" type="tel" inputmode="numeric"
+                     autocomplete="off" maxlength="<?= $pTelMax ?>" pattern="<?= e($pTelPattern) ?>"
+                     title="<?= e($pTelTitle) ?>"
+                     value="<?= e(partner_mobile_digits($pf['alt_mobile_number'] ?? '')) ?>">
             </div>
           </div>
 

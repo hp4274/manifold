@@ -32,14 +32,7 @@ $activity = recent_activity(15);
 require __DIR__ . '/partials/layout-top.php';
 ?>
 
-<?php if ($savedNote !== ''): ?>
-  <p class="alert alert--ok"><?= e($savedNote) ?></p>
-<?php endif; ?>
-
-<?php if ($deletedNote !== ''): ?>
-  <p class="alert alert--error"><?= e($deletedNote) ?></p>
-<?php endif; ?>
-
+<?php /* what happened and what was emailed, as one line — see the partial */ ?>
 <?php require __DIR__ . '/partials/mail-flash.php'; ?>
 
 <div class="tiles">

@@ -1321,10 +1321,15 @@ body.has-drawer{overflow:hidden}
 .pay-stage__actions{
   display:flex;
   flex-wrap:wrap;
-  align-items:flex-start;
+  /* stretch, not flex-start: the reject form is a field with a button beside
+     it, so that button is as tall as the field while a button standing on its
+     own kept its own smaller height. The row's height is the field's, and both
+     answers are drawn at it. */
+  align-items:stretch;
   gap:10px;
   margin:14px 0 16px;
 }
+.pay-stage__actions > form > .btn{height:100%}
 .pay-stage .pay-list{margin-top:12px}
 
 .pay-panel__head{
@@ -1638,7 +1643,9 @@ a.pay-item__proof:focus-visible{
   /* the same at the other end, over the rail's bottom padding */
   bottom:-20px;
   z-index:2;
-  margin:0 -16px -20px;
+  /* auto, not 0: the shorthand would otherwise undo the margin-top:auto that
+     holds the account block against the foot of the rail */
+  margin:auto -16px -20px;
   padding:10px 16px 20px;
   background:var(--navy-800);
 }

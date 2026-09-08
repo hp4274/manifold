@@ -61,7 +61,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $waiting = voucher_bundles(['with_admin']);
 $funded  = voucher_bundles(['funded']);
-$inFlight = voucher_bundles(['with_rf']);
+
+/* Everywhere else a claim can be: with the distributor who has to approve it,
+   approved and waiting to be bundled, with C&F, or funded and waiting to be
+   paid out. Bundles are not the whole chain — a dealer's own voucher spends
+   its first two stages on its own — so this asks for claims, not bundles. */
+$elsewhere = vouchers_standalone(['with_distributor', 'bundled', 'with_rf', 'funded']);
 
 $sum = static function (array $bundles): float {
     $total = 0.0;
@@ -77,9 +82,14 @@ $paidTotal = (float) db()->query(
     "SELECT COALESCE(SUM(amount), 0) FROM commission_vouchers WHERE status = 'paid'"
 )->fetchColumn();
 
-$owedTotal = (float) db()->query(
-    "SELECT COALESCE(SUM(dealer_commission), 0) + COALESCE(SUM(distributor_commission), 0)
-       FROM applications WHERE " . COMMISSION_EARNED_SQL
+/* What has actually been claimed, not what the sales are worth: a voucher is
+   the claim, so this page counts vouchers. Rejected and cancelled ones are left
+   out — those sales go back to being claimable and would be counted twice when
+   they are claimed again. A bundle carries only the distributor's own share and
+   its dealers ride as rows of their own, so this sums without double counting. */
+$raisedTotal = (float) db()->query(
+    "SELECT COALESCE(SUM(amount), 0) FROM commission_vouchers
+      WHERE status NOT IN ('rejected', 'cancelled')"
 )->fetchColumn();
 
 require __DIR__ . '/partials/layout-top.php';
@@ -110,9 +120,9 @@ require __DIR__ . '/partials/layout-top.php';
   </span>
   <span class="tile">
     <span class="eyebrow">Commission earned</span>
-    <strong class="stock-figure"><?= e(money($owedTotal)) ?></strong>
+    <strong class="stock-figure"><?= e(money($raisedTotal)) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat">on every completed sale, all partners</span>
+      <span class="tile__stat">raised through vouchers, all partners</span>
     </span>
   </span>
   <span class="tile">
@@ -253,45 +263,59 @@ require __DIR__ . '/partials/layout-top.php';
   <div class="table-wrap">
     <table class="data-table">
       <colgroup>
-        <col style="width:10%">
-        <col style="width:30%">
-        <col style="width:20%">
-        <col style="width:20%">
-        <col style="width:20%">
+        <col style="width:34%">
+        <col style="width:22%">
+        <col style="width:22%">
+        <col style="width:22%">
       </colgroup>
       <thead>
         <tr>
-          <th>#</th>
-          <th>Distributor</th>
+          <th>Who is claiming</th>
           <th>Worth</th>
           <th>Where it is</th>
           <th>Raised</th>
         </tr>
       </thead>
       <tbody>
-        <?php $elsewhere = array_merge($inFlight, $funded); ?>
-
         <?php if (!$elsewhere): ?>
           <tr class="row-empty">
-            <td colspan="5">No entry found — no claim is in flight.</td>
+            <td colspan="4">No entry found — no claim is in flight.</td>
           </tr>
         <?php endif; ?>
 
         <?php foreach ($elsewhere as $row): ?>
           <tr>
-            <td><?= (int) $row['id'] ?></td>
             <td>
               <div class="cell-stack">
-                <strong><?= e($row['party_name']) ?></strong>
-                <span class="cell-sub"><?= e($row['party_code']) ?></span>
+                <strong><?= e($row['party_name'] ?? 'a deleted partner') ?></strong>
+                <span class="cell-sub">
+                  <?= $row['party_type'] === 'distributor' ? 'Distributor' : 'Dealer' ?>
+                  <?= $row['party_code'] ? '· ' . e((string) $row['party_code']) : '' ?>
+                  <?= (int) $row['is_bundle'] === 1 ? ' · bundle' : '' ?>
+                </span>
               </div>
             </td>
+            <?php /* a bundle is worth its own claim plus every dealer in it;
+                     anything else is worth exactly what it says */ ?>
             <td class="td-amount stock-figure">
-              <strong><?= e(money(voucher_bundle_total((int) $row['id']))) ?></strong>
+              <strong><?= e(money((int) $row['is_bundle'] === 1
+                  ? voucher_bundle_total((int) $row['id'])
+                  : (float) $row['amount'])) ?></strong>
             </td>
             <td>
+              <?php /* The labels are written for the partner whose voucher it is
+                       — "with your distributor" — and this is the office reading
+                       over their shoulder. Two of them are said from here
+                       instead; "In a bundle" would also be untrue of a claim the
+                       distributor has approved and not yet sent. */ ?>
               <span class="pill pill--<?= e(voucher_status_pill((string) $row['status'])) ?>">
-                <?= e(voucher_status_label((string) $row['status'])) ?>
+                <?php if ($row['status'] === 'with_distributor'): ?>
+                  With their distributor
+                <?php elseif ($row['status'] === 'bundled'): ?>
+                  Approved, not yet sent
+                <?php else: ?>
+                  <?= e(voucher_status_label((string) $row['status'])) ?>
+                <?php endif; ?>
               </span>
             </td>
             <td><span class="cell-sub"><?= e(format_datetime($row['raised_at'])) ?></span></td>

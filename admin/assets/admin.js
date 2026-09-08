@@ -580,9 +580,10 @@
      this is only for tables that have nowhere to navigate to. */
   function pageTable(table) {
     var size = parseInt(table.dataset.paged, 10) || 10;
-    if (!table.tBodies.length) return;
+    var isTable = table.tagName === 'TABLE';
+    if (isTable && !table.tBodies.length) return;
 
-    var rows = Array.prototype.slice.call(table.tBodies[0].rows);
+    var rows = Array.prototype.slice.call(isTable ? table.tBodies[0].rows : table.children);
     if (rows.length <= size) return;
 
     var pages = Math.ceil(rows.length / size);

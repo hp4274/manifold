@@ -122,6 +122,100 @@ if ($postDiscarded) {
         header('Location: status#referral');
         exit;
     }
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'documents') {
+    csrf_check();
+
+    /* ---------- answering a refusal of the paperwork ----------
+       Finance turned the documents down and said why. This is the applicant's
+       reply: the corrected files, and the ID number if that was what was wrong.
+       It changes nothing about the money and moves no status — the application
+       is still `docs_pending` — it only puts something new in front of finance
+       and stamps when it arrived, which is what clears the refusal. */
+    $id = (int) ($_POST['id'] ?? 0);
+
+    $stmt = db()->prepare('SELECT * FROM applications WHERE id = ? AND email = ?');
+    $stmt->execute([$id, $email]);
+    $app = $stmt->fetch();
+
+    $chose = static function (string $field): bool {
+        return !empty($_FILES[$field]) && (int) $_FILES[$field]['error'] !== UPLOAD_ERR_NO_FILE;
+    };
+
+    if (!$app) {
+        $error = 'That application could not be found.';
+    } elseif (!docs_refused($app)) {
+        /* already answered, already verified, or never refused */
+        $error = 'There is nothing to correct on that application just now.';
+    } elseif (!$chose('id_document_file') && !$chose('residence_proof_file')) {
+        $uploadError = 'Choose at least one corrected document to send.';
+        $uploadStage = 'documents';
+    } else {
+        $saved  = [];
+        $failed = [];
+
+        foreach (['id_document_file' => 'id_document_path',
+                  'residence_proof_file' => 'residence_proof_path'] as $field => $column) {
+            if (!$chose($field)) {
+                continue;
+            }
+
+            /* store_upload() drops anything of the wrong type or over the limit
+               and says nothing, which is right for an application form nobody
+               is watching — here somebody is waiting on an answer, so a file
+               that did not land has to be said out loud rather than silently
+               leaving the old one in place */
+            $name = store_upload($field);
+
+            if ($name === null) {
+                $failed[] = $field === 'id_document_file' ? 'ID document' : 'residence proof';
+                continue;
+            }
+
+            $saved[$column] = $name;
+        }
+
+        if ($failed) {
+            $uploadError = 'We could not take your ' . implode(' or the ', $failed)
+                . '. Send a JPG, PNG, WebP or PDF under '
+                . (int) (UPLOAD_MAX_BYTES / 1024 / 1024) . ' MB.';
+            $uploadStage = 'documents';
+        } else {
+            $idNumber = mb_substr(trim((string) ($_POST['id_number'] ?? '')), 0, 80);
+
+            $set    = ['docs_resent_at = NOW()'];
+            $params = [];
+
+            foreach ($saved as $column => $name) {
+                $set[]    = $column . ' = ?';
+                $params[] = $name;
+            }
+
+            if ($idNumber !== '' && $idNumber !== (string) ($app['id_number'] ?? '')) {
+                $set[]    = 'id_number = ?';
+                $params[] = $idNumber;
+            }
+
+            $params[] = $id;
+            $params[] = $email;
+
+            db()->prepare('UPDATE applications SET ' . implode(', ', $set)
+                . ' WHERE id = ? AND email = ?')->execute($params);
+
+            $reason = (string) ($app['docs_reject_reason'] ?? '');
+            $fresh  = db()->prepare('SELECT * FROM applications WHERE id = ?');
+            $fresh->execute([$id]);
+            $after = $fresh->fetch() ?: $app;
+
+            /* the office hears about it after the applicant has their page back:
+               nothing on their side is waiting on the letter */
+            after_response(static function () use ($after, $reason): void {
+                send_documents_resent_admin($after, $reason);
+            });
+
+            header('Location: status?documents=' . $id . '#app-' . $id);
+            exit;
+        }
+    }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
@@ -142,7 +236,15 @@ if ($postDiscarded) {
     $choice = (string) ($_POST['choice'] ?? '');
 
     if ($app && in_array($choice, ['continue', 'cancel'], true)) {
-        if (($app['status'] ?? '') !== 'confirm_pending') {
+        /* Continue is answered once. Cancel is not: somebody who said yes by
+           mistake has until they pay the delivery amount to say otherwise, and
+           the money already in is refunded either way. Once a delivery receipt
+           is with us the order is past this — they call us instead. */
+        $answering = (string) ($app['status'] ?? '');
+        $canCancel = $choice === 'cancel'
+            && in_array($answering, ['confirm_pending', 'delivery_pending'], true);
+
+        if (!$canCancel && $answering !== 'confirm_pending') {
             $error = 'That question has already been answered.';
         } else {
             db()->prepare(
@@ -259,15 +361,24 @@ require __DIR__ . '/partials/head.php';
     <?php $who = $applications[0]['full_name'] ?? ''; ?>
 
     <p class="eyebrow eyebrow--rule">Signed in as <?= e($email) ?></p>
-    <div class="section-head">
-      <h1 class="section-title"><?= $who !== '' ? e($who) . '.' : 'My applications.' ?></h1>
-      <p class="section-sub">Everything you have applied for, and what happens next at each stage.</p>
-    </div>
+
+    <?php /* The heading is not drawn: the address above and the booking number
+             on every card already say whose page this is, and the sentence
+             under it said nothing the cards do not. It stays in the markup for
+             a screen reader, which has no cards to look at. */ ?>
+    <h1 class="visually-hidden"><?= $who !== '' ? e($who) . '.' : 'My applications.' ?></h1>
 
     <?php if ($uploadedId > 0): ?>
       <p class="portal-alert portal-alert--ok">
         <?= e(payment_stage_label($uploadedStage)) ?> receipt received for application #<?= $uploadedId ?>.
         We verify payments within two working days.
+      </p>
+    <?php endif; ?>
+
+    <?php if ((int) ($_GET['documents'] ?? 0) > 0): ?>
+      <p class="portal-alert portal-alert--ok">
+        Your corrected documents are with our finance team. We check them by hand, usually within two
+        working days, and email you the moment they pass.
       </p>
     <?php endif; ?>
 
@@ -308,10 +419,13 @@ require __DIR__ . '/partials/head.php';
            the application is — but "we are checking your documents" is no
            longer true and must not be the first thing they read. The reason
            itself is beside the delivery payment, which is what it holds shut. */
-        if ($status === 'docs_pending' && !empty($app['docs_rejected_at'])) {
+        if (docs_refused($app)) {
             $copy = 'Our finance team could not accept the documents you gave with the application. '
-                . 'We have emailed you what is wrong with them — send the corrected ones and we will '
-                . 'check again. Your application stands and your booking payment is safe.';
+                . 'Send the corrected ones below and we will check again. Your application stands and '
+                . 'your booking payment is safe.';
+        } elseif (docs_resent($app)) {
+            $copy = 'We have the corrected documents you sent and our finance team is checking them. '
+                . 'The delivery payment opens as soon as they pass, and we email you when it does.';
         }
       ?>
       <article class="portal-app" id="app-<?= (int) $app['id'] ?>">
@@ -350,7 +464,24 @@ require __DIR__ . '/partials/head.php';
           <?php /* No badge up here: the stage the timeline marks and the
                    paragraph under it already say where this order is, and a
                    third telling of it in the corner read as a second, different
-                   status to the person looking at it. */ ?>
+                   status to the person looking at it.
+
+                   What does belong here is the way back out. Continuing with
+                   delivery is one tap and easily one taken by mistake, so the
+                   answer stays undoable until the delivery amount is paid —
+                   after that the money is in flight and it is a phone call. */ ?>
+          <?php if ($status === 'delivery_pending'): ?>
+            <form class="portal-app__undo" method="post"
+                  data-confirm="Cancel this order? We refund everything you have paid.">
+              <?= csrf_field() ?>
+              <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
+              <input type="hidden" name="choice" value="cancel">
+              <button type="submit" class="btn-pill portal-choice__cancel">
+                <i class="bi bi-x-circle" aria-hidden="true"></i> Cancel order
+              </button>
+              <span class="portal-app__undo-note">Changed your mind? Everything you have paid comes back.</span>
+            </form>
+          <?php endif; ?>
         </header>
 
         <?php /* An order that ended - turned down, or cancelled by the client
@@ -479,7 +610,7 @@ require __DIR__ . '/partials/head.php';
                   <?php elseif ($stage['state'] === 'checking'): ?>
                     Your receipt is with our team. We check every payment by hand, usually within
                     two working days.
-                  <?php elseif ($sealed && !empty($app['docs_rejected_at'])): ?>
+                  <?php elseif ($sealed && docs_refused($app)): ?>
                     Your booking is verified. This opens once our finance team can accept your
                     documents - see below for what they need.
                   <?php elseif ($sealed): ?>
@@ -505,13 +636,67 @@ require __DIR__ . '/partials/head.php';
                          stage because this is the stage it holds shut. There is
                          no upload box for documents, so it says how to send them
                          rather than pointing at a form that is not there. */ ?>
-                <?php if ($sealed && !empty($app['docs_rejected_at'])): ?>
+                <?php if ($sealed && docs_refused($app)): ?>
                   <p class="portal-alert portal-alert--error portal-stage__reject">
                     Your documents were not accepted: <?= e((string) $app['docs_reject_reason']) ?>
                     <br>
-                    Reply to the email we sent with the corrected documents attached, or call
-                    <a href="tel:+919725154186">+91 97251 54186</a>. Your application stands and
-                    your booking payment is safe.
+                    Send the corrected ones below and we will check them again. Your application
+                    stands and your booking payment is safe.
+                  </p>
+
+                  <?php /* The answer to that refusal, where the refusal is: the
+                           files themselves, and the ID number in case that was
+                           what did not match. Sending them puts the application
+                           back in front of finance — nothing else about it
+                           changes, and nothing they have paid is touched. */ ?>
+                  <?php $docsFailed = $uploadError !== '' && $uploadStage === 'documents'; ?>
+                  <form class="portal-docs form-x" method="post" enctype="multipart/form-data"
+                        id="documents-<?= (int) $app['id'] ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="documents">
+                    <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
+
+                    <p class="portal-docs__title">Send corrected documents</p>
+                    <p class="portal-docs__note">
+                      Replace whichever one they asked about — the other is left exactly as it is.
+                      We check them by hand and email you either way.
+                    </p>
+
+                    <?php if ($docsFailed): ?>
+                      <p class="field-error" role="alert">
+                        <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                        <?= e($uploadError) ?>
+                      </p>
+                    <?php endif; ?>
+
+                    <div class="field">
+                      <label for="idnum-<?= (int) $app['id'] ?>">ID / passport number</label>
+                      <input id="idnum-<?= (int) $app['id'] ?>" name="id_number" type="text"
+                             maxlength="80" value="<?= e((string) ($app['id_number'] ?? '')) ?>">
+                    </div>
+
+                    <div class="field">
+                      <label for="iddoc-<?= (int) $app['id'] ?>">ID document (proof of identity)</label>
+                      <input id="iddoc-<?= (int) $app['id'] ?>" name="id_document_file" type="file"
+                             accept="image/*,application/pdf">
+                      <span class="field-hint">JPG, PNG, WebP or PDF, up to 10 MB</span>
+                    </div>
+
+                    <div class="field">
+                      <label for="resproof-<?= (int) $app['id'] ?>">Residence proof (proof of address)</label>
+                      <input id="resproof-<?= (int) $app['id'] ?>" name="residence_proof_file" type="file"
+                             accept="image/*,application/pdf">
+                      <span class="field-hint">JPG, PNG, WebP or PDF, up to 10 MB</span>
+                    </div>
+
+                    <button type="submit" class="btn-pill btn-pill--accent form-x__submit">
+                      Send for checking <i class="bi bi-upload" aria-hidden="true"></i>
+                    </button>
+                  </form>
+                <?php elseif ($sealed && docs_resent($app)): ?>
+                  <p class="portal-alert portal-alert--ok portal-stage__reject">
+                    Corrected documents sent <?= e(format_datetime((string) $app['docs_resent_at'])) ?>.
+                    They are with our finance team — we email you as soon as they pass.
                   </p>
                 <?php endif; ?>
 

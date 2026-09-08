@@ -44,11 +44,13 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
            applicant sees in their portal too. */ ?>
   <?php
     $docsDone   = !empty($srcRow['docs_verified_at']);
-    /* an earlier refusal still standing — cleared the moment they are verified */
-    $docsRefused = !$docsDone && !empty($srcRow['docs_rejected_at']);
+    /* an earlier refusal still standing — answered by corrected documents from
+       the applicant's portal, and cleared the moment they are verified */
+    $docsRefused = docs_refused($srcRow);
+    $docsResent  = docs_resent($srcRow);
   ?>
   <?php if ($payTotals['stages']['booking']['settled'] || $docsDone): ?>
-    <section class="pay-stage pay-stage--<?= $docsDone ? 'paid' : ($docsRefused ? 'rejected' : 'due') ?>">
+    <section class="pay-stage pay-stage--<?= $docsDone ? 'paid' : ($docsRefused ? 'rejected' : ($docsResent ? 'checking' : 'due')) ?>">
       <header class="pay-stage__head">
         <h4 class="pay-stage__title">Finance documents</h4>
         <span class="pay-stage__state">
@@ -58,6 +60,9 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
           <?php elseif ($docsRefused): ?>
             <i class="bi bi-x-circle" aria-hidden="true"></i>
             turned down <?= e(format_datetime((string) $srcRow['docs_rejected_at'])) ?>
+          <?php elseif ($docsResent): ?>
+            <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+            corrected <?= e(format_datetime((string) $srcRow['docs_resent_at'])) ?>
           <?php else: ?>
             <i class="bi bi-hourglass-split" aria-hidden="true"></i> waiting on finance
           <?php endif; ?>
@@ -72,6 +77,18 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
           <p class="pay-stage__note">
             They have been emailed this and asked to reply with corrected documents. Verify below
             once the new ones are in order — that clears this and opens the delivery payment.
+          </p>
+        <?php elseif ($docsResent): ?>
+          <?php /* they answered the refusal from their portal: the files on the
+                   record are the new ones, and what was wrong last time is
+                   still on the row to check them against */ ?>
+          <p class="pay-stage__note pay-stage__note--reject">
+            Turned down: <?= e((string) $srcRow['docs_reject_reason']) ?>
+          </p>
+          <p class="pay-stage__note">
+            They sent corrected documents on
+            <?= e(format_datetime((string) $srcRow['docs_resent_at'])) ?> — the ID and residence
+            proof under Applicant are the new ones. Verify below once they are in order.
           </p>
         <?php else: ?>
           <p class="pay-stage__note">

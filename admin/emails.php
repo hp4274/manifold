@@ -898,6 +898,50 @@ function send_payment_received_admin(array $app): bool
 }
 
 /**
+ * An applicant has answered a refusal of their paperwork with corrected
+ * documents, sent from their portal.
+ *
+ * Nothing about the application moves — it is still `docs_pending` — so without
+ * this nobody would know there was anything new to look at until somebody
+ * happened to open the row again. What was wrong last time travels with it, so
+ * whoever checks knows what they are checking against.
+ */
+function send_documents_resent_admin(array $app, string $lastReason = ''): bool
+{
+    $product = product_label((string) $app['product']);
+    $link    = base_url() . '/admin/list.php?type=' . rawurlencode((string) $app['product'])
+        . '&status=docs_pending#row-' . (int) $app['id'];
+
+    $rows = [
+        'Booking number' => (string) $app['reference_code'],
+        'Product'        => $product,
+        'Applicant'      => (string) $app['full_name'],
+        'Email'          => (string) $app['email'],
+        'Phone'          => (string) ($app['mobile_number'] ?? ''),
+        'Sent'           => format_datetime((string) ($app['docs_resent_at'] ?? date('Y-m-d H:i:s'))),
+    ];
+
+    if ($lastReason !== '') {
+        $rows['Turned down for'] = $lastReason;
+    }
+
+    $inner = '<p style="margin:0 0 16px;">An applicant has sent corrected documents from their portal, '
+        . 'after finance turned the first set down. They are waiting on a second check.</p>'
+        . email_rows($rows)
+        . email_button($link, 'Open it in the admin')
+        . '<p style="margin:0;font-size:14px;color:#8499ac;">Open the row and use '
+        . '<strong style="color:#0f2c4d;">Documents verified</strong> in the payment panel once the new '
+        . 'ones are in order - that opens the delivery payment.</p>';
+
+    return send_to_office(
+        'Corrected documents sent - ' . $app['reference_code'] . ' (' . $product . ')',
+        'Corrected documents sent',
+        $inner,
+        'docs_resent'
+    );
+}
+
+/**
  * A client has asked, from their portal, to be paid the referral reward they
  * have earned and not yet been sent. Nothing about the money changes — this
  * only puts the request in front of the office so nobody has to keep checking

@@ -19,7 +19,7 @@ declare(strict_types=1);
             : 'Nothing with the office right now.') ?>
   </p>
 <?php else: ?>
-  <div class="panel__body">
+  <div class="panel__body" data-paged="5">
     <?php foreach ($rfBundles as $rfBundle): ?>
       <?php
         $rfId       = (int) $rfBundle['id'];
