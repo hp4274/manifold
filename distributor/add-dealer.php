@@ -32,7 +32,7 @@ $editing = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_dealer') {
     csrf_check();
 
-    [$values, $error] = partner_values($_POST);
+    [$values, $error] = partner_values($_POST, 'dealer');
 
     if (!$room) {
         $error = 'You already hold ' . $held . ' dealers, which is the limit. '

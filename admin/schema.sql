@@ -10,6 +10,15 @@
 --
 -- Import:  mysql -u root -p < schema.sql
 --
+-- Shared hosting (Hostinger and the like) does not allow CREATE DATABASE from
+-- a SQL import: make the database in the control panel first, delete the three
+-- statements between this header and the first table below, and import the
+-- rest into it. Then set DB_NAME, DB_USER and DB_PASS in admin/config.php to
+-- match what the panel gave you.
+--
+-- Re-importing over a database that already has these tables changes nothing:
+-- every table is CREATE TABLE IF NOT EXISTS and both seeds are INSERT IGNORE.
+--
 -- Then sign in at /manifold/admin/login.php with
 --   the office     admin  (or admin@manifold.com)  password admin12345
 --   C&F            cf@manifold.com                 password <set on install>
@@ -144,7 +153,7 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `product` enum('stove','tuktuk') NOT NULL,
   -- an application from the website waits on the office before it becomes a
   -- payment: 'submitted' is that wait, and approving it is what starts the rest
-  `status` enum('submitted','booking_pending','booking_review','docs_pending','confirm_pending','delivery_pending','delivery_review','complete','cancelled','rejected')
+  `status` enum('submitted','booking_pending','booking_review','docs_pending','confirm_pending','delivery_pending','delivery_review','complete','cancelled','refunded','rejected')
       NOT NULL DEFAULT 'submitted',
   `reference_code` varchar(20) NOT NULL DEFAULT '',
   `referral_code` varchar(20) NOT NULL DEFAULT '',
@@ -603,7 +612,7 @@ CREATE TABLE IF NOT EXISTS `settings` (
 -- to count down to and the popup on the website says the dates are still to come.
 -- Only the raffle date, cycle and winner count are editable from the admin; the
 -- prize figures below are changed here or straight in the `settings` table.
-INSERT INTO `settings` (`name`, `value`) VALUES
+INSERT IGNORE INTO `settings` (`name`, `value`) VALUES
   ('commission_dealer_stove',    '3000.00'),
   ('commission_dealer_tuktuk',   '4500.00'),
   ('commission_override_stove',  '1000.00'),
@@ -638,7 +647,7 @@ INSERT INTO `settings` (`name`, `value`) VALUES
 -- CHANGE BOTH PASSWORDS before this touches a real server. They are written in
 -- this file, and this file is in the repository.
 -- --------------------------------------------------------------------------
-INSERT INTO `admin_users` (`name`, `email`, `role`, `password_hash`) VALUES
+INSERT IGNORE INTO `admin_users` (`name`, `email`, `role`, `password_hash`) VALUES
   ('admin', 'admin@manifold.com', 'admin', '$2y$10$UoO.3dsFFzlN0PsyNNbAjOAJ0yITCnUYzPcyiBX6nQNPLk6WPPJC6'),
   ('C&F',   'cf@manifold.com',    'cf',    '$2y$12$lZyHI3M1i5w1MIrlC/tJHOTelCSNU5vQClGBgwtHhVkpI5c8mJ4MK');
 

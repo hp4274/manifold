@@ -188,6 +188,30 @@ switch ($action) {
         $flash = 'docs_rejected';
         break;
 
+    /* ---------- the money goes back ----------
+       A client who cancelled after the documents were verified is owed
+       everything they have paid. The transfer itself happens in a bank, not
+       here; this records that it was made, tells them, and closes the order so
+       it stops asking to be refunded again. */
+    case 'refund':
+        if ($app['status'] !== 'cancelled') {
+            http_response_code(409);
+            exit('Only a cancelled order has a refund waiting on it.');
+        }
+
+        db()->prepare('UPDATE applications SET status = ? WHERE id = ?')->execute(['refunded', $id]);
+        log_status_change('application', $id, (string) $app['status'], 'refunded', (int) $user['id']);
+
+        $refundTotals = payment_totals($app);
+
+        after_response(static function () use ($app, $refundTotals): void {
+            send_refund_sent_email($app, $refundTotals);
+        });
+
+        $did   = 'refund of ' . money((float) $refundTotals['paid']) . ' recorded';
+        $flash = 'refunded';
+        break;
+
     /* ---------- nudge whoever still owes ---------- */
     case 'remind':
         $totals = payment_totals($app);

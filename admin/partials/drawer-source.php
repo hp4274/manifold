@@ -62,6 +62,50 @@ foreach (array_keys($srcGroups) as $groupLabel) {
     </div>
   <?php endif; ?>
 
+  <?php /* The client answered the delivery question with "cancel", so the money
+           they have already sent has to go back. Same shape as the approval
+           bar above, because it is the same kind of thing: one decision the
+           office has to make, at the top of what it is deciding on. */ ?>
+  <?php if ($srcIsApp && ($srcRow['status'] ?? '') === 'cancelled'): ?>
+    <?php $srcRefund = payment_totals($srcRow); ?>
+    <div class="decide-bar decide-bar--refund">
+      <div class="decide-bar__text">
+        <p class="decide-bar__title">
+          Refund requested — <?= e(money((float) $srcRefund['paid'])) ?>
+        </p>
+        <p class="decide-bar__note">
+          <?= e($srcRow['full_name']) ?> cancelled on
+          <?= e(format_datetime((string) ($srcRow['delivery_choice_at'] ?? $srcRow['created_at']))) ?>,
+          after the documents were verified. Transfer the money back to the account they paid from,
+          then record it here — that emails them the confirmation and closes the order.
+        </p>
+      </div>
+
+      <div class="decide-bar__actions">
+        <form method="post" action="payment.php"
+              data-confirm="Record the <?= e(money((float) $srcRefund['paid'])) ?> refund to <?= e($srcRow['full_name']) ?>? They are emailed that it is on its way.">
+          <?= csrf_field() ?>
+          <input type="hidden" name="action" value="refund">
+          <input type="hidden" name="type" value="<?= e($srcType) ?>">
+          <input type="hidden" name="id" value="<?= $srcId ?>">
+          <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
+          <button type="submit" class="btn btn--primary">
+            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Refund sent
+          </button>
+        </form>
+      </div>
+    </div>
+  <?php endif; ?>
+
+  <?php /* Nothing left to do on a refunded order, but the drawer still has to
+           say what happened to the money it is showing as paid. */ ?>
+  <?php if ($srcIsApp && ($srcRow['status'] ?? '') === 'refunded'): ?>
+    <p class="drawer-closed">
+      <i class="bi bi-check-circle" aria-hidden="true"></i>
+      Refunded in full and closed. The payments below stay on the record as they were.
+    </p>
+  <?php endif; ?>
+
   <?php if (count($srcTabs) > 1): ?>
     <nav class="detail-tabs" role="tablist" aria-label="Sections">
       <?php foreach ($srcTabs as $i => $tab): ?>

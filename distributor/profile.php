@@ -28,7 +28,7 @@ $editing = $dist;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_profile') {
     csrf_check();
 
-    [$values, $error] = partner_values($_POST);
+    [$values, $error] = partner_values($_POST, 'distributor', $distId);
 
     if ($error === '') {
         $columns = array_keys($values);

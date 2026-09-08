@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $values = [];
 
     if ($action === 'save') {
-        [$values, $error] = partner_values($_POST);
+        [$values, $error] = partner_values($_POST, 'distributor', $id);
 
         if ($error === '' && $id > 0) {
             $set = implode(' = ?, ', PARTNER_FIELDS) . ' = ?';
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id   = (int) ($_POST['distributor_id'] ?? 0);
         $dist = $id > 0 ? distributor_by_id($id) : null;
 
-        [$values, $error] = partner_values($_POST);
+        [$values, $error] = partner_values($_POST, 'dealer');
 
         if (!$dist) {
             $error = 'Pick the distributor this dealer answers to.';
@@ -239,10 +239,14 @@ $distributorChoices = db()->query(
     'SELECT id, full_name, distributor_code FROM distributors WHERE is_active = 1 ORDER BY full_name'
 )->fetchAll();
 
-/* the page's own rows carry their figures for the table */
+/* the page's own rows carry their figures for the table — the whole page's
+   totals and dealer lists batched rather than fetched per row */
+$distIds      = array_column($distributors, 'id');
+$distTotals   = commission_totals_map('distributor', $distIds);
+$distDealers  = distributor_dealers_map($distIds);
 foreach ($distributors as $i => $dist) {
-    $distributors[$i]['totals']  = distributor_totals((int) $dist['id']);
-    $distributors[$i]['dealers'] = distributor_dealers((int) $dist['id']);
+    $distributors[$i]['totals']  = $distTotals[(int) $dist['id']];
+    $distributors[$i]['dealers'] = $distDealers[(int) $dist['id']];
 }
 
 /* the tiles are the whole business, not this page of it — summed in SQL so

@@ -361,9 +361,15 @@
       panel.classList.add('is-open');
       button.setAttribute('aria-expanded', 'true');
 
-      /* flip upwards when there is no room below */
-      var room = window.innerHeight - button.getBoundingClientRect().bottom;
-      panel.classList.toggle('is-above', room < panel.offsetHeight + 24);
+      /* Flip upwards only when that is genuinely better: on a short screen
+         neither side fits, and flipping then put the calendar off the top of
+         the window where the days could not be reached at all. */
+      var box    = button.getBoundingClientRect();
+      var below  = window.innerHeight - box.bottom;
+      var above  = box.top;
+      var needed = panel.offsetHeight + 24;
+
+      panel.classList.toggle('is-above', below < needed && above > below);
 
       document.addEventListener('click', onOutside);
       document.addEventListener('keydown', onKey);

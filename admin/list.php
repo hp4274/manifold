@@ -35,9 +35,28 @@ if ($status !== '') {
 }
 
 if ($q !== '') {
-    $where[]  = '(full_name LIKE ? OR email LIKE ? OR mobile LIKE ? OR partner_code LIKE ? OR referral_code LIKE ?)';
+    /* Each form is its own table with its own columns: an application has a
+       full_name and a mobile_number, an enquiry has a name and a phone, a
+       newsletter row has an address and nothing else. Naming columns that are
+       not there is what made every search on this page answer with a 500 and
+       send the browser off on a full reload. */
+    $searchable = [
+        'applications'           => ['full_name', 'email', 'mobile_number',
+                                     'reference_code', 'referral_code', 'referred_by_code'],
+        'contact_messages'       => ['name', 'email', 'phone', 'company', 'city'],
+        'newsletter_subscribers' => ['email'],
+    ][$config['table']] ?? ['email'];
+
+    $where[] = '(' . implode(' OR ', array_map(
+        static fn (string $column): string => '`' . $column . '` LIKE ?',
+        $searchable
+    )) . ')';
+
     $like = '%' . $q . '%';
-    array_push($params, $like, $like, $like, $like, $like);
+
+    foreach ($searchable as $ignored) {
+        $params[] = $like;
+    }
 }
 
 $clause = $where ? ' WHERE ' . implode(' AND ', $where) : '';

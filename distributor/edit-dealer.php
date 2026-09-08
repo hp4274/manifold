@@ -40,7 +40,7 @@ $editing = $dealer;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_dealer') {
     csrf_check();
 
-    [$values, $error] = partner_values($_POST);
+    [$values, $error] = partner_values($_POST, 'dealer', $dealerId);
 
     if ($error === '') {
         $columns = array_keys($values);

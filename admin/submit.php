@@ -302,6 +302,28 @@ try {
             respond(false, 'That email address does not look right — we send the payment link to it.');
         }
 
+        /* One address, one account. A dealer or a distributor cannot also apply
+           as a customer on the same address — the portal reads its roles off
+           one session and would sign them into both sets of screens at once.
+
+           A returning customer is different: buying a second unit is the same
+           person, and the portal's "Buy again" fills this form in for them. So
+           an address that already belongs to a customer is allowed through only
+           while that customer is signed in; anybody else typing it is told to
+           sign in rather than quietly starting a second account on it. */
+        $emailOwner = email_owner((string) $columns['email']);
+
+        if ($emailOwner === 'dealer' || $emailOwner === 'distributor') {
+            respond(false, 'That email address is already registered as a ' . $emailOwner
+                . ' account. Sign in at ' . base_url() . '/portal/ with it, or apply on a different address.');
+        }
+
+        if ($emailOwner === 'client'
+            && strcasecmp((string) ($_SESSION['applicant_email'] ?? ''), (string) $columns['email']) !== 0) {
+            respond(false, 'This email address is already used. Sign in to your portal at '
+                . base_url() . '/portal/ and use "Buy again" to apply for another unit.');
+        }
+
         if (strlen($digits($columns['pin_code'])) !== 6) {
             respond(false, 'The pin code has to be six digits.');
         }

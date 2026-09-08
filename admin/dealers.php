@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $values = [];
 
     if ($action === 'save') {
-        [$values, $error] = partner_values($_POST);
+        [$values, $error] = partner_values($_POST, 'dealer', $id);
 
         /* Every dealer answers to a distributor — there is no such thing as
            one without, so this is checked here and not only in the form.
@@ -306,9 +306,11 @@ $dealers = db()->query(
 
 $dealerUrl = $dealerFilterUrl($show, $dist);
 
-/* the page's own rows carry their figures for the table */
+/* the page's own rows carry their figures for the table — the whole page's
+   totals in four GROUP BY queries rather than four per row */
+$dealerTotals = commission_totals_map('dealer', array_column($dealers, 'id'));
 foreach ($dealers as $i => $dealer) {
-    $dealers[$i]['totals'] = dealer_totals((int) $dealer['id']);
+    $dealers[$i]['totals'] = $dealerTotals[(int) $dealer['id']];
 }
 
 /* the tiles are the whole business, not this page of it — summed in SQL so

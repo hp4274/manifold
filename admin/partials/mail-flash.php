@@ -33,6 +33,8 @@ $pay  = $payFlash ?? '';
     Documents turned down. The applicant has been emailed the reason and asked to send corrected
     ones. Their application stands and the delivery payment stays shut until you verify them.
   </p>
+<?php elseif ($pay === 'refunded'): ?>
+  <p class="alert alert--ok">Refund recorded. The client has been emailed that the money is on its way back.</p>
 <?php elseif ($pay === 'reminded'): ?>
   <p class="alert alert--ok">Reminder sent.</p>
 <?php elseif ($pay === 'mailfail'): ?>

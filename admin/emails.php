@@ -412,6 +412,32 @@ function send_order_cancelled_email(array $app): bool
     );
 }
 
+/**
+ * Sent when the office has actually made the refund transfer.
+ */
+function send_refund_sent_email(array $app, ?array $totals = null): bool
+{
+    $totals = $totals ?? payment_totals($app);
+
+    $inner = '<p style="margin:0 0 14px;">Hello ' . e((string) $app['full_name']) . ',</p>'
+        . '<p style="margin:0 0 16px;">Your refund is on its way back to the account you paid from. '
+        . 'Banks usually take a few working days to show it on a statement.</p>'
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Product'        => product_label((string) $app['product']),
+            'Refunded'       => money((float) $totals['paid']),
+        ])
+        . '<p style="margin:16px 0 0;">If it has not arrived in five working days, reply to this email '
+        . 'or call +91 97251 54186 and we will trace it.</p>';
+
+    return send_mail(
+        (string) $app['email'],
+        'Your refund is on its way (' . $app['reference_code'] . ')',
+        email_wrap('Refund sent', $inner),
+        'refund_sent'
+    );
+}
+
 /** And the office hears the answer, because a cancellation owes somebody money. */
 function send_delivery_choice_admin(array $app, string $choice): bool
 {

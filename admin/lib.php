@@ -110,7 +110,7 @@ const STATUSES = ['new', 'accepted', 'contacted', 'rejected'];
  */
 const APPLICATION_STATUSES = [
     'submitted', 'booking_pending', 'booking_review', 'docs_pending', 'confirm_pending',
-    'delivery_pending', 'delivery_review', 'complete', 'cancelled', 'rejected',
+    'delivery_pending', 'delivery_review', 'complete', 'cancelled', 'refunded', 'rejected',
 ];
 
 /** The stages an applicant sees in the portal timeline (rejected sits outside). */
@@ -152,7 +152,8 @@ function status_label(string $status, string $audience = 'admin'): string
             ? 'Delivery payment submitted — verifying'
             : 'Delivery receipt — verify',
         'complete'         => $audience === 'applicant' ? 'Complete' : 'Both payments verified',
-        'cancelled'        => $audience === 'applicant' ? 'Cancelled - refund due' : 'Cancelled - refund the booking',
+        'cancelled'        => $audience === 'applicant' ? 'Cancelled - refund due' : 'Refund requested',
+        'refunded'         => $audience === 'applicant' ? 'Refunded' : 'Refunded - order closed',
         'new'              => 'New',
         'accepted'         => 'Accepted',
         'contacted'        => 'Contacted',
@@ -174,7 +175,8 @@ function status_short(string $status): string
         'delivery_pending' => 'delivery due',
         'delivery_review'  => 'delivery receipt',
         'complete'         => 'complete',
-        'cancelled'        => 'cancelled',
+        'cancelled'        => 'refund requested',
+        'refunded'         => 'refunded',
     ];
 
     return $short[$status] ?? $status;
@@ -211,6 +213,9 @@ function stage_copy(string $status): array
         'cancelled'        => ['Order cancelled',
                                'You asked us not to go ahead. Everything you have paid is refunded - our '
                                . 'team is arranging the transfer and will confirm it by email.'],
+        'refunded'         => ['Refunded',
+                               'Your refund has been sent back to the account you paid from. It can take '
+                               . 'a few working days to show on your statement.'],
         'rejected'         => ['Not proceeding',
                                'This application is not moving forward. Contact us if you think that is a mistake.'],
     ];
@@ -382,6 +387,14 @@ function status_from_payments(array $app, ?array $payments = null): string
 {
     if ($app['status'] === 'rejected') {
         return 'rejected';
+    }
+
+    /* A refund that has been paid out is the end of the order. The payments it
+       was worked out from are still verified, so without this the machine would
+       read the money and put the sale back to 'cancelled' — asking the office to
+       refund a second time. */
+    if ($app['status'] === 'refunded') {
+        return 'refunded';
     }
 
     /* An application nobody has approved yet has no payment stage to be at.
@@ -2757,7 +2770,66 @@ const PARTNER_CODE_FIELDS = [
  * has to be there — the browser marks the same fields, and a request that did
  * not come from our form has to meet the same bar.
  */
-function partner_values(array $post): array
+/**
+ * Who already holds an email address — 'dealer', 'distributor', 'client', or
+ * null when nobody does.
+ *
+ * One address, one account. A person is a dealer or a distributor or a
+ * customer, never two at once: the portal reads its roles off the session and
+ * an address that answers as both would sign one person into two different
+ * sets of screens, with two different sets of money attached.
+ *
+ * $selfRole and $selfId are the record being edited, so saving somebody's own
+ * form does not report their own address as taken.
+ */
+function email_owner(string $email, string $selfRole = '', int $selfId = 0): ?string
+{
+    $email = mb_strtolower(trim($email));
+
+    if ($email === '') {
+        return null;
+    }
+
+    foreach (['dealer' => 'dealers', 'distributor' => 'distributors'] as $role => $table) {
+        $sql = 'SELECT 1 FROM `' . $table . '` WHERE LOWER(email) = ?';
+        $args = [$email];
+
+        if ($role === $selfRole && $selfId > 0) {
+            $sql   .= ' AND id <> ?';
+            $args[] = $selfId;
+        }
+
+        $stmt = db()->prepare($sql . ' LIMIT 1');
+        $stmt->execute($args);
+
+        if ($stmt->fetchColumn()) {
+            return $role;
+        }
+    }
+
+    /* A customer may hold several applications on one address — buying a second
+       stove is the same person, not a second account — so an application is
+       only ever 'client', never a clash with itself. */
+    $stmt = db()->prepare('SELECT 1 FROM applications WHERE LOWER(email) = ? LIMIT 1');
+    $stmt->execute([$email]);
+
+    return $stmt->fetchColumn() ? 'client' : null;
+}
+
+/** The same fact said to somebody filling a partner form in. */
+function email_owner_message(string $owner): string
+{
+    $labels = [
+        'dealer'      => 'a dealer',
+        'distributor' => 'a distributor',
+        'client'      => 'a customer',
+    ];
+
+    return 'That email address already belongs to ' . ($labels[$owner] ?? 'somebody else')
+        . '. One address, one account — use a different one.';
+}
+
+function partner_values(array $post, string $role = '', int $id = 0): array
 {
     $values = [];
 
@@ -2790,6 +2862,15 @@ function partner_values(array $post): array
 
     if (!filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
         return [$values, 'That email address does not look right.'];
+    }
+
+    /* checked here rather than in each of the seven forms that call this: the
+       office adds partners two ways, a distributor adds one more, and both of
+       them plus each partner can edit one afterwards */
+    $owner = $role === '' ? null : email_owner((string) $values['email'], $role, $id);
+
+    if ($owner !== null) {
+        return [$values, email_owner_message($owner)];
     }
 
     return [$values, ''];
@@ -3028,6 +3109,114 @@ function commission_totals(string $who, int $id): array
 function distributor_totals(int $distributorId): array
 {
     return commission_totals('distributor', $distributorId);
+}
+
+/**
+ * commission_totals() for a whole list of ids at once.
+ *
+ * The dealers and distributors lists call commission_totals() once per row —
+ * four queries each, forty-odd serial round-trips to a remote database for one
+ * ten-row page. This is the same figures read in four GROUP BY queries no
+ * matter how many rows, keyed by id. The per-id function stays for everywhere
+ * that wants one; this is only the list's shortcut, and returns byte-identical
+ * arrays (verified in tests/section-e.php).
+ */
+function commission_totals_map(string $who, array $ids): array
+{
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+
+    if (!$ids) {
+        return [];
+    }
+
+    $column  = $who === 'distributor' ? 'distributor_id' : 'dealer_id';
+    $payouts = $who === 'distributor' ? 'distributor_payouts' : 'dealer_payouts';
+    $frozen  = $who === 'distributor' ? 'distributor_commission' : 'dealer_commission';
+    $in      = implode(', ', array_fill(0, count($ids), '?'));
+
+    $agg = static function (string $sql, array $args) use ($column): array {
+        $stmt = db()->prepare($sql);
+        $stmt->execute($args);
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $out[(int) $r[$column]] = $r;
+        }
+        return $out;
+    };
+
+    $sales = $agg(
+        'SELECT ' . $column . ' AS ' . $column . ', COUNT(*) AS sales,
+                COALESCE(SUM(' . COMMISSION_EARNED_SQL . '), 0) AS confirmed
+           FROM applications WHERE ' . $column . ' IN (' . $in . ') GROUP BY ' . $column,
+        $ids
+    );
+    $paid = $agg(
+        'SELECT ' . $column . ' AS ' . $column . ', COALESCE(SUM(amount), 0) AS paid
+           FROM ' . $payouts . ' WHERE ' . $column . ' IN (' . $in . ') GROUP BY ' . $column,
+        $ids
+    );
+    $pipe = $agg(
+        'SELECT ' . $column . ' AS ' . $column . ", COALESCE(SUM(" . $frozen . "), 0) AS pipeline
+           FROM applications
+          WHERE " . $column . ' IN (' . $in . ") AND status <> 'rejected' AND delivery_paid_at IS NULL
+          GROUP BY " . $column,
+        $ids
+    );
+
+    /* earned reads from commission_lines, keyed on party_id — the same source
+       and rounding as commission_earned(), one query for the whole page */
+    $earnStmt = db()->prepare(
+        'SELECT party_id, COALESCE(SUM(amount), 0) AS earned
+           FROM commission_lines
+          WHERE party_type = ? AND party_id IN (' . $in . ') GROUP BY party_id'
+    );
+    $earnStmt->execute(array_merge([$who], $ids));
+    $earn = [];
+    foreach ($earnStmt->fetchAll() as $r) {
+        $earn[(int) $r['party_id']] = (float) $r['earned'];
+    }
+
+    $map = [];
+    foreach ($ids as $id) {
+        $earned = round($earn[$id] ?? 0.0, 2);
+        $paidId = (float) ($paid[$id]['paid'] ?? 0);
+        $map[$id] = [
+            'sales'     => (int) ($sales[$id]['sales'] ?? 0),
+            'confirmed' => (int) ($sales[$id]['confirmed'] ?? 0),
+            'earned'    => $earned,
+            'pipeline'  => round((float) ($pipe[$id]['pipeline'] ?? 0), 2),
+            'paid'      => $paidId,
+            'remaining' => max(0.0, round($earned - $paidId, 2)),
+        ];
+    }
+
+    return $map;
+}
+
+/**
+ * distributor_dealers() for a whole list of distributors at once — one query,
+ * grouped in PHP, keeping each distributor's own newest-first ordering.
+ */
+function distributor_dealers_map(array $distributorIds): array
+{
+    $ids = array_values(array_unique(array_map('intval', $distributorIds)));
+
+    if (!$ids) {
+        return [];
+    }
+
+    $in   = implode(', ', array_fill(0, count($ids), '?'));
+    $stmt = db()->prepare(
+        'SELECT * FROM dealers WHERE distributor_id IN (' . $in . ') ORDER BY is_active DESC, full_name'
+    );
+    $stmt->execute($ids);
+
+    $map = array_fill_keys($ids, []);
+    foreach ($stmt->fetchAll() as $row) {
+        $map[(int) $row['distributor_id']][] = $row;
+    }
+
+    return $map;
 }
 
 /** The reading view of one dealer, in the same shape field_groups() returns. */
@@ -3673,6 +3862,7 @@ function status_done(string $status): string
 {
     $done = [
         'booking_pending' => 'approved',
+        'refunded'        => 'marked refunded',
         'rejected'        => 'rejected',
         'accepted'        => 'accepted',
         'contacted'       => 'marked as contacted',

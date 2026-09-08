@@ -478,6 +478,13 @@
     var scrim = document.createElement('div');
     scrim.className = 'consent-scrim';
 
+    /* measured before the scroll is locked: locking removes the scrollbar, and
+       the width it was holding is handed back as padding so the page does not
+       jump sideways when the question is answered */
+    document.documentElement.style.setProperty(
+      '--sbw', (window.innerWidth - document.documentElement.clientWidth) + 'px'
+    );
+
     document.body.appendChild(scrim);
     document.body.appendChild(bar);
     document.body.classList.add('has-consent-bar', 'is-consent-gated');

@@ -2478,8 +2478,14 @@ body.has-drawer{overflow:hidden}
 }
 .consent-scrim.is-visible{opacity:1}
 
-/* nothing behind the gate scrolls or answers to a click */
-body.is-consent-gated{overflow:hidden}
+/* Nothing behind the gate scrolls or answers to a click. Locking the scroll
+   takes the scrollbar away with it, so the width it held is given back as
+   padding — the document and the two fixed bars keep the width they had, and
+   answering the question does not slide the page sideways. main.js measures
+   the scrollbar into --sbw; a browser with overlay scrollbars measures 0. */
+body.is-consent-gated{overflow:hidden;padding-right:var(--sbw,0px)}
+body.is-consent-gated .top-bar,
+body.is-consent-gated .site-header{padding-right:var(--sbw,0px)}
 .consent-bar{
   position:fixed;
   inset:auto 0 0 0;
@@ -2550,18 +2556,11 @@ body.is-consent-gated{overflow:hidden}
 }
 .consent-btn--decline:hover{background:rgba(255,255,255,.12);color:#fff}
 
-/* The bar is fixed over the page, so while it is up the last stretch of the
-   document would sit under it — including, on the home page, the hero's own
-   buttons. Its measured height (main.js sets --consent-h) is reserved at the
-   foot of the document, so everything can still be scrolled clear of it. */
-body.has-consent-bar{padding-bottom:var(--consent-h,86px)}
-
-/* And while it is up, the first screen gives it room rather than letting it lie
-   across the hero's own buttons — which is what it did at 1440 x 900, on both
-   of them. The moment consent is answered the bar goes and this goes with it. */
-body.has-consent-bar .hero,
-body.has-consent-bar .page-hero,
-body.has-consent-bar .soon{padding-bottom:var(--consent-h,86px)}
+/* The bar lies over the page rather than pushing it. Nothing behind the scrim
+   scrolls while the question is open, so there is nothing to reserve room for —
+   and padding the document or the hero for the bar's height moved the hero's
+   own content up, then dropped it back the moment Accept or Decline was
+   pressed. The page must look the same before and after the answer. */
 
 /* the back-to-top button steps over the bar while it is up */
 body.has-consent-bar .to-top{bottom:calc(26px + var(--consent-h,86px))}
@@ -3951,7 +3950,13 @@ fieldset.field legend{margin-bottom:2px}
 .apply-form--wizard .form-step{display:none;scroll-margin-top:calc(var(--header-offset) + 104px)}
 .apply-form--wizard .form-step.is-current{
   display:grid;
-  animation:form-step-in .28s ease both;
+  /* No fill mode: `both` leaves the finished animation applying its final
+     transform for good, and an element holding a transform is a stacking
+     context — which trapped the date picker's panel inside this step, where
+     the sticky progress card above it (z-index 5) painted straight over the
+     part of the calendar that opened upwards. The animation has no delay, so
+     the fill was buying nothing. */
+  animation:form-step-in .28s ease;
 }
 @keyframes form-step-in{
   from{opacity:0;transform:translateY(14px)}

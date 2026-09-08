@@ -353,8 +353,13 @@ require __DIR__ . '/partials/head.php';
                    status to the person looking at it. */ ?>
         </header>
 
-        <?php if ($status === 'rejected'): ?>
-          <p class="portal-alert portal-alert--error"><strong><?= e($title) ?>.</strong> <?= e($copy) ?></p>
+        <?php /* An order that ended - turned down, or cancelled by the client
+                 and being refunded - is not somewhere on the timeline, so it
+                 says what happened instead of drawing eight empty steps. */ ?>
+        <?php if (in_array($status, ['rejected', 'cancelled', 'refunded'], true)): ?>
+          <p class="portal-alert portal-alert--<?= $status === 'rejected' ? 'error' : 'warn' ?>">
+            <strong><?= e($title) ?>.</strong> <?= e($copy) ?>
+          </p>
         <?php else: ?>
           <ol class="portal-steps">
             <?php foreach (APPLICATION_STAGES as $i => $stage): ?>
