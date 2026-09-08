@@ -341,7 +341,10 @@
             '</button>' +
             '<div class="nav-account__menu" id="' + menuId + '" hidden>' +
               '<p class="nav-account__who"><strong></strong><span></span></p>' +
-              '<a href="' + siteRoot + 'portal/status"><i class="bi bi-clipboard-check" aria-hidden="true"></i> View status</a>' +
+              /* already on the status page? then this link goes nowhere useful */
+              (page === 'status'
+                ? ''
+                : '<a href="' + siteRoot + 'portal/status"><i class="bi bi-clipboard-check" aria-hidden="true"></i> View status</a>') +
               (session.canRefer
                 ? '<a href="' + siteRoot + 'portal/status#referral"><i class="bi bi-people" aria-hidden="true"></i> Refer someone</a>'
                 : '') +
@@ -1526,4 +1529,135 @@
     var digitsOnly = e.target.value.replace(/[^0-9]/g, '');
     if (digitsOnly !== e.target.value) e.target.value = digitsOnly;
   });
+})();
+
+/* ---------- portal: resend the sign-in code on a timer ----------
+   The button unlocks 20 seconds after the first code goes out and 60 after a
+   resend. The moment it may next be pressed is kept in localStorage, so a wrong
+   code typed in between — which reloads the page — does not hand back an early
+   resend. The server marks a code sent this request with data-resend-fresh (20
+   or 60); a plain reload carries 0 and the countdown already running carries on. */
+(function () {
+  var btn = document.querySelector('[data-resend]');
+  if (!btn) return;
+
+  var KEY   = 'mfOtpResendUntil';
+  var label = (btn.textContent || 'Resend code').trim();
+
+  function readUntil() {
+    try { return parseInt(localStorage.getItem(KEY), 10) || 0; } catch (e) { return 0; }
+  }
+
+  var fresh = parseInt(btn.getAttribute('data-resend-fresh'), 10) || 0;
+  if (fresh > 0) {
+    try { localStorage.setItem(KEY, String(Date.now() + fresh * 1000)); } catch (e) {}
+  }
+
+  function tick() {
+    var left = Math.ceil((readUntil() - Date.now()) / 1000);
+
+    if (left > 0) {
+      btn.disabled = true;
+      btn.textContent = label + ' in ' + left + 's';
+      setTimeout(tick, 250);
+    } else {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  tick();
+})();
+
+/* ---------- portal: the six-digit code, one cell per digit ----------
+   Built from the single input the page ships with, which stays as the fallback
+   when this does not run. The real input is kept in the DOM, hidden, and still
+   named `code` — the cells only mirror into it — so the form submits exactly as
+   before and a one-time code the browser or a paste drops in fills all six. */
+(function () {
+  var wrap = document.querySelector('[data-otp]');
+  if (!wrap) return;
+
+  var real = wrap.querySelector('[data-otp-fallback]');
+  if (!real) return;
+
+  var N = 6;
+  var boxes = [];
+  var row = document.createElement('div');
+  row.className = 'otp-boxes';
+
+  for (var i = 0; i < N; i++) {
+    var b = document.createElement('input');
+    b.className = 'otp-box';
+    b.type = 'text';
+    b.inputMode = 'numeric';
+    b.setAttribute('pattern', '[0-9]*');
+    b.setAttribute('aria-label', 'Digit ' + (i + 1));
+    b.autocomplete = i === 0 ? 'one-time-code' : 'off';
+    boxes.push(b);
+    row.appendChild(b);
+  }
+
+  /* keep the real input for its value, hide it from view and from tabbing */
+  real.type = 'hidden';
+  real.removeAttribute('autofocus');
+  wrap.appendChild(row);
+
+  function indexOf(el) {
+    for (var i = 0; i < N; i++) { if (boxes[i] === el) return i; }
+    return -1;
+  }
+
+  function sync() {
+    var v = '';
+    for (var i = 0; i < N; i++) {
+      v += boxes[i].value;
+      boxes[i].className = 'otp-box' + (boxes[i].value ? ' otp-box--filled' : '');
+    }
+    real.value = v;
+  }
+
+  function fill(str) {
+    var digits = (str || '').replace(/\D/g, '').slice(0, N);
+    for (var i = 0; i < N; i++) { boxes[i].value = digits.charAt(i) || ''; }
+    sync();
+    boxes[Math.min(digits.length, N - 1)].focus();
+  }
+
+  row.addEventListener('input', function (e) {
+    var i = indexOf(e.target);
+    if (i < 0) return;
+
+    var v = e.target.value.replace(/\D/g, '');
+
+    if (v.length > 1) { fill(v); return; } /* autofill or paste into one cell */
+
+    e.target.value = v;
+    sync();
+
+    if (v && i < N - 1) boxes[i + 1].focus();
+  });
+
+  row.addEventListener('keydown', function (e) {
+    var i = indexOf(e.target);
+    if (i < 0) return;
+
+    if (e.key === 'Backspace' && !e.target.value && i > 0) {
+      boxes[i - 1].focus();
+      e.preventDefault();
+    } else if (e.key === 'ArrowLeft' && i > 0) {
+      boxes[i - 1].focus();
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight' && i < N - 1) {
+      boxes[i + 1].focus();
+      e.preventDefault();
+    }
+  });
+
+  row.addEventListener('paste', function (e) {
+    e.preventDefault();
+    fill((e.clipboardData || window.clipboardData).getData('text'));
+  });
+
+  boxes[0].focus();
 })();

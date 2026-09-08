@@ -12,6 +12,7 @@ unset(
     $_SESSION['portal_roles'],
     $_SESSION['otp_email']
 );
+clear_authenticated();
 
 header('Location: ./');
 exit;

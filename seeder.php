@@ -23,6 +23,10 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/admin/lib.php';
+/* the voucher chain fires notifications (held back while seeding, but the
+   functions still have to exist) and the raffle block calls raffle-lib */
+require_once __DIR__ . '/admin/emails.php';
+require_once __DIR__ . '/admin/raffle-lib.php';
 
 /* ---------------------------------------------------------------- guards */
 
@@ -43,6 +47,11 @@ $confirmed = isset($_GET['confirm']) || (defined('SEEDER_ALLOW_REMOTE') && SEEDE
 @set_time_limit(300);
 
 const SEED_TAG = '[seed]';
+
+/* Seeding walks the voucher, referral and status flows through the live code,
+   which would fire real email at every step. This flag, checked in send_mail(),
+   holds all of it back — the seeder is after the rows, not the notifications. */
+define('MANIFOLD_SEEDING', true);
 
 $wipe = isset($_GET['wipe']) || (($_GET['only'] ?? '') === 'wipe');
 $onlyWipe = ($_GET['only'] ?? '') === 'wipe';
@@ -215,6 +224,10 @@ if ($wipe) {
 
     if ($dealerIds) {
         $in = implode(',', array_map('intval', $dealerIds));
+        /* voucher lines and events cascade from the voucher row */
+        $removed['dealer vouchers'] = (int) $db->exec(
+            "DELETE FROM commission_vouchers WHERE party_type = 'dealer' AND party_id IN ({$in})"
+        );
         $removed['dealer_payouts'] = (int) $db->exec("DELETE FROM dealer_payouts WHERE dealer_id IN ({$in})");
         $removed['stock (dealers)'] = (int) $db->exec(
             "DELETE FROM stock_ledger WHERE owner_type = 'dealer' AND owner_id IN ({$in})"
@@ -224,6 +237,9 @@ if ($wipe) {
 
     if ($distIds) {
         $in = implode(',', array_map('intval', $distIds));
+        $removed['distributor vouchers'] = (int) $db->exec(
+            "DELETE FROM commission_vouchers WHERE party_type = 'distributor' AND party_id IN ({$in})"
+        );
         $removed['distributor_payouts'] = (int) $db->exec("DELETE FROM distributor_payouts WHERE distributor_id IN ({$in})");
         $removed['stock (distributors)'] = (int) $db->exec(
             "DELETE FROM stock_ledger WHERE owner_type = 'distributor' AND owner_id IN ({$in})"
@@ -231,12 +247,29 @@ if ($wipe) {
         $removed['distributors'] = (int) $db->exec("DELETE FROM distributors WHERE id IN ({$in})");
     }
 
+    /* the stand-alone tables, each carrying its own seed marker */
+    foreach ([
+        'blog posts'         => "DELETE FROM blog_posts WHERE slug LIKE 'seed-%'",
+        'contact messages'   => "DELETE FROM contact_messages WHERE admin_note LIKE '%" . SEED_TAG . "%'",
+        'newsletter signups' => "DELETE FROM newsletter_subscribers WHERE admin_note LIKE '%" . SEED_TAG . "%'",
+    ] as $what => $sql) {
+        try {
+            $removed[$what] = (int) $db->exec($sql);
+        } catch (Throwable $e) {
+            /* a table this database does not have is not an error here */
+        }
+    }
+
     $removed = array_filter($removed);
 }
 
 /* --------------------------------------------------------------- the build */
 
-$made = ['distributors' => 0, 'dealers' => 0, 'applications' => 0, 'payouts' => 0, 'stock rows' => 0];
+$made = [
+    'distributors' => 0, 'dealers' => 0, 'applications' => 0, 'payouts' => 0, 'stock rows' => 0,
+    'commission claims' => 0, 'blog posts' => 0, 'contact messages' => 0,
+    'newsletter signups' => 0, 'raffle winners' => 0,
+];
 $scenarios = [];
 $sample = [];
 
@@ -761,6 +794,69 @@ if (!$onlyWipe) {
 
     $scenarios[] = ['Referral reward states', 'pending, sent and cancelled all present'];
 
+    /* --- 8b. the commission voucher chain: claims in flight and settled ---
+       Driven through the real voucher functions so every status, line and
+       payout is exactly what the app would produce. Distributor 1's bundle is
+       paid end to end, 2's waits with the office, 3's waits with C&F, and 4 has
+       a dealer claim left sitting with the distributor to approve. */
+    foreach ($distributors as $d => $dist) {
+        if (empty($dist['is_active'])) {
+            continue;
+        }
+
+        $distId   = (int) $dist['id'];
+        $approved = 0;
+
+        $live = array_values(array_filter($dealers[$d], static function (array $x): bool {
+            return $x['approval_status'] === 'approved' && !empty($x['is_active']);
+        }));
+
+        foreach (array_slice($live, 0, 3) as $dealer) {
+            [$vid] = voucher_raise('dealer', (int) $dealer['id'], 'the seed');
+
+            if (!$vid) {
+                continue;
+            }
+
+            $made['commission claims']++;
+
+            /* distributor 4 leaves its dealer claims sitting unapproved */
+            if ($d !== 4) {
+                voucher_approve_dealer($vid, $distId, 'the seed');
+                $approved++;
+            }
+        }
+
+        /* 4 stops here — a claim in flight on the distributor's own desk */
+        if ($d === 4) {
+            continue;
+        }
+
+        if ($approved === 0 && !voucher_claimable('distributor', $distId)) {
+            continue;
+        }
+
+        [$bid] = voucher_bundle($distId, 'the seed');
+
+        if (!$bid) {
+            continue;
+        }
+
+        $made['commission claims']++;
+
+        if ($d === 1) {
+            voucher_move_bundle($bid, 'with_admin', 'the seed', ['with_rf']);
+            voucher_move_bundle($bid, 'funded', 'the seed', ['with_admin']);
+            voucher_pay($bid, 'the seed', 'SEED-UTR-' . $bid);
+        } elseif ($d === 2) {
+            voucher_move_bundle($bid, 'with_admin', 'the seed', ['with_rf']);
+        }
+        /* distributor 3 leaves the bundle with C&F (with_rf) */
+    }
+
+    $scenarios[] = ['Commission voucher chain',
+        'a bundle paid end to end, one with the office, one with C&F, and a dealer claim awaiting approval'];
+
     /* --- 9. money going back out: part of what is owed, paid --- */
     foreach ($distributors as $dist) {
         $owed = commission_totals('distributor', (int) $dist['id']);
@@ -789,6 +885,93 @@ if (!$onlyWipe) {
     }
 
     $scenarios[] = ['Partly paid partners', 'earned, paid and still owed are all non-zero'];
+
+    /* --- 10. the blog: one of every state it can be in --- */
+    $blogRows = [
+        ['how the hydrogen stove actually works',      'published',   seed_when(40)],
+        ['what a tuktuk owner saves in a year',        'published',   seed_when(12)],
+        ['becoming a Manifold dealer',                 'scheduled',   date('Y-m-d H:i:s', strtotime('+5 days'))],
+        ['behind the build: our Ahmedabad workshop',   'draft',       null],
+        ['an announcement we have since pulled',       'unpublished', seed_when(80)],
+    ];
+
+    foreach ($blogRows as [$title, $status, $publishAt]) {
+        $slug = 'seed-' . bin2hex(random_bytes(3)) . '-'
+            . preg_replace('/[^a-z0-9]+/', '-', strtolower($title));
+
+        db()->prepare(
+            'INSERT INTO blog_posts (slug, title, subtitle, body, status, publish_at, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        )->execute([
+            mb_substr($slug, 0, 160),
+            ucfirst($title),
+            'A seeded article, here so the blog screens have something to show.',
+            '<p>Seeded copy for <strong>' . e(ucfirst($title)) . '</strong>. Nothing here is real — it '
+            . 'exists so the published list, the scheduled queue and the draft and unpublished states '
+            . 'can all be seen.</p><p>Second paragraph, for the reading view.</p>',
+            $status, $publishAt, seed_when(mt_rand(5, 90)),
+        ]);
+        $made['blog posts']++;
+    }
+
+    $scenarios[] = ['Blog states', 'published, scheduled, draft and unpublished posts all present'];
+
+    /* --- 11. contact enquiries and newsletter signups, across every state --- */
+    $interests = ['stove', 'tuktuk', 'dealership', 'distribution', 'other'];
+
+    foreach (['new', 'new', 'accepted', 'contacted', 'rejected'] as $i => $state) {
+        [$c, $s, $p] = seed_city();
+        $interest = $interests[$i % count($interests)];
+
+        db()->prepare(
+            'INSERT INTO contact_messages (status, name, company, email, phone, interest, city,
+                                           message, consent, admin_note, ip_address, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)'
+        )->execute([
+            $state, seed_name(), null, seed_email('client'), seed_mobile(), $interest, $c,
+            'Seeded enquiry — is the ' . $interest . ' available in ' . $c . '?',
+            SEED_TAG, '127.0.0.1', seed_when(mt_rand(1, 60)),
+        ]);
+        $made['contact messages']++;
+
+        db()->prepare(
+            'INSERT INTO newsletter_subscribers (status, email, source_page, admin_note, ip_address, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([
+            $state, 'seed-news-' . bin2hex(random_bytes(3)) . '@yopmail.com',
+            'index', SEED_TAG, '127.0.0.1', seed_when(mt_rand(1, 90)),
+        ]);
+        $made['newsletter signups']++;
+    }
+
+    $scenarios[] = ['Contact & newsletter', 'both boxes seeded across new, accepted, contacted and rejected'];
+
+    /* --- 12. raffle winners, only when a draw is actually set up and running,
+             so this is a no-op on a site that has not turned the raffle on --- */
+    if (function_exists('raffle_running') && raffle_running()) {
+        raffle_sync();
+        $draws = raffle_all_draws(1);
+        $draw  = $draws[0] ?? null;
+
+        if ($draw) {
+            $eligible = db()->query(
+                "SELECT id FROM applications
+                  WHERE admin_note LIKE '%" . SEED_TAG . "%'
+                    AND booking_paid_at IS NOT NULL AND status <> 'rejected'
+                  ORDER BY id LIMIT 3"
+            )->fetchAll(PDO::FETCH_COLUMN);
+
+            foreach ($eligible as $appId) {
+                if (raffle_add_winner((int) $draw['id'], (int) $appId) === '') {
+                    $made['raffle winners']++;
+                }
+            }
+        }
+
+        if ($made['raffle winners'] > 0) {
+            $scenarios[] = ['Raffle winners', 'seeded onto the current draw'];
+        }
+    }
 
     /* ---- a few sign-ins worth writing down ---- */
     $sample['A distributor'] = $distributors[1]['email'] . ' — code ' . $distributors[1]['distributor_code'];
@@ -955,7 +1138,9 @@ $money = db()->query(
       <a href="admin/">Admin dashboard</a>
       <a href="admin/dealers">Dealers</a>
       <a href="admin/distributors">Distributors</a>
+      <a href="admin/vouchers">Commission vouchers</a>
       <a href="admin/referrals">Referrals</a>
+      <a href="admin/blog">Blog</a>
       <a href="portal/">Client &amp; partner portal</a>
     </p>
     <p class="muted" style="margin:6px 0 0">

@@ -529,22 +529,15 @@ require __DIR__ . '/partials/head.php';
                             · <?= e($entry['reject_reason']) ?>
                           <?php endif; ?>
                         </span>
+                        <?php /* The per-payment status the stage header already
+                                 carries is not repeated here; the receipt row
+                                 shows only the receipt link. */ ?>
                         <?php if ($entry['status'] === 'verified'): ?>
                           <a class="portal-entry__receipt" target="_blank" rel="noopener"
                              href="receipt.php?payment=<?= (int) $entry['id'] ?>">
                             <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Receipt PDF
                           </a>
                         <?php endif; ?>
-
-                        <span class="portal-entry__state">
-                          <?php if ($entry['status'] === 'verified'): ?>
-                            <i class="bi bi-check-lg" aria-hidden="true"></i> Verified
-                          <?php elseif ($entry['status'] === 'pending'): ?>
-                            <i class="bi bi-hourglass-split" aria-hidden="true"></i> Checking
-                          <?php else: ?>
-                            <i class="bi bi-x-lg" aria-hidden="true"></i> Not accepted
-                          <?php endif; ?>
-                        </span>
                       </li>
                     <?php endforeach; ?>
                   </ul>

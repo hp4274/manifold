@@ -1009,8 +1009,11 @@
 
           var active = document.activeElement;
           var isSearch = active && active.classList.contains('admin-search-input');
-          var cursorStart = 0, cursorEnd = 0;
+          var liveValue = '', cursorStart = 0, cursorEnd = 0;
           if (isSearch) {
+            /* what the box holds RIGHT NOW, which is not always what the server
+               rendered: a keystroke can land while the request is in flight */
+            liveValue = active.value;
             cursorStart = active.selectionStart;
             cursorEnd = active.selectionEnd;
           }
@@ -1021,9 +1024,16 @@
           if (isSearch) {
             var newSearch = liveList.querySelector('.admin-search-input');
             if (newSearch) {
+              /* Keep the person's own text and caret, not the value the server
+                 echoed for the older query — otherwise a character typed during
+                 the request (usually the space that just triggered it) is thrown
+                 away and the caret, saved against the newer text, jumps. The
+                 range is clamped so it can never point past the value. */
+              if (newSearch.value !== liveValue) newSearch.value = liveValue;
+              var end = liveValue.length;
               newSearch.focus();
               try {
-                newSearch.setSelectionRange(cursorStart, cursorEnd);
+                newSearch.setSelectionRange(Math.min(cursorStart, end), Math.min(cursorEnd, end));
               } catch (e) {}
             }
           }
@@ -1079,7 +1089,7 @@
 
         var url = form.getAttribute('action') || window.location.pathname;
         swapList(url + (query.length ? '?' + query.join('&') : ''), true);
-      }, 200);
+      }, 500);
     });
 
     liveList.addEventListener('submit', function (e) {

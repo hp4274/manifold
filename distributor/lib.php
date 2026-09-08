@@ -49,8 +49,7 @@ function require_distributor(): array
 
     if (!$dist) {
         /* one sign-in for everybody: the address decides the role */
-        header('Location: ../portal/');
-        exit;
+        guard_redirect('../portal/');
     }
 
     return $dist;

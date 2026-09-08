@@ -50,8 +50,7 @@ function require_applicant(): string
     $email = applicant();
 
     if (!$email) {
-        header('Location: ./');
-        exit;
+        guard_redirect('./');
     }
 
     return $email;
@@ -189,14 +188,12 @@ function roles_for_email(string $email): array
 }
 
 /**
- * What the sign-in form says whatever was typed at it.
+ * What the sign-in form says once a code has actually gone out.
  *
- * The three states an address could be in — unknown, waiting on the office,
- * registered — used to be three different sentences, which with no per-IP
- * throttle in front of the form made it a customer-list harvester: type an
- * address, read which of the three came back. The kindness the middle sentence
- * carried is not lost, it has moved into an email that only the owner of the
- * mailbox can read.
+ * Shown only for a known address now that the form tells an unknown or
+ * still-pending one so directly (see issue_otp). The per-IP and per-address
+ * throttles in otp_recent_count() are what keep the form from being walked
+ * through a list one address at a time.
  */
 const OTP_SENT_NOTICE = 'If that address is registered with us, a six-digit code is on its way. '
     . 'It is valid for ' . OTP_TTL_MINUTES . ' minutes.';
@@ -241,11 +238,11 @@ function otp_recent_count(string $email, ?string $ip): int
 /**
  * Issues a code and emails it. Returns an error string, or '' on success.
  *
- * '' does not mean a code went out — it means the form should say
- * OTP_SENT_NOTICE, which is the same answer for an address we have never heard
- * of as for one we know. An error string is only ever returned for something
- * true of the request rather than of the address: too many tries, or our own
- * mail failing.
+ * '' means a code went out to a known address and the form should say
+ * OTP_SENT_NOTICE. An address we do not know, or one whose application is still
+ * waiting on the office, is told so plainly instead — the form no longer hides
+ * whether an address is registered. An error is also returned for something
+ * true of the request rather than the address: too many tries, or mail failing.
  */
 function issue_otp(string $email, string $audience = 'any'): string
 {
@@ -263,10 +260,13 @@ function issue_otp(string $email, string $audience = 'any'): string
     $known = $audience === 'any' ? roles_for_email($email) !== [] : (bool) otp_owner($email, $audience);
 
     if (!$known) {
-        /* An application still waiting on the office is not an unknown address.
-           Saying so on the page would answer the question for anybody typing
-           addresses at it, so it is said in an email instead — where only the
-           person who reads that mailbox sees it. */
+        /* nothing signed, so any code typed at the next step fails */
+        unset($_SESSION['otp']);
+
+        /* An application still waiting on the office is registered, only not yet
+           let in — said apart from a plainly unknown address so the person knows
+           to wait rather than to re-apply. The waiting email still goes, as it
+           carries what happens next. */
         $waiting = db()->prepare(
             "SELECT COUNT(*) FROM applications WHERE email = ? AND status = 'submitted'"
         );
@@ -276,12 +276,13 @@ function issue_otp(string $email, string $audience = 'any'): string
             after_response(static function () use ($email): void {
                 send_application_waiting_email($email);
             });
+
+            return 'Your application is still being reviewed. You will be able to sign in '
+                 . 'once the office has approved it.';
         }
 
-        /* nothing signed, so any code typed at the next step fails */
-        unset($_SESSION['otp']);
-
-        return '';
+        return 'We could not find an account for that email address. Check the address and '
+             . 'try again, or apply first from our website.';
     }
 
     $code    = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);

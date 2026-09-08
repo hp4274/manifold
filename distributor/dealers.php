@@ -102,12 +102,15 @@ require __DIR__ . '/partials/layout-top.php';
     <div class="table-wrap">
       <table class="data-table data-table--dealer-clients data-table--stack is-filterable">
         <colgroup>
-          <col style="width:23%">
-          <col style="width:12%">
+          <col style="width:22%">
           <col style="width:11%">
-          <col style="width:12%">
-          <col style="width:13%">
-          <col style="width:19%">
+          <col style="width:10%">
+          <?php /* wide enough for "Waiting for approval" on one line — at 12% the
+                   pill overflowed into the sales column */ ?>
+          <col style="width:16%">
+          <?php /* 15% keeps "Completed sales" on one line */ ?>
+          <col style="width:15%">
+          <col style="width:16%">
           <col style="width:10%">
         </colgroup>
         <thead>
@@ -168,9 +171,13 @@ require __DIR__ . '/partials/layout-top.php';
               <td data-label="State">
                 <?php if ($dealer['approval_status'] !== 'approved'): ?>
                   <?php /* their code books nothing until the office decides */ ?>
+                  <?php /* a short pill so it sits on one line in a narrow cell;
+                           the full "on approval" note sits under the code */ ?>
                   <span class="pill pill--<?= $dealer['approval_status'] === 'pending'
                       ? 'booking_review' : 'rejected' ?>">
-                    <?= e(approval_label((string) $dealer['approval_status'])) ?>
+                    <?= $dealer['approval_status'] === 'pending'
+                        ? 'Pending'
+                        : e(approval_label((string) $dealer['approval_status'])) ?>
                   </span>
                 <?php else: ?>
                   <span class="pill pill--<?= $dealer['is_active'] ? 'accepted' : 'rejected' ?>">

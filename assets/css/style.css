@@ -4319,7 +4319,37 @@ fieldset.field legend{margin-bottom:2px}
   letter-spacing:.32em;
   text-align:center;
 }
-.portal-restart{margin-top:18px}
+/* six cells, one per digit — built by main.js from the single input above, which
+   stays as the fallback when JavaScript is off */
+.otp-boxes{display:flex;gap:8px}
+.otp-box{
+  flex:1 1 0;
+  min-width:0;
+  max-width:48px;
+  height:46px;
+  padding:0;
+  border:1.5px solid var(--line);
+  border-radius:var(--radius-sm);
+  background:#fff;
+  color:var(--ink);
+  text-align:center;
+  font-family:inherit;
+  font-size:20px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+.otp-box:focus{
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(75,180,83,.18);
+}
+.otp-box--filled{border-color:var(--accent-deep)}
+@media (max-width:420px){
+  .otp-box{height:44px;font-size:19px}
+}
+.portal-resend{margin-top:18px}
+.portal-restart{margin-top:12px}
 .portal-link{
   border:0;
   background:none;
@@ -4331,6 +4361,8 @@ fieldset.field legend{margin-bottom:2px}
   cursor:pointer;
 }
 .portal-link:hover{text-decoration:underline}
+/* the resend link while its countdown runs: readable, plainly not yet pressable */
+.portal-link:disabled{color:var(--muted);cursor:default;text-decoration:none}
 
 .portal-alert{
   padding:16px 20px;
@@ -5767,21 +5799,8 @@ body{overflow-x:hidden}
 }
 .portal-entry__amount{font-size:var(--t-sub);font-weight:700;color:var(--ink)}
 .portal-entry__meta{flex:1 1 200px;font-size:var(--t-ui);color:var(--muted)}
-.portal-entry__state{
-  display:inline-flex;
-  align-items:center;
-  gap:7px;
-  font-size:var(--t-micro);
-  font-weight:700;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-  white-space:nowrap;
-}
 .portal-entry--verified{border-color:rgba(75,180,83,.35)}
-.portal-entry--verified .portal-entry__state{color:#26743a}
-.portal-entry--pending .portal-entry__state{color:#8a5f1c}
 .portal-entry--rejected{border-color:rgba(201,69,92,.3)}
-.portal-entry--rejected .portal-entry__state{color:#a8324a}
 
 @media (max-width:767px){
   .portal-ledger{padding:18px}

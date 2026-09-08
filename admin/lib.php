@@ -79,20 +79,44 @@ foreach ($_POST as $postKey => $postValue) {
     }
 }
 
-if (session_status() === PHP_SESSION_NONE) {
-    /* Secure follows the request rather than being hard-coded on: set on a
-       plain-HTTP local install the browser drops the cookie and nobody can sign
-       in at all. Behind a load balancer or Cloudflare the request reaching PHP
-       is plain HTTP even though the visitor is on TLS, so the forwarded scheme
-       counts too — without it a production session would be sent in the clear. */
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+if (!defined('SESSION_LIFETIME')) {
+    /* How long a sign-in survives while idle, in seconds. Raised well above
+       PHP's 24-minute default so the office is not signed out mid-task and a
+       customer is not dropped between two payment steps. config.php can override. */
+    define('SESSION_LIFETIME', 8 * 60 * 60);
+}
+
+/**
+ * Whether the request reached us over TLS — directly, via a proxy that
+ * terminated it, or on the HTTPS port. Decides the Secure flag on our cookies:
+ * set on a plain-HTTP local install the browser drops the cookie and nobody can
+ * sign in, but omitted behind Cloudflare (where the leg to PHP is plain HTTP) a
+ * production session would travel in the clear.
+ */
+function request_is_https(): bool
+{
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
         || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'
         || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443;
+}
+
+if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.gc_maxlifetime', (string) SESSION_LIFETIME);
+
+    /* Kept out of the shared temp directory a co-tenant could sweep on their
+       own, shorter gc schedule — there our raised lifetime meant nothing. Falls
+       back to the default path when the private one cannot be made writable: a
+       broken save path is worse than a shared one. */
+    $sessionDir = ERROR_LOG_DIR . '/sessions';
+    if ((is_dir($sessionDir) || @mkdir($sessionDir, 0700, true)) && is_writable($sessionDir)) {
+        session_save_path($sessionDir);
+    }
 
     session_set_cookie_params([
+        'lifetime' => 0,
         'httponly' => true,
         'samesite' => 'Lax',
-        'secure'   => $https,
+        'secure'   => request_is_https(),
     ]);
     session_start();
 }
@@ -3531,13 +3555,111 @@ function make_reference_code(int $id): string
 }
 
 /** The four submission types shown in the sidebar. */
+/**
+ * The dashboard's latest activity: one row per record, newest activity first.
+ *
+ * "Activity" is either a record arriving or its status moving — every
+ * application status change is written to status_log by sync_application_status,
+ * so the most recent of a record's creation and its logged changes is when it
+ * last did something. Records are returned whole and current (the live row, not
+ * a snapshot), so the dashboard renders them with the same cells, status pill
+ * and row actions the form lists use. Each item is ['type' => stove|tuktuk|
+ * contact|newsletter, 'row' => the record].
+ */
+function recent_activity(int $limit = 15): array
+{
+    $limit = max(1, $limit);
+
+    /* one line per record, timestamped by its latest activity */
+    $index = db()->query(
+        "SELECT type, id, MAX(at) AS at FROM (
+            SELECT product AS type, id, created_at AS at FROM applications
+            UNION ALL
+            SELECT a.product, a.id, sl.changed_at
+              FROM status_log sl JOIN applications a ON a.id = sl.entity_id
+             WHERE sl.entity = 'application'
+            UNION ALL
+            SELECT 'contact', id, created_at FROM contact_messages
+            UNION ALL
+            SELECT 'contact', entity_id, changed_at FROM status_log WHERE entity = 'contact'
+            UNION ALL
+            SELECT 'newsletter', id, created_at FROM newsletter_subscribers
+            UNION ALL
+            SELECT 'newsletter', entity_id, changed_at FROM status_log WHERE entity = 'newsletter'
+         ) e
+         GROUP BY type, id
+         ORDER BY at DESC
+         LIMIT {$limit}"
+    )->fetchAll();
+
+    if (!$index) {
+        return [];
+    }
+
+    $appIds = $contactIds = $newsIds = [];
+
+    foreach ($index as $r) {
+        if ($r['type'] === 'contact') {
+            $contactIds[] = (int) $r['id'];
+        } elseif ($r['type'] === 'newsletter') {
+            $newsIds[] = (int) $r['id'];
+        } else {
+            $appIds[] = (int) $r['id'];
+        }
+    }
+
+    /* the live rows, one batched read per table */
+    $fetch = static function (string $table, array $ids): array {
+        if (!$ids) {
+            return [];
+        }
+
+        $in  = implode(',', array_map('intval', $ids));
+        $out = [];
+
+        foreach (db()->query("SELECT * FROM {$table} WHERE id IN ({$in})")->fetchAll() as $row) {
+            $out[(int) $row['id']] = $row;
+        }
+
+        return $out;
+    };
+
+    $apps    = $fetch('applications', $appIds);
+    $contact = $fetch('contact_messages', $contactIds);
+    $news    = $fetch('newsletter_subscribers', $newsIds);
+
+    $rows = [];
+
+    foreach ($index as $r) {
+        $type = (string) $r['type'];
+        $row  = $type === 'contact'
+            ? ($contact[(int) $r['id']] ?? null)
+            : ($type === 'newsletter' ? ($news[(int) $r['id']] ?? null) : ($apps[(int) $r['id']] ?? null));
+
+        if ($row) {
+            $rows[] = ['type' => $type, 'row' => $row];
+        }
+    }
+
+    return $rows;
+}
+
 function submission_types(): array
 {
+    /* Built once per request: type_config() reaches for this on nearly every
+       admin page, sometimes several times a page, and the shape never changes
+       within a request. */
+    static $types = null;
+
+    if ($types !== null) {
+        return $types;
+    }
+
     /* `list` is what a row of the table needs to draw itself and its actions,
        and nothing else. An application carries 87 columns; the list shows nine
        of them, and the drawer asks for the rest only when somebody opens one
        (admin/drawer.php). */
-    return [
+    return $types = [
         'stove' => [
             'label' => 'Stove applications',
             'icon'  => 'bi-fire',
@@ -3745,13 +3867,65 @@ function current_user(): ?array
  * vouchers and nothing else — so landing on an office page sends them to their
  * own. One sign-in, two destinations.
  */
+/**
+ * A cookie set the moment somebody signs in and cleared when they sign out —
+ * separate from the session cookie and outliving it, so a guard can tell a
+ * session that has quietly expired (marker still here) from a browser that has
+ * never signed in (no marker). That is what turns a silent bounce to the login
+ * form into an "your session ended" page.
+ */
+const AUTH_MARKER = 'mf_auth';
+
+function mark_authenticated(): void
+{
+    setcookie(AUTH_MARKER, '1', [
+        'expires'  => time() + 60 * 60 * 24 * 30,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure'   => request_is_https(),
+    ]);
+    $_COOKIE[AUTH_MARKER] = '1';
+}
+
+function clear_authenticated(): void
+{
+    setcookie(AUTH_MARKER, '', [
+        'expires'  => time() - 3600,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure'   => request_is_https(),
+    ]);
+    unset($_COOKIE[AUTH_MARKER]);
+}
+
+function auth_marker_present(): bool
+{
+    return !empty($_COOKIE[AUTH_MARKER]);
+}
+
+/**
+ * Sends an unauthenticated request back to a sign-in page, flagging it as an
+ * expiry (rather than a first visit) when the marker above says this browser
+ * had signed in.
+ */
+function guard_redirect(string $to): void
+{
+    if (auth_marker_present()) {
+        $to .= (strpos($to, '?') === false ? '?' : '&') . 'expired=1';
+    }
+
+    header('Location: ' . $to);
+    exit;
+}
+
 function require_login(): array
 {
     $user = current_user();
 
     if (!$user) {
-        header('Location: login');
-        exit;
+        guard_redirect('login');
     }
 
     if (($user['role'] ?? 'admin') === 'cf') {
@@ -3768,8 +3942,7 @@ function require_rf(): array
     $user = current_user();
 
     if (!$user) {
-        header('Location: ../admin/login');
-        exit;
+        guard_redirect('../admin/login');
     }
 
     if (($user['role'] ?? 'admin') !== 'cf') {
@@ -3817,16 +3990,30 @@ function status_counts(string $type): array
     $counts   = array_fill_keys($statuses, 0);
 
     if ($config['table'] === 'applications') {
-        $stmt = db()->prepare(
-            'SELECT status, COUNT(*) AS n FROM applications WHERE product = ? GROUP BY status'
-        );
-        $stmt->execute([$type]);
+        /* One GROUP BY product, status for the whole request, cached: the
+           dashboard asks this for both stove and tuktuk, and that is two
+           round-trips to a remote database for figures one query already holds. */
+        static $byProduct = null;
+
+        if ($byProduct === null) {
+            $byProduct = [];
+
+            foreach (db()->query(
+                'SELECT product, status, COUNT(*) AS n FROM applications GROUP BY product, status'
+            )->fetchAll() as $row) {
+                $byProduct[$row['product']][$row['status']] = (int) $row['n'];
+            }
+        }
+
+        foreach ($byProduct[$type] ?? [] as $status => $n) {
+            $counts[$status] = $n;
+        }
     } else {
         $stmt = db()->query('SELECT status, COUNT(*) AS n FROM ' . $config['table'] . ' GROUP BY status');
-    }
 
-    foreach ($stmt->fetchAll() as $row) {
-        $counts[$row['status']] = (int) $row['n'];
+        foreach ($stmt->fetchAll() as $row) {
+            $counts[$row['status']] = (int) $row['n'];
+        }
     }
 
     $counts['total'] = array_sum(array_intersect_key($counts, array_flip($statuses)));

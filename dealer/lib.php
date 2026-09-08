@@ -58,8 +58,7 @@ function require_dealer(): array
 
     if (!$dealer) {
         /* one sign-in for everybody: the address decides the role */
-        header('Location: ../portal/');
-        exit;
+        guard_redirect('../portal/');
     }
 
     return $dealer;

@@ -80,6 +80,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             db()->prepare('DELETE FROM login_attempts WHERE email = ?')->execute([$email]);
 
+            /* marks this browser as one that has signed in, so a later expiry
+               shows the session-ended page rather than a bare login form */
+            mark_authenticated();
+
             /* one sign-in, two destinations: the office lands on the
                dashboard, C&F on their own */
             header('Location: ' . role_landing((string) ($user['role'] ?? 'admin')));
@@ -92,6 +96,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Those details do not match an account.';
     }
 }
+
+/* sent here by a guard because a signed-in session had expired, not a cold visit */
+$expired = $_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['expired']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -114,6 +121,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <p class="eyebrow">Admin</p>
     <h1>Sign in</h1>
     <p class="login-card__lead">Submissions from the two application forms, the contact form and the newsletter box.</p>
+
+    <?php if ($expired): ?>
+      <p class="alert alert--warn"><i class="bi bi-clock-history" aria-hidden="true"></i>
+        Your session ended after a spell of inactivity. Sign in again to carry on.</p>
+    <?php endif; ?>
 
     <?php if ($error !== ''): ?>
       <p class="alert alert--error"><?= e($error) ?></p>

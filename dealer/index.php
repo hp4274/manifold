@@ -40,8 +40,8 @@ require __DIR__ . '/partials/layout-top.php';
       <?php endforeach; ?>
     </span>
     <span class="tile__stats">
-      <span class="tile__stat"><?= e(money((float) $dashStock['value'])) ?> at cost ·
-        <a href="stock">Order more</a></span>
+      <span class="tile__stat"><?= e(money((float) $dashStock['value'])) ?> at cost</span>
+      <span class="tile__stat"><a href="stock">Order more</a></span>
     </span>
   </span>
   <span class="tile">

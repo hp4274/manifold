@@ -37,6 +37,13 @@ function send_mail(
     array $bcc = [],
     array $files = []
 ): bool {
+    /* The seeder drives the voucher, referral and status flows that would
+       otherwise email the office and partners for real. While it runs nothing
+       is sent — the rows are what it is after, not the notifications. */
+    if (defined('MANIFOLD_SEEDING') && MANIFOLD_SEEDING) {
+        return true;
+    }
+
     $ok    = false;
     $error = null;
 

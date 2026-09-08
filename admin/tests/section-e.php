@@ -66,15 +66,14 @@ check('3,000 of 16,500 is 18.18%', $rate(3000, 16500) === 18.18);
 check('a zero base records nothing', $rate(3000, 0) === 0.0);
 check('it never overflows decimal(5,2)', $rate(3000, 0.01) === 999.99);
 
-echo PHP_EOL . 'E3 — one answer for every address' . PHP_EOL;
+echo PHP_EOL . 'E3 — the sent-code notice stays generic' . PHP_EOL;
 
-/* The point of E3 is that nothing about the address reaches the page. issue_otp
-   itself sends mail, so what is checked here is the notice the page shows: it
-   must name neither the address nor which of the three states it is in. */
+/* The form now tells an unknown or still-pending address so plainly (issue_otp),
+   but the notice shown once a code has gone out must still not echo the typed
+   address back into the page. */
 $notice = OTP_SENT_NOTICE;
 
 check('the notice does not name an address', strpos($notice, '@') === false);
-check('it does not say "registered with us" as a fact', strpos($notice, 'If that address') === 0);
-check('it says nothing about an application', stripos($notice, 'application') === false);
+check('it does not name an application', stripos($notice, 'application') === false);
 
 echo PHP_EOL . $checks . ' checks.' . PHP_EOL;

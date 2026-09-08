@@ -29,6 +29,14 @@ $email = (string) ($_SESSION['otp_email'] ?? '');
 $error = '';
 $note  = '';
 $roles = $signedIn;
+/* a guard sent them here because a signed-in session had expired, not because
+   they arrived cold — say so rather than showing a bare form */
+$expired = $_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['expired']) && !$signedIn;
+/* Seconds the resend button waits before it can be pressed, but only when a
+   code has just gone out this request: 20 after the first send, 60 after a
+   resend. 0 on a plain reload (a wrong code typed in between) so the countdown
+   already running in the browser is left to carry on rather than reset. */
+$resendFresh = 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
@@ -44,12 +52,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = issue_otp($email, 'any');
 
             if ($error === '') {
-                /* The same answer whether or not that address is registered —
-                   the code step is reached either way, and a code typed at it
-                   without one having gone out simply does not match. */
+                /* Reached only for a known address now — issue_otp returns a
+                   message for an unknown or still-pending one, which keeps the
+                   form on the email step rather than advancing to the code. */
                 $_SESSION['otp_email'] = $email;
                 $step = 'code';
                 $note = OTP_SENT_NOTICE;
+                $resendFresh = 20;
+            }
+        }
+    }
+
+    if ($action === 'resend') {
+        $email = (string) ($_SESSION['otp_email'] ?? '');
+
+        if ($email === '') {
+            /* nothing to resend to — send them back to the start */
+            $step  = 'email';
+            $email = '';
+        } else {
+            $step  = 'code';
+            $error = issue_otp($email, 'any');
+
+            if ($error === '') {
+                $note        = 'A new code is on its way.';
+                $resendFresh = 60;
             }
         }
     }
@@ -69,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($error === '') {
                 unset($_SESSION['otp_email']);
+                mark_authenticated();
                 $roles = portal_roles();
 
                 /* one role is not a choice, so do not present it as one */
@@ -108,6 +136,14 @@ require __DIR__ . '/partials/head.php';
             ? 'That address is registered more than once. Pick what you came here for — you can come back and switch.'
             : 'No password. Applicants, dealers and distributors all sign in here: enter your email address and we send a one-time code.' ?>
       </p>
+
+      <?php if ($expired && $step === 'email'): ?>
+        <p class="portal-alert portal-alert--warn">
+          <i class="bi bi-clock-history" aria-hidden="true"></i>
+          Your session ended after a spell of inactivity, for safety. Sign in again to pick up
+          where you left off.
+        </p>
+      <?php endif; ?>
 
       <?php if ($error !== ''): ?>
         <p class="portal-alert portal-alert--error"><?= e($error) ?></p>
@@ -175,9 +211,11 @@ require __DIR__ . '/partials/head.php';
 
           <div class="field">
             <label for="code">Six-digit code sent to <?= e($email) ?></label>
-            <input id="code" name="code" type="text" inputmode="numeric" pattern="[0-9]*"
-                   maxlength="6" autocomplete="one-time-code" required autofocus
-                   class="portal-code" placeholder="000000">
+            <div class="otp-field" data-otp>
+              <input id="code" name="code" type="text" inputmode="numeric" pattern="[0-9]*"
+                     maxlength="6" autocomplete="one-time-code" required autofocus
+                     class="portal-code" data-otp-fallback placeholder="6-digit code">
+            </div>
             <span class="field-hint">
               Nothing after a couple of minutes? Check the spam folder, then try the other address
               you might be registered under.
@@ -186,6 +224,14 @@ require __DIR__ . '/partials/head.php';
 
           <button type="submit" class="btn-pill btn-pill--accent form-x__submit">
             Sign in <i class="bi bi-arrow-right"></i>
+          </button>
+        </form>
+
+        <form method="post" class="portal-resend">
+          <?= csrf_field() ?>
+          <input type="hidden" name="action" value="resend">
+          <button type="submit" class="portal-link" data-resend data-resend-fresh="<?= (int) $resendFresh ?>">
+            Resend code
           </button>
         </form>
 
