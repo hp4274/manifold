@@ -221,15 +221,6 @@ try {
            applicant it has no identity, address or paperwork for. */
         $required = [
             'full_name'            => 'full name',
-            'date_of_birth'        => 'date of birth',
-            'nationality'          => 'nationality',
-            'gender'               => 'gender',
-            'occupation'           => 'occupation',
-            'mobile_number'        => 'mobile number',
-            'email'                => 'email address',
-            'id_number'            => 'National ID or passport number',
-            'id_document_path'     => 'copy of your ID',
-            'residence_proof_path' => 'residence proof',
             'house_number'         => 'house, villa or apartment number',
             'street'               => 'street name',
             'city'                 => 'city',
@@ -240,8 +231,7 @@ try {
 
         foreach ($required as $column => $label) {
             if (($columns[$column] ?? null) === null || $columns[$column] === '') {
-                respond(false, 'Your ' . $label . ' is missing. Applicant information, '
-                    . 'identification and residential address are all required.');
+                respond(false, 'Your ' . $label . ' is missing. Name and residential address are required.');
             }
         }
 
@@ -276,11 +266,17 @@ try {
         $mobileDial = $dial('mobile_code');
         $altDial    = $dial('alt_mobile_code');
 
-        if (!$lengthOk($columns['mobile_number'], $mobileDial)) {
-            [$min, $max] = dial_digits($mobileDial);
+        if ($columns['mobile_number'] !== null && $columns['mobile_number'] !== '') {
+            if (!$lengthOk($columns['mobile_number'], $mobileDial)) {
+                [$min, $max] = dial_digits($mobileDial);
 
-            respond(false, 'The mobile number has to be ' . ($min === $max ? $min . ' digits' : $min . ' to ' . $max . ' digits')
-                . ' for +' . $mobileDial . ' — no country code, no spaces.');
+                respond(false, 'The mobile number has to be ' . ($min === $max ? $min . ' digits' : $min . ' to ' . $max . ' digits')
+                    . ' for +' . $mobileDial . ' — no country code, no spaces.');
+            }
+
+            $columns['mobile_number'] = '+' . $mobileDial . $digits($columns['mobile_number']);
+        } else {
+            $columns['mobile_number'] = null;
         }
 
         if ($columns['alt_mobile_number'] !== null
@@ -298,30 +294,10 @@ try {
             $columns['alt_mobile_number'] = '+' . $altDial . $digits($columns['alt_mobile_number']);
         }
 
-        if (!filter_var((string) $columns['email'], FILTER_VALIDATE_EMAIL)) {
-            respond(false, 'That email address does not look right — we send the payment link to it.');
-        }
-
-        /* One address, one account. A dealer or a distributor cannot also apply
-           as a customer on the same address — the portal reads its roles off
-           one session and would sign them into both sets of screens at once.
-
-           A returning customer is different: buying a second unit is the same
-           person, and the portal's "Buy again" fills this form in for them. So
-           an address that already belongs to a customer is allowed through only
-           while that customer is signed in; anybody else typing it is told to
-           sign in rather than quietly starting a second account on it. */
-        $emailOwner = email_owner((string) $columns['email']);
-
-        if ($emailOwner === 'dealer' || $emailOwner === 'distributor') {
-            respond(false, 'That email address is already registered as a ' . $emailOwner
-                . ' account. Sign in at ' . base_url() . '/portal/ with it, or apply on a different address.');
-        }
-
-        if ($emailOwner === 'client'
-            && strcasecmp((string) ($_SESSION['applicant_email'] ?? ''), (string) $columns['email']) !== 0) {
-            respond(false, 'This email address is already used. Sign in to your portal at '
-                . base_url() . '/portal/ and use "Buy again" to apply for another unit.');
+        if ($columns['email'] !== null && $columns['email'] !== '') {
+            if (!filter_var((string) $columns['email'], FILTER_VALIDATE_EMAIL)) {
+                respond(false, 'That email address does not look right — we send the payment link to it.');
+            }
         }
 
         if (strlen($digits($columns['pin_code'])) !== 6) {
@@ -330,7 +306,8 @@ try {
 
         $columns['pin_code'] = $digits($columns['pin_code']);
 
-        if (!preg_match('#^[A-Za-z0-9\-/]{4,20}$#', (string) $columns['id_number'])) {
+        if ($columns['id_number'] !== null
+            && !preg_match('#^[A-Za-z0-9\-/]{4,20}$#', (string) $columns['id_number'])) {
             respond(false, 'The ID number should be the number as printed — letters and digits, four to twenty.');
         }
 

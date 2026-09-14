@@ -154,13 +154,13 @@
           </div>
 
           <div class="field">
-            <label for="date_of_birth">Date of birth <span class="req" aria-hidden="true">*</span></label>
-            <input id="date_of_birth" name="date_of_birth" type="date" autocomplete="bday" data-limit="past" required>
+            <label for="date_of_birth">Date of birth</label>
+            <input id="date_of_birth" name="date_of_birth" type="date" autocomplete="bday" data-limit="past">
           </div>
 
           <div class="field">
-            <label for="nationality">Nationality <span class="req" aria-hidden="true">*</span></label>
-            <select id="nationality" name="nationality" required>
+            <label for="nationality">Nationality</label>
+            <select id="nationality" name="nationality">
               <option value="Indian" data-dial="91" selected>Indian</option>
               <option value="Afghan" data-dial="93">Afghan</option>
               <option value="Albanian" data-dial="355">Albanian</option>
@@ -337,8 +337,8 @@
           </div>
 
           <div class="field">
-            <label for="gender">Gender <span class="req" aria-hidden="true">*</span></label>
-            <select id="gender" name="gender" required>
+            <label for="gender">Gender</label>
+            <select id="gender" name="gender">
               <option value="" selected>Select…</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
@@ -348,12 +348,12 @@
           </div>
 
           <div class="field">
-            <label for="occupation">Occupation <span class="req" aria-hidden="true">*</span></label>
-            <input id="occupation" name="occupation" type="text" required>
+            <label for="occupation">Occupation</label>
+            <input id="occupation" name="occupation" type="text">
           </div>
 
           <div class="field">
-            <label for="mobile_number">Mobile number <span class="req" aria-hidden="true">*</span></label>
+            <label for="mobile_number">Mobile number</label>
             <div class="tel-field">
               <select id="mobile_code" name="mobile_code" aria-label="Country code">
                 <option value="93">Afghanistan +93</option>
@@ -529,7 +529,7 @@
               </select>
               <input id="mobile_number" name="mobile_number" type="tel" autocomplete="tel"
                      inputmode="numeric" pattern="[0-9]{10}" maxlength="10"
-                     title="Ten digits, no spaces or country code" required>
+                     title="Ten digits, no spaces or country code">
             </div>
             <span class="field-hint">The code follows your nationality — change it if it should not.</span>
           </div>
@@ -716,10 +716,10 @@
           </div>
 
           <div class="field">
-            <label for="email">Email <span class="req" aria-hidden="true">*</span></label>
+            <label for="email">Email</label>
             <input id="email" name="email" type="email" autocomplete="email" maxlength="190"
                    pattern="[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}"
-                   title="Something like name@example.com" required>
+                   title="Something like name@example.com">
           </div>
         </div>
 
@@ -728,34 +728,34 @@
 
         <div class="field-grid">
           <div class="field">
-            <label for="id_number">National ID / Passport number <span class="req" aria-hidden="true">*</span></label>
+            <label for="id_number">National ID / Passport number</label>
             <input id="id_number" name="id_number" type="text" maxlength="20"
                    pattern="[A-Za-z0-9\-\/]{4,20}"
-                   title="The number as printed, letters and digits only" required>
+                   title="The number as printed, letters and digits only">
           </div>
 
           <div class="field">
-            <label for="id_document_file">Upload copy of ID <span class="req" aria-hidden="true">*</span></label>
+            <label for="id_document_file">Upload copy of ID</label>
             <label class="upload" for="id_document_file">
               <i class="bi bi-upload" aria-hidden="true"></i>
               <span class="upload__name" data-file-label>Choose file…</span>
-              <input id="id_document_file" name="id_document_file" type="file" accept="image/*,application/pdf" required>
+              <input id="id_document_file" name="id_document_file" type="file" accept="image/*,application/pdf">
             </label>
             <span class="field-hint">JPG, PNG or PDF, max 10 MB</span>
           </div>
 
           <div class="field">
-            <label for="residence_proof_file">Residence proof / Auto RC <span class="req" aria-hidden="true">*</span></label>
+            <label for="residence_proof_file">Residence proof / Auto RC</label>
             <label class="upload" for="residence_proof_file">
               <i class="bi bi-upload" aria-hidden="true"></i>
               <span class="upload__name" data-file-label>Choose file…</span>
-              <input id="residence_proof_file" name="residence_proof_file" type="file" accept="image/*,application/pdf" required>
+              <input id="residence_proof_file" name="residence_proof_file" type="file" accept="image/*,application/pdf">
             </label>
             <span class="field-hint">Utility bill, tenancy contract or vehicle registration</span>
           </div>
         </div>
 
-        <p class="form-info">Both uploads are required. Files are stored securely and are only visible to our review team.</p>
+        <p class="form-info">Files are stored securely and are only visible to our review team.</p>
       </section>
 
       <section class="form-step reveal">
