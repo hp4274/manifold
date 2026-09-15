@@ -1,0 +1,130 @@
+Please find below details.
+ 
+API EndPoints UAT Details:        
+MID – 100000000007164
+Key - db06cca0-838b-4e01-8b20-6ac446ffb6bd
+Agg ID - A100000000007164 - Mandatory    
+
+Initiate Sale URL : https://pgpayuat.icicibank.com/tsp/pg/api/v2/initiateSale	
+
+Refund/StatusCheck: https://pgpayuat.icicibank.com/tsp/pg/api/command
+
+Settlement Details: https://pgpayuat.icicibank.com/tsp/pg/api/settlementDetails  
+
+
+Initiate Sale URL: https://pgpayuat.icicibank.com/tsp/pg/api/v2/initiateSale								
+Initiate Sale Request:								
+{								
+    "merchantId": "100000000482422",
+    "aggregatorID" :"100000000482421",								
+    "merchantTxnNo": "757585887575",								
+    "amount": "100.00",								
+    "currencyCode": "356",								
+    "payType": "0",								
+    "customerEmailID": "Dummyemail@icicibank.com",								
+    "transactionType": "SALE",								
+    "returnURL": "https://pgpayuat.icicibank.com/tsp/pg/api/merchant",								
+    "txnDate": "20241121115413",								
+    "customerMobileNo": "9876543210",								
+    "customerName": "Manish",								
+    "addlParam1": "ABCD",								
+    "addlParam2": "111",								
+    "secureHash": "205a2c1e897d3d654bbc92858b1da4929d0e2b1bbcedb781723f6db22768a10b"								
+}								
+								
+								
+Initiate Sale Response:								
+{"responseCode":"R1000","merchantId":"100000000007164","aggregatorID":A100000000007164,"merchantTxnNo":"757585887575","redirectURI":"https://pgpayuat.icicibank.com/tsp/pg/api/v2/authRedirect","showOTPCapturePage":"N","generateOTPURI":null,"verifyOTPURI":null,"authorizeURI":null,"tranCtx":"Ra3c22840-bb8b-4e44-b622-e35928b86858","secureHash":"1033eedc162c60a3dc4ed6c51fb73ddbc6f01d21d28f77cea20140747514144e"}								
+								
+								
+								
+HashKey = addlParam1addlParam2aggregatorIDamountcurrencyCodecustomerEmailIDcustomerMobileNocustomerNamemerchantIdmerchantTxnN						opayTypereturnURLtransactionTypetxnDate								
+HashText:= ABCD111A100000000007164100.00356narayan.kapase@phicommerce.com917709356362Narayan1000000000071647575858875750https://pgpayuat.icicibank.com/tsp/pg/api/merchantSALE20241121115413				
+
+
+				
+secureHash: 205a2c1e897d3d654bbc92858b1da4929d0e2b1bbcedb781723f6db22768a10b
+
+
+
+Sample URL from Response: https://pgpayuat.icicibank.com/tsp/pg/api/v2/authRedirect?tranCtx=Ra3c22840-bb8b-4e44-b622-e35928b86858
+
+
+
+
+Testing credentials :
+
+Card Name - Test Card
+Card Number - 4761 3400 0000 0035
+Exp - 07/26
+CVV - 123
+OTP - 123456
+						
+
+Net Banking:
+Select Test Bank >> Enter OTP 123456
+
+
+UPI VPA ID
+test@ybl	
+
+
+SUCCESS PAYMENT RETURN RESPONSE
+
+securehash: 51620b91c17f0d4e73522f3019104f22bf06846e0763550005db77c7b5a4a486
+amount: 100.00
+respdescription: Transaction successful
+paymentMode : NB
+customerEmailID: sonali.rajesh@icicibank.com
+addlParam2: testing
+responseCode: 0000/000
+customerMobileNo: 8879354614
+paymentSubInstType: Axis Bank
+merchantId: 100000000007164
+paymentID: 30122393903
+merchantTxnNo: 757585887575
+addlParam1: testing
+paymentDateTime: 20241121115413
+txnID: 7700201489192
+
+
+
+
+Status check API
+
+API EndPoints:	'https://pgpayuat.icicibank.com/tsp/pg/api/command' 
+
+{
+
+    "merchantId": "100000000007164",
+
+    "aggregatorID" :"A100000000007164",	
+
+    "merchantTxnNo": "123456789",
+
+    "transactionType": "STATUS",
+
+    "secureHash": "cfe7271dfd6d1061fee02b49e5b6e3a36119ac863eba46a7afff915b69e37c0f",
+
+    "originalTxnNo": "123456789"
+
+}
+
+
+
+
+Refund:
+
+API EndPoints:	 'https://pgpayuat.icicibank.com/tsp/pg/api/command' 
+{
+    "merchantId": "100000000006873",
+    "aggregatorID" :"A100000000006873",	
+    "merchantTxnNo": "4351",
+    "amount": "100",
+    "transactionType": "REFUND",
+    "secureHash": "8337338555bebd70e2ca233c1aa07ac3c1fd504647bda4b965ab08cd80694d36",
+    "originalTxnNo": "47063"
+}
+
+
+		

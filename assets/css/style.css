@@ -4535,6 +4535,83 @@ fieldset.field legend{margin-bottom:2px}
 .portal-pay__note strong{color:var(--ink)}
 .portal-pay__form .field:last-of-type{margin-bottom:6px}
 
+/* --- payment gateway button & modes --- */
+.portal-pay__gateway{
+  grid-column:1/-1;
+  text-align:center;
+  padding:8px 0 4px;
+}
+.portal-pay__modes{
+  display:flex;
+  justify-content:center;
+  flex-wrap:wrap;
+  gap:10px;
+  margin:16px 0 20px;
+}
+.portal-pay__mode{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 14px;
+  font-size:var(--t-sm);
+  font-weight:500;
+  color:var(--body);
+  background:var(--bg);
+  border:1px solid var(--line);
+  border-radius:20px;
+}
+.portal-pay__mode i{font-size:1.1em;color:var(--accent)}
+.portal-pay__btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:14px 36px;
+  font-size:1.05rem;
+  font-weight:600;
+}
+.portal-pay__btn i{font-size:1.15em}
+.portal-pay__secure{
+  margin-top:16px;
+  font-size:var(--t-sm);
+  color:var(--muted);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+}
+.portal-pay__secure i{color:var(--green,#2e8b57)}
+
+/* --- fallback receipt upload toggle --- */
+.portal-pay__fallback{
+  grid-column:1/-1;
+  margin-top:4px;
+  border-top:1px solid var(--line);
+  padding-top:16px;
+}
+.portal-pay__fallback-toggle{
+  cursor:pointer;
+  font-size:var(--t-sm);
+  color:var(--muted);
+  list-style:none;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  user-select:none;
+}
+.portal-pay__fallback-toggle::-webkit-details-marker{display:none}
+.portal-pay__fallback-toggle::marker{display:none;content:''}
+.portal-pay__fallback-toggle:hover{color:var(--ink)}
+.portal-pay__fallback-body{
+  margin-top:20px;
+  display:grid;
+  grid-template-columns:260px minmax(0,1fr);
+  gap:24px;
+  align-items:start;
+}
+@media (max-width:991px){
+  .portal-pay__fallback-body{grid-template-columns:1fr}
+}
+
 
 @media (max-width:991px){
   .portal-auth,

@@ -381,6 +381,14 @@ function verify_otp(string $email, string $code, string $audience = 'any'): stri
 
     $_SESSION['portal_roles'] = $roles;
 
+    /* session_regenerate_id() above re-sent the cookie under the params the
+       session was started with, which for a visitor who was not signed in yet
+       means one that dies with the browser. Now that they are, date it — and
+       clear the stamp first so this counts as the fresh dating it is, rather
+       than being skipped as recent work from the session they just left. */
+    unset($_SESSION['cookie_dated_at']);
+    session_keep_alive();
+
     return '';
 }
 

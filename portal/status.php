@@ -375,6 +375,39 @@ require __DIR__ . '/partials/head.php';
       </p>
     <?php endif; ?>
 
+    <?php if (isset($_GET['pg_paid'])): ?>
+      <p class="portal-alert portal-alert--ok">
+        <i class="bi bi-check-circle" aria-hidden="true"></i>
+        Payment successful! Your <?= e(payment_stage_label($uploadedStage)) ?> has been verified
+        automatically. A receipt is on its way to your email.
+      </p>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['pg_pending'])): ?>
+      <p class="portal-alert portal-alert--warn">
+        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+        We are still confirming this payment with the bank. If money left your account it is
+        safe — the receipt will follow by email, usually within a few minutes. Please do not
+        pay again; call +91 97251 54186 if you do not hear from us.
+      </p>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['pg_failed'])): ?>
+      <p class="portal-alert portal-alert--error">
+        <i class="bi bi-x-circle" aria-hidden="true"></i>
+        The payment did not go through. No money has been charged. You can try again, or pay
+        via bank transfer and upload the receipt instead.
+      </p>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['pg_error'])): ?>
+      <p class="portal-alert portal-alert--error">
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        We could not connect to the payment gateway just now. Please try again in a few minutes,
+        or pay via bank transfer and upload the receipt.
+      </p>
+    <?php endif; ?>
+
     <?php if ((int) ($_GET['documents'] ?? 0) > 0): ?>
       <p class="portal-alert portal-alert--ok">
         Your corrected documents are with our finance team. We check them by hand, usually within two
@@ -737,65 +770,103 @@ require __DIR__ . '/partials/head.php';
          something nothing announces. `inert` takes both away, which is
          what the blur already says to everyone who can see it. */ ?>
                   <div class="portal-pay"<?= $sealed ? ' inert aria-hidden="true"' : '' ?>>
-                    <div class="portal-pay__qr">
-                      <?php
-                        $qr = qr_path();
-                        /* the QR is whatever file the office uploaded, so its size is
-                           read off the file rather than guessed, and the box below it
-                           stops jumping while the image loads */
-                        $qrSize = $qr === '' ? false : @getimagesize((string) qr_file());
-                      ?>
-                      <?php if ($qr !== ''): ?>
-                        <img src="../<?= e($qr) ?>"
-                             <?= $qrSize ? 'width="' . (int) $qrSize[0] . '" height="' . (int) $qrSize[1] . '"' : '' ?>
-                             alt="Payment QR code for <?= e($app['reference_code']) ?>">
-                      <?php endif; ?>
+
+                    <?php /* ---- Pay Now: gateway button (primary path) ---- */ ?>
+                    <div class="portal-pay__gateway">
                       <p class="portal-pay__note">
-                        Transfer exactly <strong><?= e(money((float) $stage['amount'])) ?></strong>,
-                        then upload that receipt. Quote booking number
-                        <strong><?= e($app['reference_code']) ?></strong> on the payment.
+                        Pay <strong><?= e(money((float) $stage['amount'])) ?></strong> securely
+                        using your card, net banking, or UPI.
+                        Booking number <strong><?= e($app['reference_code']) ?></strong>.
+                      </p>
+
+                      <div class="portal-pay__modes" aria-label="Accepted payment methods">
+                        <span class="portal-pay__mode"><i class="bi bi-credit-card" aria-hidden="true"></i> Cards</span>
+                        <span class="portal-pay__mode"><i class="bi bi-bank" aria-hidden="true"></i> Net Banking</span>
+                        <span class="portal-pay__mode"><i class="bi bi-phone" aria-hidden="true"></i> UPI</span>
+                      </div>
+
+                      <form method="post" action="pg-initiate.php">
+                        <fieldset<?= $sealed ? ' disabled' : '' ?> style="border:0;margin:0;padding:0;min-width:0">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
+                        <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
+                        <button type="submit" class="btn-pill btn-pill--accent portal-pay__btn">
+                          <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                          Pay <?= e(money((float) $stage['amount'])) ?> Now
+                        </button>
+                        </fieldset>
+                      </form>
+
+                      <p class="portal-pay__secure">
+                        <i class="bi bi-lock" aria-hidden="true"></i>
+                        Secured by ICICI Bank Payment Gateway. Your payment is verified instantly.
                       </p>
                     </div>
 
-                    <form class="portal-pay__form form-x" method="post" enctype="multipart/form-data">
-                      <fieldset<?= $sealed ? ' disabled' : '' ?> style="border:0;margin:0;padding:0;min-width:0">
-                      <?= csrf_field() ?>
-                      <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
-                      <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
+                    <?php /* ---- Fallback: manual receipt upload ---- */ ?>
+                    <details class="portal-pay__fallback">
+                      <summary class="portal-pay__fallback-toggle">
+                        <i class="bi bi-upload" aria-hidden="true"></i>
+                        Already paid via bank transfer? Upload receipt instead
+                      </summary>
 
-                      <div class="field">
-                        <label for="ref-<?= e($stageId) ?>">Payment reference or UTR (optional)</label>
-                        <input id="ref-<?= e($stageId) ?>" name="payment_reference" type="text"
-                               placeholder="From your bank or UPI app">
-                      </div>
-
-                      <?php /* an upload that failed says so here, against the box
-                               it was chosen in, rather than at the top of a page
-                               that may carry two of them */ ?>
-                      <?php $stageFailed = $uploadError !== '' && $uploadStage === $stageKey; ?>
-
-                      <div class="field<?= $stageFailed ? ' field--error' : '' ?>">
-                        <label for="proof-<?= e($stageId) ?>">Proof of this payment
-                          <span class="req" aria-hidden="true">*</span></label>
-                        <input id="proof-<?= e($stageId) ?>" name="payment_proof" type="file"
-                               accept="image/*,application/pdf" required
-                               <?= $stageFailed ? 'aria-describedby="proof-error-' . e($stageId) . '" aria-invalid="true"' : '' ?>>
-
-                        <?php if ($stageFailed): ?>
-                          <p class="field-error" id="proof-error-<?= e($stageId) ?>" role="alert">
-                            <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
-                            <?= e($uploadError) ?>
+                      <div class="portal-pay__fallback-body">
+                        <div class="portal-pay__qr">
+                          <?php
+                            $qr = qr_path();
+                            $qrSize = $qr === '' ? false : @getimagesize((string) qr_file());
+                          ?>
+                          <?php if ($qr !== ''): ?>
+                            <img src="../<?= e($qr) ?>"
+                                 <?= $qrSize ? 'width="' . (int) $qrSize[0] . '" height="' . (int) $qrSize[1] . '"' : '' ?>
+                                 alt="Payment QR code for <?= e($app['reference_code']) ?>">
+                          <?php endif; ?>
+                          <p class="portal-pay__note">
+                            Transfer exactly <strong><?= e(money((float) $stage['amount'])) ?></strong>,
+                            then upload that receipt. Quote booking number
+                            <strong><?= e($app['reference_code']) ?></strong> on the payment.
                           </p>
-                        <?php endif; ?>
+                        </div>
 
-                        <span class="field-hint">JPG, PNG, WebP or PDF, up to 10 MB</span>
+                        <form class="portal-pay__form form-x" method="post" enctype="multipart/form-data">
+                          <fieldset<?= $sealed ? ' disabled' : '' ?> style="border:0;margin:0;padding:0;min-width:0">
+                          <?= csrf_field() ?>
+                          <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
+                          <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
+
+                          <div class="field">
+                            <label for="ref-<?= e($stageId) ?>">Payment reference or UTR (optional)</label>
+                            <input id="ref-<?= e($stageId) ?>" name="payment_reference" type="text"
+                                   placeholder="From your bank or UPI app">
+                          </div>
+
+                          <?php $stageFailed = $uploadError !== '' && $uploadStage === $stageKey; ?>
+
+                          <div class="field<?= $stageFailed ? ' field--error' : '' ?>">
+                            <label for="proof-<?= e($stageId) ?>">Proof of this payment
+                              <span class="req" aria-hidden="true">*</span></label>
+                            <input id="proof-<?= e($stageId) ?>" name="payment_proof" type="file"
+                                   accept="image/*,application/pdf" required
+                                   <?= $stageFailed ? 'aria-describedby="proof-error-' . e($stageId) . '" aria-invalid="true"' : '' ?>>
+
+                            <?php if ($stageFailed): ?>
+                              <p class="field-error" id="proof-error-<?= e($stageId) ?>" role="alert">
+                                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                                <?= e($uploadError) ?>
+                              </p>
+                            <?php endif; ?>
+
+                            <span class="field-hint">JPG, PNG, WebP or PDF, up to 10 MB</span>
+                          </div>
+
+                          <button type="submit" class="btn-pill form-x__submit">
+                            Upload <?= e(strtolower($stage['label'])) ?> proof <i class="bi bi-upload"></i>
+                          </button>
+                        </fieldset>
+                        </form>
                       </div>
+                    </details>
 
-                      <button type="submit" class="btn-pill btn-pill--accent form-x__submit">
-                        Upload <?= e(strtolower($stage['label'])) ?> proof <i class="bi bi-upload"></i>
-                      </button>
-                    </fieldset>
-                    </form>
                   </div>
                 <?php endif; ?>
 

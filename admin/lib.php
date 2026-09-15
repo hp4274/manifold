@@ -80,10 +80,27 @@ foreach ($_POST as $postKey => $postValue) {
 }
 
 if (!defined('SESSION_LIFETIME')) {
-    /* How long a sign-in survives while idle, in seconds. Raised well above
-       PHP's 24-minute default so the office is not signed out mid-task and a
-       customer is not dropped between two payment steps. config.php can override. */
+    /* How long an *office* sign-in survives while idle, in seconds. The
+       dashboard sees every customer's paperwork and bank details, and the
+       machines it is opened on are shared, so it still times out. Enforced in
+       current_user() rather than by the session's own lifetime, which is now the
+       long one below. config.php can override. */
     define('SESSION_LIFETIME', 8 * 60 * 60);
+}
+
+if (!defined('PORTAL_SESSION_LIFETIME')) {
+    /* How long a customer's sign-in survives, in seconds.
+
+       Deliberately long, and deliberately not an idle timeout. A client signs in
+       with a code emailed to them, comes back a week later to see where their
+       order is, and being asked for a fresh code every time — or being dropped
+       mid-payment — reads as the site losing their place rather than as safety.
+       They see their own application and nothing else, so there is little to
+       protect and a great deal of nuisance in protecting it.
+
+       This is the figure the session cookie and the garbage collector both run
+       on, so it has to be the longer of the two lifetimes. */
+    define('PORTAL_SESSION_LIFETIME', 60 * 60 * 24 * 90);
 }
 
 /**
@@ -101,17 +118,22 @@ function request_is_https(): bool
 }
 
 if (session_status() === PHP_SESSION_NONE) {
-    ini_set('session.gc_maxlifetime', (string) SESSION_LIFETIME);
+    ini_set('session.gc_maxlifetime', (string) PORTAL_SESSION_LIFETIME);
 
     /* Kept out of the shared temp directory a co-tenant could sweep on their
        own, shorter gc schedule — there our raised lifetime meant nothing. Falls
        back to the default path when the private one cannot be made writable: a
        broken save path is worse than a shared one. */
     $sessionDir = ERROR_LOG_DIR . '/sessions';
-    if ((is_dir($sessionDir) || @mkdir($sessionDir, 0700, true)) && is_writable($sessionDir)) {
+    $sessionDirOurs = (is_dir($sessionDir) || @mkdir($sessionDir, 0700, true)) && is_writable($sessionDir);
+
+    if ($sessionDirOurs) {
         session_save_path($sessionDir);
     }
 
+    /* A passer-by still gets a cookie that dies with the browser: most visitors
+       never sign in, and there is no reason to date a cookie that holds nothing.
+       A sign-in is what turns it into a dated one, in session_keep_alive(). */
     session_set_cookie_params([
         'lifetime' => 0,
         'httponly' => true,
@@ -119,6 +141,132 @@ if (session_status() === PHP_SESSION_NONE) {
         'secure'   => request_is_https(),
     ]);
     session_start();
+
+    session_keep_alive();
+
+    if ($sessionDirOurs) {
+        session_sweep_anonymous($sessionDir);
+    }
+}
+
+/**
+ * Clears out sessions that never became a sign-in.
+ *
+ * PHP's own collector goes on one lifetime for the whole save path, and ours has
+ * to be the long one so a client is not swept while they are still using their
+ * session. That leaves every passer-by's session sitting there for three months:
+ * the public pages ask portal/session.php who is signed in, so each visitor gets
+ * a file, and on a shared host a hundred thousand of them is an inode problem
+ * rather than a disk one.
+ *
+ * So the long lifetime is for people who signed in, and this puts the short one
+ * back for everybody else. A file is spared if it holds any of the four things
+ * that mean somebody is signed in — checked by reading it, because an anonymous
+ * session is not always empty (a form on the page leaves a CSRF token behind).
+ *
+ * Runs on about one request in five hundred, after the response has gone.
+ */
+function session_sweep_anonymous(string $dir): void
+{
+    if (random_int(1, 500) !== 1) {
+        return;
+    }
+
+    $cutoff  = time() - SESSION_LIFETIME;
+    $current = session_id() === '' ? '' : 'sess_' . session_id();
+
+    register_shutdown_function(static function () use ($dir, $cutoff, $current): void {
+        foreach (glob($dir . '/sess_*') ?: [] as $file) {
+            if (basename($file) === $current || @filemtime($file) > $cutoff) {
+                continue;
+            }
+
+            /* Big enough to hold a sign-in and then some. Anything past it is
+               not a stray, so leave it alone and let a person look. */
+            if (@filesize($file) > 8192) {
+                continue;
+            }
+
+            $body = @file_get_contents($file);
+
+            if ($body === false) {
+                continue;
+            }
+
+            /* Loose on purpose. Sparing a file we could have deleted costs
+               nothing; deleting one somebody is signed in to costs them their
+               session, so the match errs towards leaving things alone. */
+            if (preg_match('/(applicant_email|dealer_id|distributor_id|admin)\|/', $body)) {
+                continue;
+            }
+
+            @unlink($file);
+        }
+    });
+}
+
+/**
+ * Keeps a signed-in session from ageing out underneath the person using it.
+ *
+ * Two things had to be answered to stop a client being signed out on their own:
+ *
+ *   The cookie. PHP dates it once, when the session is created, so a window set
+ *   at sign-in would run out mid-use however recently they were here. Re-sending
+ *   it moves the date forward, which is what makes the window a rolling one.
+ *   Daily is often enough to keep it from expiring under anybody, and rare
+ *   enough not to put a Set-Cookie on every response.
+ *
+ *   The file. PHP rewrites a session file only when something in it changed, and
+ *   the collector goes on the file's mtime — so somebody who signs in and then
+ *   only ever reads their status page has a session that looks untouched since
+ *   the day they got their code, and is swept while they are still using it.
+ *   The daily stamp below is itself a change, so the file is rewritten and
+ *   re-dated at the same time.
+ *
+ * Called for anyone signed in, the office included; the office's own timeout is
+ * a separate thing and lives in current_user().
+ */
+function session_keep_alive(): void
+{
+    /* Nothing to keep alive, and nothing to hand a cookie to. */
+    if (!signed_in_somehow()) {
+        return;
+    }
+
+    if (!empty($_SESSION['cookie_dated_at'])
+        && time() - (int) $_SESSION['cookie_dated_at'] < 86400) {
+        return;
+    }
+
+    /* The gateway's return runs with session cookies switched off on purpose
+       (see portal/pg-return.php). Sending one here would put back exactly the
+       bug that file exists to avoid: a Set-Cookie on a cross-site POST, landing
+       on the applicant's real session id. */
+    if (!ini_get('session.use_cookies') || headers_sent() || session_id() === '') {
+        return;
+    }
+
+    $params = session_get_cookie_params();
+
+    setcookie(session_name(), session_id(), [
+        'expires'  => time() + PORTAL_SESSION_LIFETIME,
+        'path'     => $params['path'],
+        'domain'   => $params['domain'],
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure'   => $params['secure'],
+    ]);
+
+    $_SESSION['cookie_dated_at'] = time();
+}
+
+/** Whether this session belongs to anybody at all — any portal, or the office. */
+function signed_in_somehow(): bool
+{
+    return !empty($_SESSION['applicant_email'])
+        || !empty($_SESSION['dealer_id'])
+        || !empty($_SESSION['distributor_id'])
+        || !empty($_SESSION['admin']);
 }
 
 /** Workflow states for contact enquiries and newsletter signups. */
@@ -3953,9 +4101,39 @@ function csrf_check(): void
 
 /* ---------- Authentication ---------- */
 
+/**
+ * The office account signed in at this browser, or null.
+ *
+ * The idle timeout the whole application used to run on was the session's own,
+ * which is now long so that a client is not signed out on their own. The office
+ * is the part that still wants one — the dashboard carries every customer's
+ * paperwork and bank details, and it is opened on machines other people use — so
+ * it is applied here instead, to the office and to nobody else. A portal session
+ * sharing the same browser is untouched by it.
+ */
 function current_user(): ?array
 {
-    return $_SESSION['admin'] ?? null;
+    $user = $_SESSION['admin'] ?? null;
+
+    if (!$user) {
+        return null;
+    }
+
+    $seen = (int) ($_SESSION['admin_seen'] ?? 0);
+
+    if ($seen > 0 && time() - $seen > SESSION_LIFETIME) {
+        unset($_SESSION['admin'], $_SESSION['admin_seen']);
+
+        return null;
+    }
+
+    /* Written once a minute rather than on every hit: the point is the gap since
+       they were last here, and that is not measured any finer. */
+    if (time() - $seen >= 60) {
+        $_SESSION['admin_seen'] = time();
+    }
+
+    return $user;
 }
 
 /**

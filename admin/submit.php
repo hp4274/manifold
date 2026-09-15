@@ -288,7 +288,12 @@ try {
                 . ' for +' . $altDial . ', or left empty.');
         }
 
-        $columns['mobile_number'] = '+' . $mobileDial . $digits($columns['mobile_number']);
+        /* The mobile keeps its code from the guarded block above, where a blank
+           one is left blank. Prefixing again here — as this did until the
+           application fields were made optional, and the guard grew up around a
+           line that stayed put — put the code on twice (+91 9773444404 came out
+           +91919773444404, because stripping to digits leaves the first code in
+           the number) and turned a mobile nobody gave into a bare "+91". */
 
         if ($columns['alt_mobile_number'] !== null) {
             $columns['alt_mobile_number'] = '+' . $altDial . $digits($columns['alt_mobile_number']);

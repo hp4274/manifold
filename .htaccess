@@ -23,6 +23,12 @@ RewriteRule ^admin/(submit|file|drawer|receipt|receipt-pdf|raffle-search)\.php$ 
 
 RewriteRule ^portal/(session|prefill|receipt)\.php$ - [L]
 
+# The payment gateway's returnURL is signed into the initiateSale hash as
+# .../portal/pg-return.php, so it has to answer under that exact name — bouncing
+# it through the clean-URL 301 would hand the bank a redirect where it expects a
+# page. Same for the button that starts the payment.
+RewriteRule ^portal/pg-(initiate|return)\.php$ - [L]
+
 RewriteRule ^distributor/proof\.php$ - [L]
 
 # The paying agent's desk was /rf/ before it was renamed C&F. Anything still
@@ -69,7 +75,7 @@ RewriteRule ^(.+)$ $1.php [L]
 # Protect sensitive PHP files
 # ==========================================================================
 
-<FilesMatch "^(lib|config(\.[a-z0-9]+)?|mailer|emails|raffle-lib|receipt-pdf|xlsx)\.php$">
+<FilesMatch "^(lib|config(\.[a-z0-9]+)?|mailer|emails|raffle-lib|receipt-pdf|xlsx|pg-gateway)\.php$">
     Require all denied
 </FilesMatch>
 

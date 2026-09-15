@@ -8,10 +8,10 @@
 
 declare(strict_types=1);
 
-const DB_HOST = 'srv964.hstgr.io';
-const DB_NAME = 'u768511311_test_manifold';
-const DB_USER = 'u768511311_manifold';
-const DB_PASS = 'Manifold@2210';
+const DB_HOST = '127.0.0.1';
+const DB_NAME = 'manifold';
+const DB_USER = 'root';
+const DB_PASS = '';
 const DB_PORT = 3306;
 
 /** Absolute path where uploaded application documents are stored. */
@@ -204,6 +204,28 @@ function qr_file(): ?string
 
     return $path === '' ? null : __DIR__ . '/../' . $path;
 }
+
+/* --------------------------------------------------------------------------
+ * ICICI Payment Gateway — Orange PG (UAT)
+ *
+ * These are the test/UAT credentials. For production, override them in
+ * config.local.php:
+ *
+ *   define('PG_MERCHANT_ID',   '<production MID>');
+ *   define('PG_AGGREGATOR_ID', '<production Agg ID>');
+ *   define('PG_KEY',           '<production key>');
+ *   define('PG_INITIATE_URL',  'https://pgpay.icicibank.com/...');
+ *   define('PG_COMMAND_URL',   'https://pgpay.icicibank.com/...');
+ *
+ * payType 0 = all modes (Cards, Net Banking, UPI).
+ * ----------------------------------------------------------------------- */
+if (!defined('PG_MERCHANT_ID'))   { define('PG_MERCHANT_ID',   '100000000007164'); }
+if (!defined('PG_AGGREGATOR_ID')) { define('PG_AGGREGATOR_ID', 'A100000000007164'); }
+if (!defined('PG_KEY'))           { define('PG_KEY',           'db06cca0-838b-4e01-8b20-6ac446ffb6bd'); }
+if (!defined('PG_CURRENCY_CODE')) { define('PG_CURRENCY_CODE', '356'); }
+if (!defined('PG_PAY_TYPE'))      { define('PG_PAY_TYPE',      '0'); }
+if (!defined('PG_INITIATE_URL'))  { define('PG_INITIATE_URL',  'https://pgpayuat.icicibank.com/tsp/pg/api/v2/initiateSale'); }
+if (!defined('PG_COMMAND_URL'))   { define('PG_COMMAND_URL',   'https://pgpayuat.icicibank.com/tsp/pg/api/command'); }
 
 /**
  * What every application costs, and how it is collected: a booking amount with

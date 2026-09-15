@@ -182,7 +182,12 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `nationality` varchar(80) DEFAULT NULL,
   `gender` varchar(30) DEFAULT NULL,
   `occupation` varchar(120) DEFAULT NULL,
-  `mobile_number` varchar(32) NOT NULL,
+  -- Optional, like the rest of the contact fields: neither apply form marks it
+  -- required and submit.php does not list it among the things an application
+  -- cannot arrive without. The column said otherwise, and what hid the
+  -- disagreement was the duplicate dial-code line in submit.php, which turned a
+  -- mobile nobody gave into the string "+91" before the insert ever saw a null.
+  `mobile_number` varchar(32) DEFAULT NULL,
   `alt_mobile_number` varchar(32) DEFAULT NULL,
   `email` varchar(190) NOT NULL,
   `id_number` varchar(80) DEFAULT NULL,
@@ -307,6 +312,34 @@ CREATE TABLE IF NOT EXISTS `payments` (
   KEY `fk_pay_admin` (`decided_by`),
   CONSTRAINT `fk_pay_admin` FOREIGN KEY (`decided_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_pay_app` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- Payment gateway transactions (ICICI Orange PG).
+-- One row per initiateSale call. Tracks the lifecycle from initiation through
+-- the gateway callback so the return handler can match a response to the
+-- application and stage it belongs to.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `pg_transactions` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `application_id` int(10) unsigned NOT NULL,
+  `stage` enum('booking','delivery') NOT NULL,
+  `merchant_txn_no` varchar(80) NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `tran_ctx` varchar(120) DEFAULT NULL,
+  `response_code` varchar(20) DEFAULT NULL,
+  `payment_id` varchar(60) DEFAULT NULL,
+  `payment_mode` varchar(30) DEFAULT NULL,
+  `payment_sub_type` varchar(60) DEFAULT NULL,
+  `txn_id` varchar(60) DEFAULT NULL,
+  `status` enum('initiated','success','failed') NOT NULL DEFAULT 'initiated',
+  `raw_response` text DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `completed_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_merchant_txn` (`merchant_txn_no`),
+  KEY `ix_pgtxn_app` (`application_id`),
+  CONSTRAINT `fk_pgtxn_app` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
