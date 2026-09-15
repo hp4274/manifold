@@ -106,6 +106,18 @@ foreach (array_keys($srcGroups) as $groupLabel) {
     </p>
   <?php endif; ?>
 
+  <?php /* The drawer reads; correcting what it shows is a page of its own, so
+           that an edit is a deliberate act with a form and an audit trail behind
+           it rather than something done in passing. */ ?>
+  <?php if ($srcIsApp): ?>
+    <p class="drawer__edit">
+      <a class="btn btn--ghost btn--sm" href="client-edit?id=<?= $srcId ?>">
+        <i class="bi bi-pencil" aria-hidden="true"></i>
+        Edit <?= e((string) $srcRow['full_name']) ?>'s details
+      </a>
+    </p>
+  <?php endif; ?>
+
   <?php if (count($srcTabs) > 1): ?>
     <nav class="detail-tabs" role="tablist" aria-label="Sections">
       <?php foreach ($srcTabs as $i => $tab): ?>

@@ -75,6 +75,9 @@ function require_dealer(): array
 function dealer_client_view(array $client): array
 {
     return [
+        /* the row's own id, so the list can link to the edit screen — it is not
+           a secret, and client_for_actor() is what decides whose it is */
+        'id'                => (int) $client['id'],
         'reference_code'    => (string) $client['reference_code'],
         'full_name'         => (string) $client['full_name'],
         'email'             => (string) $client['email'],

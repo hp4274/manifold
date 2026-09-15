@@ -207,6 +207,113 @@ function send_new_application_admin(array $app): bool
     );
 }
 
+/**
+ * Sent to BOTH addresses when a client's email is changed.
+ *
+ * Email is how a client signs in, so changing it hands their portal — documents,
+ * receipts, payment history — to whatever address was typed. The office, their
+ * dealer and their distributor can all make that change, which means the one
+ * person who must not find out about it by accident is the client.
+ *
+ * So it goes to the address being left as well as the one being moved to. The
+ * old address is the only place a wrongly-made change can still be noticed by
+ * the person it was made against; sending only to the new one would be telling
+ * whoever took the account that they had taken it.
+ */
+function send_client_email_changed(array $app, string $oldEmail, string $newEmail, array $actor): bool
+{
+    $inner = '<p style="margin:0 0 16px;">The email address on your application '
+        . e((string) $app['reference_code']) . ' has been changed by ' . e((string) $actor['label']) . '.</p>'
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Was'            => $oldEmail,
+            'Now'            => $newEmail,
+            'Changed by'     => (string) $actor['label'],
+        ])
+        . '<p style="margin:0 0 16px;">From now on the new address is the one that signs in to your '
+        . 'portal, and the old one no longer opens it.</p>'
+        . '<p style="margin:0;font-size:14px;color:#8499ac;"><strong>If you did not ask for this, '
+        . 'call us on +91 97251 54186 straight away.</strong> Your application, your payments and '
+        . 'anything you have uploaded are unchanged — only the address that opens them has moved.</p>';
+
+    $subject = 'The email on your application ' . $app['reference_code'] . ' was changed';
+
+    /* The old address first: it is the one that can still tell us this was
+       wrong, and it is about to stop being able to sign in and ask. */
+    $told = send_mail($oldEmail, $subject, email_wrap('Your email address was changed', $inner),
+        'client_email_changed');
+
+    return send_mail($newEmail, $subject, email_wrap('Your email address was changed', $inner),
+        'client_email_changed') || $told;
+}
+
+/** And the office hears it too, whoever made it. */
+function send_client_email_changed_admin(array $app, string $oldEmail, string $newEmail, array $actor): bool
+{
+    $link = base_url() . '/admin/client-edit?id=' . (int) $app['id'];
+
+    $inner = '<p style="margin:0 0 16px;">A client\'s sign-in address was changed. Both the old '
+        . 'address and the new one have been told.</p>'
+        . email_rows([
+            'Booking number' => (string) $app['reference_code'],
+            'Client'         => (string) $app['full_name'],
+            'Was'            => $oldEmail,
+            'Now'            => $newEmail,
+            'Changed by'     => (string) $actor['label'],
+        ])
+        . email_button($link, 'Open the record')
+        . '<p style="margin:0;font-size:14px;color:#8499ac;">Every edit to a client is kept in '
+        . 'client_edits, and this one is in there with the address it came from.</p>';
+
+    return send_to_office(
+        'Sign-in address changed - ' . $app['reference_code'],
+        'Client email changed',
+        $inner,
+        'client_email_changed_admin'
+    );
+}
+
+/**
+ * Sent once after a spreadsheet import, rather than once per client.
+ *
+ * An import is the one place this system creates applications in bulk, and the
+ * per-application note the website sends would arrive five hundred times over
+ * for a file of five hundred. The office wants to know that a batch landed, who
+ * sent it and how big it was; the rows themselves are in the list.
+ */
+function send_import_summary_admin(array $created, array $context): bool
+{
+    $count   = count($created);
+    $product = (string) ($created[0]['product'] ?? 'stove');
+    $first   = (string) ($created[0]['reference_code'] ?? '');
+    $last    = (string) ($created[$count - 1]['reference_code'] ?? '');
+
+    $link = base_url() . '/admin/list?type=' . rawurlencode($product) . '&status=submitted';
+
+    $inner = '<p style="margin:0 0 16px;">'
+        . $count . ' ' . ($count === 1 ? 'client was' : 'clients were')
+        . ' imported from a spreadsheet by ' . e(import_actor_label($context))
+        . ', and ' . ($count === 1 ? 'is' : 'are') . ' waiting for a decision.</p>'
+        . email_rows([
+            'Imported'       => (string) $count,
+            'Booking numbers' => $count === 1 ? $first : $first . ' – ' . $last,
+            'Imported by'    => import_actor_label($context),
+            'Commission to'  => import_commission_label($context),
+        ])
+        . email_button($link, 'Open the list')
+        . '<p style="margin:0;font-size:14px;color:#8499ac;">Each of them has been emailed to say '
+        . 'their application arrived. Nothing has been asked of them yet — approving an application '
+        . 'is what sends its payment details and opens the portal.</p>';
+
+    return send_to_office(
+        'Imported ' . $count . ' ' . ($count === 1 ? 'client' : 'clients')
+            . ' - ' . import_actor_label($context),
+        'Clients imported',
+        $inner,
+        'import_summary'
+    );
+}
+
 /** Sent when the office turns an application down. */
 function send_application_rejected_email(array $app, string $reason = ''): bool
 {

@@ -3752,6 +3752,19 @@ function sale_source(array $app): array
             : ['label' => 'Dealer form', 'code' => $dealer];
     }
 
+    /* Typed in from a spreadsheet rather than filled in by the customer. The
+       office still collects, so this is an ordinary online sale and falls past
+       the 'direct' branch above — but it did not come off the website, and a row
+       that said "Website" would send somebody looking for a form submission that
+       never happened. */
+    if (!empty($app['entered_by_dealer'])) {
+        return ['label' => 'Dealer import', 'code' => $dealer];
+    }
+
+    if (!empty($app['entered_by_distributor'])) {
+        return ['label' => 'Distributor import', 'code' => $distributor];
+    }
+
     /* One box on the form takes any code, so what was typed decides what this
        says: MF is another customer's, MD a dealer's, MX a distributor's. */
     $quoted = strtoupper((string) ($app['referred_by_code'] ?? ''));

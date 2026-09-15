@@ -75,7 +75,7 @@ RewriteRule ^(.+)$ $1.php [L]
 # Protect sensitive PHP files
 # ==========================================================================
 
-<FilesMatch "^(lib|config(\.[a-z0-9]+)?|mailer|emails|raffle-lib|receipt-pdf|xlsx|pg-gateway)\.php$">
+<FilesMatch "^(lib|config(\.[a-z0-9]+)?|mailer|emails|raffle-lib|receipt-pdf|xlsx|pg-gateway|import-lib|client-lib)\.php$">
     Require all denied
 </FilesMatch>
 

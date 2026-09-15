@@ -343,6 +343,38 @@ CREATE TABLE IF NOT EXISTS `pg_transactions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
+-- Every change made to a client's own details, one row per field.
+--
+-- Not folded into status_log: that table's `changed_by` is a foreign key into
+-- admin_users, and two of the three people who can edit a client — the dealer
+-- who sold it and the distributor above them — are not in that table. So the
+-- actor is recorded by kind and id, with their name written alongside, which
+-- also means the log still reads after a dealer has been switched off.
+--
+-- This matters most for `email`: it is how a client signs in to their portal, so
+-- a change to it moves the portal. There is deliberately no way to make that
+-- change without leaving a row here.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `client_edits` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `application_id` int(10) unsigned NOT NULL,
+  `field` varchar(60) NOT NULL,
+  `old_value` text DEFAULT NULL,
+  `new_value` text DEFAULT NULL,
+  `actor_type` enum('office','dealer','distributor') NOT NULL,
+  -- no foreign key: the id points into admin_users, dealers or distributors
+  -- depending on actor_type, which is why actor_label carries the name too
+  `actor_id` int(10) unsigned DEFAULT NULL,
+  `actor_label` varchar(160) NOT NULL DEFAULT '',
+  `ip_address` varchar(45) DEFAULT NULL,
+  `changed_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `ix_cedit_app` (`application_id`,`changed_at`),
+  KEY `ix_cedit_field` (`field`,`changed_at`),
+  CONSTRAINT `fk_cedit_app` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
 -- Commission lines per tranche per party.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `commission_lines` (

@@ -2,9 +2,11 @@
 /**
  * Every sale under one distributor — their own and their dealers'.
  *
- * Read-only by design. distributor_client_view() is what decides that: receipts,
- * payment proofs, UTR references, identity documents and home addresses stay in
- * the admin.
+ * A distributor may correct a client's own details from here — their own sales
+ * and their dealers' alike — but not their money. Receipts, payment proofs, UTR
+ * references and uploaded identity documents stay in the admin;
+ * distributor_client_view() decides what this page shows, and client_fields()
+ * what the edit screen may write.
  */
 
 declare(strict_types=1);
@@ -87,6 +89,9 @@ require __DIR__ . '/partials/layout-top.php';
       <span class="eyebrow" data-table-count><?= (int) $paging['from'] ?>–<?= (int) $paging['to'] ?>
         of <?= (int) $paging['total'] ?></span>
     </div>
+    <a class="btn btn--ghost btn--sm" href="import">
+      <i class="bi bi-upload" aria-hidden="true"></i> Import from a spreadsheet
+    </a>
   </div>
 
   <?php if (!$clients): ?>
@@ -98,11 +103,12 @@ require __DIR__ . '/partials/layout-top.php';
     <div class="table-wrap">
       <table class="data-table data-table--dealer-clients data-table--stack is-filterable">
         <colgroup>
+          <col style="width:22%">
+          <col style="width:13%">
+          <col style="width:15%">
           <col style="width:24%">
-          <col style="width:14%">
-          <col style="width:16%">
-          <col style="width:26%">
-          <col style="width:20%">
+          <col style="width:17%">
+          <col style="width:9%">
         </colgroup>
         <thead>
           <tr>
@@ -119,6 +125,7 @@ require __DIR__ . '/partials/layout-top.php';
               </button>
             </th>
             <th>Your share</th>
+            <th><span class="visually-hidden">Edit</span></th>
           </tr>
         </thead>
         <tbody>
@@ -171,6 +178,11 @@ require __DIR__ . '/partials/layout-top.php';
                 <span class="cell-sub">
                   <?= $client['earned'] ? 'earned' : 'once the sale completes' ?>
                 </span>
+              </td>
+              <td data-label="">
+                <a class="btn btn--ghost btn--sm" href="client-edit?id=<?= (int) $client['id'] ?>">
+                  <i class="bi bi-pencil" aria-hidden="true"></i> Edit
+                </a>
               </td>
             </tr>
           <?php endforeach; ?>

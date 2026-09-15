@@ -3588,3 +3588,40 @@ input[name*="email"]{text-transform:lowercase}
 .admin-search-input::-webkit-search-cancel-button:hover {
   opacity: 1;
 }
+
+/* ==========================================================================
+   Importing clients from a spreadsheet
+   ========================================================================== */
+
+/* Who a batch earns for, said on both steps of the import. It is the one thing
+   on the screen somebody could get wrong without noticing, so it is not a hint —
+   it is a line with a rule down the side of it. */
+.import-books{
+  display:flex;align-items:center;gap:10px;
+  margin:18px 0 0;padding:12px 14px;
+  border-left:3px solid var(--accent-2);
+  border-radius:0 8px 8px 0;
+  background:rgba(23,176,166,.07);
+  font-size:14px;line-height:1.45;
+}
+.import-books i{font-size:16px;opacity:.75;flex:none}
+
+/* ==========================================================================
+   Editing a client's details
+   ========================================================================== */
+
+/* A country code and the number beside it, the way the apply form pairs them.
+   The code box is narrow by inline style so the pair keeps working inside the
+   two-column .form-grid without a media query of its own. */
+.field-split{display:flex;gap:8px;align-items:flex-start}
+.field-split input{min-width:0}
+.field-split input:last-child{flex:1 1 auto}
+
+/* The groups are the drawer's groups, so a field is found in the same place it
+   is read in. A rule between them keeps forty inputs from reading as one wall. */
+.client-edit__group + .client-edit__group{
+  margin-top:22px;padding-top:20px;border-top:1px solid var(--line);
+}
+.client-edit__group .detail-block__title{margin-bottom:12px}
+/* the one way out of the read-only drawer */
+.drawer__edit{margin:0 0 14px}

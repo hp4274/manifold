@@ -2,10 +2,11 @@
 /**
  * The dealer's own customers, and how far each sale has got.
  *
- * Read-only by design. A dealer introduced these people; they did not become
- * their bank. Receipts, payment proofs, UTR references, identity documents and
- * home addresses stay in the admin — dealer_client_view() is what decides that,
- * not this page.
+ * A dealer may correct a client's own details from here — name, contact,
+ * address and the rest — but not their money. Receipts, payment proofs, UTR
+ * references and the identity documents they uploaded stay in the admin;
+ * dealer_client_view() is what decides what this page shows, and
+ * client_fields() what the edit screen may write.
  */
 
 declare(strict_types=1);
@@ -84,6 +85,9 @@ require __DIR__ . '/partials/layout-top.php';
         <?= (int) $paging['from'] ?>–<?= (int) $paging['to'] ?> of <?= (int) $paging['total'] ?>
       </span>
     </div>
+    <a class="btn btn--ghost btn--sm" href="import">
+      <i class="bi bi-upload" aria-hidden="true"></i> Import from a spreadsheet
+    </a>
   </div>
 
   <?php if (!$clients): ?>
@@ -95,11 +99,12 @@ require __DIR__ . '/partials/layout-top.php';
     <div class="table-wrap">
       <table class="data-table data-table--dealer-clients data-table--stack">
         <colgroup>
-          <col style="width:26%">
-          <col style="width:15%">
-          <col style="width:10%">
-          <col style="width:27%">
-          <col style="width:22%">
+          <col style="width:24%">
+          <col style="width:14%">
+          <col style="width:9%">
+          <col style="width:25%">
+          <col style="width:19%">
+          <col style="width:9%">
         </colgroup>
         <thead>
           <tr>
@@ -108,6 +113,7 @@ require __DIR__ . '/partials/layout-top.php';
             <th>Product</th>
             <th>Progress</th>
             <th>Your commission</th>
+            <th><span class="visually-hidden">Edit</span></th>
           </tr>
         </thead>
         <tbody>
@@ -150,6 +156,11 @@ require __DIR__ . '/partials/layout-top.php';
                 <span class="cell-sub">
                   <?= $client['earned'] ? 'earned' : 'once the sale completes' ?>
                 </span>
+              </td>
+              <td data-label="">
+                <a class="btn btn--ghost btn--sm" href="client-edit?id=<?= (int) $client['id'] ?>">
+                  <i class="bi bi-pencil" aria-hidden="true"></i> Edit
+                </a>
               </td>
             </tr>
           <?php endforeach; ?>

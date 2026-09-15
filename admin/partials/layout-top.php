@@ -52,6 +52,13 @@ $pageLead   = $pageLead ?? '';
             <?= e($sidebarConfig['label']) ?>
           </a>
         <?php endforeach; ?>
+
+        <?php /* sits with the forms because it makes the same thing they do —
+                 an application waiting for a decision — only many at a time */ ?>
+        <a href="import" class="<?= $activeType === 'import' ? 'is-active' : '' ?>">
+          <i class="bi bi-upload" aria-hidden="true"></i>
+          Import clients
+        </a>
       </nav>
     </div>
 
