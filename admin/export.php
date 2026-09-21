@@ -21,7 +21,7 @@ require_login();
 
 $kind = (string) ($_GET['kind'] ?? 'dealers');
 
-if (!in_array($kind, ['dealers', 'distributors'], true)) {
+if (!in_array($kind, ['dealers', 'distributors', 'clients'], true)) {
     http_response_code(404);
     exit('Unknown report.');
 }
@@ -111,6 +111,185 @@ function export_window(string $column): string
     }
 
     return $clauses ? ' AND ' . implode(' AND ', $clauses) : '';
+}
+
+/* ---------- clients MIS ----------
+   Every application in the period, with the dealer and distributor behind it —
+   the same filters the mis.php screen offers, so a report downloaded from
+   there matches what was on screen. Handled and finished here rather than
+   falling through the dealer/distributor branch below, which counts sales
+   *for* a partner rather than listing clients themselves. */
+if ($kind === 'clients') {
+    $product       = (string) ($_GET['product'] ?? '');
+    $statusFilter  = (string) ($_GET['status'] ?? '');
+    $dealerFilter  = (int) ($_GET['dealer'] ?? 0);
+    $distFilter    = (int) ($_GET['distributor'] ?? 0);
+    $q             = trim((string) ($_GET['q'] ?? ''));
+
+    $clWhere  = [];
+    $clParams = [];
+
+    if (in_array($product, ['stove', 'tuktuk'], true)) {
+        $clWhere[]  = 'a.product = ?';
+        $clParams[] = $product;
+    }
+
+    if (in_array($statusFilter, APPLICATION_STATUSES, true)) {
+        $clWhere[]  = 'a.status = ?';
+        $clParams[] = $statusFilter;
+    }
+
+    if ($dealerFilter > 0) {
+        $clWhere[]  = 'a.dealer_id = ?';
+        $clParams[] = $dealerFilter;
+    }
+
+    if ($distFilter > 0) {
+        $clWhere[]  = 'a.distributor_id = ?';
+        $clParams[] = $distFilter;
+    }
+
+    if ($q !== '') {
+        $clWhere[]  = '(a.full_name LIKE ? OR a.email LIKE ? OR a.mobile_number LIKE ? OR a.reference_code LIKE ?)';
+        $like       = '%' . $q . '%';
+        array_push($clParams, $like, $like, $like, $like);
+    }
+
+    $clClause = ($clWhere ? ' WHERE ' . implode(' AND ', $clWhere) : ' WHERE 1 = 1')
+        . export_window('a.created_at');
+
+    $clStmt = db()->prepare(
+        'SELECT a.*, d.full_name AS dealer_name, d.dealer_code,
+                x.full_name AS distributor_name, x.distributor_code
+           FROM applications a
+           LEFT JOIN dealers d ON d.id = a.dealer_id
+           LEFT JOIN distributors x ON x.id = a.distributor_id'
+        . $clClause . ' ORDER BY a.created_at DESC'
+    );
+    $clStmt->execute($clParams);
+    $clRows = $clStmt->fetchAll();
+
+    $clStem  = 'clients-mis-' . date('Y-m-d');
+    $clTitle = 'Clients MIS report';
+
+    if ($format === 'xlsx') {
+        require_once __DIR__ . '/xlsx.php';
+
+        $book = build_xlsx(clients_export_sheet($clRows, $clTitle, $periodLabel));
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $clStem . '.xlsx"');
+        header('Cache-Control: no-store, private');
+
+        echo $book;
+        exit;
+    }
+
+    /* No printable PDF for this one yet — the client list runs to columns a
+       landscape page cannot hold without shrinking past reading. The dialog
+       hides that radio for this kind (see export-modal.php). */
+    if ($format === 'pdf') {
+        $format = 'csv';
+    }
+
+    $filename = $clStem . '.csv';
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Cache-Control: no-store, private');
+
+    $out = fopen('php://output', 'w');
+    fwrite($out, "\xEF\xBB\xBF");
+
+    fputcsv($out, [$clTitle]);
+    fputcsv($out, ['Period', $periodLabel]);
+    fputcsv($out, ['Generated', format_datetime(date('Y-m-d H:i:s'))]);
+    fputcsv($out, []);
+    fputcsv($out, ['Reference', 'Client', 'Email', 'Mobile', 'Product', 'Status',
+                   'Dealer', 'Dealer code', 'Distributor', 'Distributor code',
+                   'City', 'State', 'Received']);
+
+    foreach ($clRows as $row) {
+        fputcsv($out, [
+            (string) $row['reference_code'],
+            (string) $row['full_name'],
+            (string) $row['email'],
+            (string) ($row['mobile_number'] ?? ''),
+            (string) $row['product'],
+            status_label((string) $row['status']),
+            (string) ($row['dealer_name'] ?? ''),
+            (string) ($row['dealer_code'] ?? ''),
+            (string) ($row['distributor_name'] ?? ''),
+            (string) ($row['distributor_code'] ?? ''),
+            (string) ($row['city'] ?? ''),
+            (string) ($row['state'] ?? ''),
+            format_datetime((string) $row['created_at']),
+        ]);
+    }
+
+    fputcsv($out, []);
+    fputcsv($out, ['Total', count($clRows) . ' clients']);
+
+    fclose($out);
+    exit;
+}
+
+/**
+ * The clients MIS as a workbook: one row per application.
+ */
+function clients_export_sheet(array $rows, string $title, string $periodLabel): array
+{
+    $columns = [
+        ['label' => 'Reference', 'width' => 14, 'type' => 'text'],
+        ['label' => 'Client', 'width' => 24, 'type' => 'text'],
+        ['label' => 'Email', 'width' => 26, 'type' => 'text'],
+        ['label' => 'Mobile', 'width' => 15, 'type' => 'text'],
+        ['label' => 'Product', 'width' => 10, 'type' => 'text'],
+        ['label' => 'Status', 'width' => 16, 'type' => 'text'],
+        ['label' => 'Dealer', 'width' => 22, 'type' => 'text'],
+        ['label' => 'Dealer code', 'width' => 13, 'type' => 'text'],
+        ['label' => 'Distributor', 'width' => 22, 'type' => 'text'],
+        ['label' => 'Distributor code', 'width' => 16, 'type' => 'text'],
+        ['label' => 'City', 'width' => 16, 'type' => 'text'],
+        ['label' => 'State', 'width' => 14, 'type' => 'text'],
+        ['label' => 'Received', 'width' => 16, 'type' => 'date'],
+    ];
+
+    $body = [];
+
+    foreach ($rows as $row) {
+        $body[] = [
+            (string) $row['reference_code'],
+            (string) $row['full_name'],
+            (string) $row['email'],
+            (string) ($row['mobile_number'] ?? ''),
+            (string) $row['product'],
+            status_label((string) $row['status']),
+            (string) ($row['dealer_name'] ?? ''),
+            (string) ($row['dealer_code'] ?? ''),
+            (string) ($row['distributor_name'] ?? ''),
+            (string) ($row['distributor_code'] ?? ''),
+            (string) ($row['city'] ?? ''),
+            (string) ($row['state'] ?? ''),
+            (string) $row['created_at'],
+        ];
+    }
+
+    $totals    = array_fill(0, count($columns), null);
+    $totals[0] = 'Total';
+    $totals[1] = count($rows) . ' ' . (count($rows) === 1 ? 'client' : 'clients');
+
+    return [
+        'name'    => 'Clients',
+        'title'   => $title,
+        'meta'    => [
+            ['Period', $periodLabel],
+            ['Generated', format_datetime(date('Y-m-d H:i:s'))],
+        ],
+        'columns' => $columns,
+        'rows'    => $body,
+        'totals'  => $totals,
+    ];
 }
 
 /* ---------- the rows ----------

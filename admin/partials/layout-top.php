@@ -114,4 +114,11 @@ $pageLead   = $pageLead ?? '';
         <h1><?= e($pageTitle) ?></h1>
         <?php if ($pageLead !== ''): ?><p><?= e($pageLead) ?></p><?php endif; ?>
       </div>
+      <?php if ($activeType === ''): ?>
+        <div class="topbar__actions">
+          <a href="mis" class="btn btn--ghost">
+            <i class="bi bi-table" aria-hidden="true"></i> Clients MIS
+          </a>
+        </div>
+      <?php endif; ?>
     </div>

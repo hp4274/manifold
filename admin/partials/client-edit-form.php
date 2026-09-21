@@ -139,7 +139,8 @@ $value = static function (string $name) use ($app, $posted) {
 
               <?php elseif ($spec['kind'] === 'bool'): ?>
                 <div class="field">
-                  <label class="field-consent" for="f-<?= e($name) ?>">
+                  <label for="f-<?= e($name) ?>"><?= e($spec['label']) ?></label>
+                  <label class="field-consent field-consent--control" for="f-<?= e($name) ?>">
                     <input id="f-<?= e($name) ?>" type="checkbox" name="<?= e($name) ?>" value="1"
                       <?= $value($name) === '1' ? 'checked' : '' ?>>
                     <span><?= e($spec['label']) ?></span>

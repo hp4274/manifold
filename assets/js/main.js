@@ -1437,9 +1437,15 @@
       icon.className = 'bi ' + (kind === 'ok' ? 'bi-check-circle' : 'bi-exclamation-circle');
       icon.setAttribute('aria-hidden', 'true');
 
+      var clone = alert.cloneNode(true);
+      var leadingIcon = clone.querySelector('i');
+      if (leadingIcon) {
+        leadingIcon.remove();
+      }
+
       var body = document.createElement('div');
       body.className = 'toast__body';
-      body.innerHTML = alert.innerHTML;
+      body.innerHTML = clone.innerHTML.trim();
 
       var close = document.createElement('button');
       close.type = 'button';

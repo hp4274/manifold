@@ -11,8 +11,22 @@ require_once __DIR__ . '/../admin/emails.php';
 
 /** How long a code stays valid, and how many guesses it allows. */
 const OTP_TTL_MINUTES = 10;
+/**
+ * Wrong guesses a code allows before it is thrown away.
+ *
+ * **0, which means unlimited.** Turned off on request. A code is six digits and
+ * lives for OTP_TTL_MINUTES, so with no cap the only thing standing between a
+ * guesser and somebody's portal is how many tries they can fit into ten minutes.
+ * Put a number back here — 5 was the old value — to close that.
+ */
 const OTP_MAX_ATTEMPTS = 5;
-const OTP_MAX_PER_HOUR = 100;
+/**
+ * Codes one address or connection may ask for in an hour.
+ *
+ * **0, which means unlimited.** Turned off on request. Issued codes are still
+ * recorded in login_attempts, so the count is there to read; nothing acts on it.
+ */
+const OTP_MAX_PER_HOUR = 0;
 
 /**
  * Every role the person at this browser is currently signed in as.
@@ -192,8 +206,8 @@ function roles_for_email(string $email): array
  *
  * Shown only for a known address now that the form tells an unknown or
  * still-pending one so directly (see issue_otp). The per-IP and per-address
- * throttles in otp_recent_count() are what keep the form from being walked
- * through a list one address at a time.
+ * throttles that used to keep this form from being walked through a list one
+ * address at a time are off — see OTP_MAX_PER_HOUR.
  */
 const OTP_SENT_NOTICE = 'If that address is registered with us, a six-digit code is on its way. '
     . 'It is valid for ' . OTP_TTL_MINUTES . ' minutes.';
@@ -248,7 +262,7 @@ function issue_otp(string $email, string $audience = 'any'): string
 {
     $ip = $_SERVER['REMOTE_ADDR'] ?? null;
 
-    if (otp_recent_count($email, $ip) >= OTP_MAX_PER_HOUR) {
+    if (OTP_MAX_PER_HOUR > 0 && otp_recent_count($email, $ip) >= OTP_MAX_PER_HOUR) {
         return 'Too many codes requested. Try again in an hour.';
     }
 
@@ -325,7 +339,7 @@ function verify_otp(string $email, string $code, string $audience = 'any'): stri
         return 'That code is not right, or it has run out. Ask for a new one.';
     }
 
-    if ((int) ($issued['attempts'] ?? 0) >= OTP_MAX_ATTEMPTS) {
+    if (OTP_MAX_ATTEMPTS > 0 && (int) ($issued['attempts'] ?? 0) >= OTP_MAX_ATTEMPTS) {
         unset($_SESSION['otp']);
 
         return 'Too many wrong attempts. Ask for a new code.';

@@ -2195,6 +2195,24 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
   cursor:pointer;
 }
 
+.field-consent--control{
+  min-height:44px;
+  padding:10px 14px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+  background:#fff;
+  margin:0;
+  align-items:center;
+  box-sizing:border-box;
+  transition:border-color .2s ease,box-shadow .2s ease;
+}
+.field-consent--control:hover{
+  border-color:#c3d3df;
+}
+.field-consent--control input[type="checkbox"]{
+  margin-top:0;
+}
+
 /* the terms themselves: readable, scrolled rather than endless */
 .terms-scroll{
   max-height:190px;

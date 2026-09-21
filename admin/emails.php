@@ -626,9 +626,8 @@ function send_voucher_update_email(string $to, string $heading, string $line, ar
 }
 
 /**
- * Sent the moment an application is submitted: the booking amount, the QR code
- * to pay it with, and the link to upload the receipt. The delivery payment is
- * named here too, so nobody is surprised by it later.
+ * Sent the moment an application is approved: the booking amount, payment details,
+ * and the link to upload the receipt. The delivery payment is named here too.
  */
 function send_payment_email(array $app): bool
 {
@@ -636,19 +635,11 @@ function send_payment_email(array $app): bool
     $portal   = base_url() . '/portal/index.php';
     $amount   = money(stage_amount($app, 'booking'));
     $delivery = money(stage_amount($app, 'delivery'));
-    $qrFile   = qr_file();
-    $hasQr    = $qrFile !== null;
 
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($app['full_name']) . ',</p>'
         . '<p style="margin:0 0 14px;">Your application for the <strong style="color:#0f2c4d;">'
         . e($product) . '</strong> has been approved. Your booking number is '
-        . '<strong style="color:#0f2c4d;">' . e((string) $app['reference_code']) . '</strong>.</p>'
-        . '<p style="margin:0 0 20px;">To reserve your place, pay the booking amount of '
-        . '<strong style="color:#0f2c4d;">' . e($amount) . '</strong> and upload the receipt. '
-        . 'We check every payment by hand and confirm within two working days.</p>'
-        . '<p style="margin:0 0 20px;">There are two payments in all: this booking amount now, and '
-        . '<strong style="color:#0f2c4d;">' . e($delivery) . '</strong> when your '
-        . e($product) . ' is delivered. Both come off the price and both are confirmed by our team.</p>';
+        . '<strong style="color:#0f2c4d;">' . e((string) $app['reference_code']) . '</strong>.</p>';
 
     $referred = ($app['referral_reward_status'] ?? 'none') === 'pending';
 
@@ -665,23 +656,17 @@ function send_payment_email(array $app): bool
             . '</strong>. Reply to this email with the correct one and we will credit the right person.</p>';
     }
 
-    $inner .= '<p style="margin:0 0 10px;font-weight:700;color:#0f2c4d;">1. Pay the booking amount, '
-        . e($amount) . '</p>';
-
-    if ($hasQr) {
-        $inner .= '<p style="margin:0 0 8px;text-align:center;">'
-            . '<img src="cid:qr" alt="Payment QR code" width="240" height="240" '
-            . 'style="width:240px;height:auto;max-width:100%;border:1px solid #e3ebf2;border-radius:14px;background:#ffffff;"></p>'
-            . '<p style="margin:0 0 20px;text-align:center;font-size:14px;color:#8499ac;">'
-            . 'Not showing? <a href="' . e($portal) . '" style="color:#0e8f96;">Open the QR code on our website</a>.</p>';
-    } else {
-        $inner .= '<p style="margin:0 0 20px;">We will send the payment QR code separately.</p>';
-    }
-
-    $inner .= '<p style="margin:0 0 10px;font-weight:700;color:#0f2c4d;">2. Upload the receipt</p>'
-        . '<p style="margin:0 0 4px;">Sign in with this email address and upload a screenshot or PDF of the payment.</p>'
-        . email_button($portal, 'Sign in and upload')
-        . '<p style="margin:0;font-size:14px;color:#8499ac;">Signing in sends a one-time code to this address - no password to remember.</p>';
+    $inner .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:#f6f9fc;border:1px solid #e3ebf2;border-radius:14px;padding:20px;">'
+        . '<tr><td>'
+        . '<p style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8499ac;">Payment Breakdown</p>'
+        . email_rows([
+            'Booking Amount (Due Now)' => $amount,
+            'Delivery Amount (Due on Delivery)' => $delivery,
+        ])
+        . '</td></tr></table>'
+        . '<p style="margin:16px 0 6px;color:#0f2c4d;">To reserve your unit, please complete your booking payment and upload your receipt in the applicant portal:</p>'
+        . email_button($portal, 'Sign in and upload receipt')
+        . '<p style="margin:12px 0 0;font-size:14px;color:#8499ac;">Signing in sends a one-time code to your email address — no password required.</p>';
 
     /* This one now goes out when the office approves an application, not when
        it arrives — the applicant already heard that it arrived — so it says so
@@ -691,8 +676,7 @@ function send_payment_email(array $app): bool
         'Approved - pay the ' . $amount . ' booking amount to reserve your place ('
             . $app['reference_code'] . ')',
         email_wrap('Your application is approved', $inner),
-        'payment',
-        $hasQr ? $qrFile : null
+        'payment'
     );
 }
 
@@ -711,7 +695,6 @@ function send_payment_reminder_email(array $app, ?array $totals = null): bool
     }
 
     $amount  = money((float) $stage['balance']);
-    $qrFile  = qr_file();
 
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($app['full_name']) . ',</p>'
         . '<p style="margin:0 0 14px;">Your application for the <strong style="color:#0f2c4d;">' . e($product)
@@ -721,16 +704,9 @@ function send_payment_reminder_email(array $app, ?array $totals = null): bool
             ? ' - you have paid ' . e(money((float) $totals['paid'])) . ' of ' . e(money((float) $totals['due'])) . ' so far'
             : '')
         . '.</p>'
-        . '<p style="margin:0 0 8px;">Pay the full amount in one transfer and upload the receipt in the portal. '
-        . 'If you have already paid, upload the receipt and ignore this note.</p>';
-
-    if ($qrFile !== null) {
-        $inner .= '<p style="margin:16px 0 20px;text-align:center;">'
-            . '<img src="cid:qr" alt="Payment QR code" width="220" height="220" '
-            . 'style="width:220px;height:auto;max-width:100%;border:1px solid #e3ebf2;border-radius:14px;background:#ffffff;"></p>';
-    }
-
-    $inner .= email_button($portal, 'Pay and upload the receipt')
+        . '<p style="margin:0 0 16px;">Pay the full amount in one transfer and upload the receipt in the portal. '
+        . 'If you have already paid, upload the receipt and ignore this note.</p>'
+        . email_button($portal, 'Pay and upload the receipt')
         . '<p style="margin:0;font-size:14px;color:#8499ac;">Any trouble? Call +91 97251 54186 and we will help.</p>';
 
     return send_mail(
@@ -738,8 +714,7 @@ function send_payment_reminder_email(array $app, ?array $totals = null): bool
         'Reminder: the ' . strtolower($stage['label']) . ' of ' . $amount . ' is due for '
             . $app['reference_code'],
         email_wrap('A quick reminder about your payment', $inner),
-        'reminder',
-        $qrFile
+        'reminder'
     );
 }
 

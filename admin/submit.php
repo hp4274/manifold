@@ -64,22 +64,27 @@ function respond(bool $ok, string $message, int $code = 200): void
 }
 
 /**
- * Refuses a sixth post in an hour from one address.
+ * How many posts one address may make in an hour, and the check that enforces it.
  *
- * Counted off what is already stored rather than out of a table of its own:
- * every one of these forms writes a row carrying the IP and the time it
- * arrived, so the count is the record itself and there is nothing to keep
- * tidy. Each accepted post sends mail, so this is the sending reputation of a
- * shared mailbox as much as it is database spam.
+ * **Currently 0, which means no limit at all: the forms accept as many
+ * submissions from one connection as it cares to send.** Turned off on request.
+ * Set it back to a number — 5 was the old value — and the throttle below starts
+ * working again with no other change.
  *
- * A request with no address behind it is not throttled — there is nothing to
+ * What the limit was protecting, for whoever turns it back on: each accepted
+ * post sends mail, so it is the sending reputation of a shared mailbox as much
+ * as it is database spam. Counted off what is already stored rather than out of
+ * a table of its own — every one of these forms writes a row carrying the IP and
+ * the time it arrived, so the count is the record itself.
+ *
+ * A request with no address behind it is never throttled: there is nothing to
  * throttle it by, and refusing everybody over one missing header is worse.
  */
-const SUBMIT_MAX_PER_HOUR = 5;
+const SUBMIT_MAX_PER_HOUR = 0;
 
 function throttled(string $table, ?string $ip): bool
 {
-    if ($ip === null || $ip === '') {
+    if (SUBMIT_MAX_PER_HOUR <= 0 || $ip === null || $ip === '') {
         return false;
     }
 
@@ -149,7 +154,7 @@ if (!empty($_POST['website'])) {
     respond(true, 'Thank you.');
 }
 
-/* five an hour, per form and per address */
+/* per form and per address — off while SUBMIT_MAX_PER_HOUR is 0 */
 $tables = ['stove' => 'applications', 'tuktuk' => 'applications',
            'contact' => 'contact_messages', 'newsletter' => 'newsletter_subscribers'];
 

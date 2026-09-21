@@ -14,7 +14,8 @@
 declare(strict_types=1);
 
 $exportKind ??= 'dealers';
-$exportWho   = $exportKind === 'dealers' ? 'dealer' : 'distributor';
+$exportWho   = ['dealers' => 'dealer', 'distributors' => 'distributor', 'clients' => 'client'][$exportKind] ?? $exportKind;
+$exportExtra ??= [];
 $exportToday = date('Y-m-d');
 ?>
 <div class="modal-x" id="exportModal" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
@@ -31,6 +32,9 @@ $exportToday = date('Y-m-d');
     <form method="get" action="export" data-modal-download>
       <div class="modal-x__body">
         <input type="hidden" name="kind" value="<?= e($exportKind) ?>">
+        <?php foreach ($exportExtra as $extraName => $extraValue): ?>
+          <input type="hidden" name="<?= e($extraName) ?>" value="<?= e((string) $extraValue) ?>">
+        <?php endforeach; ?>
 
         <div class="field">
           <label for="exportRange">Period</label>
@@ -41,8 +45,12 @@ $exportToday = date('Y-m-d');
             <option value="custom">Custom range</option>
           </select>
           <span class="field-hint">
-            Sales, commission and payouts are counted inside the period. What each partner has
-            earned and been paid altogether is on every report whatever you pick.
+            <?php if ($exportKind === 'clients'): ?>
+              Only clients received inside the period are listed.
+            <?php else: ?>
+              Sales, commission and payouts are counted inside the period. What each partner has
+              earned and been paid altogether is on every report whatever you pick.
+            <?php endif; ?>
           </span>
         </div>
 
@@ -69,6 +77,7 @@ $exportToday = date('Y-m-d');
             </span>
           </label>
 
+          <?php if ($exportKind !== 'clients'): ?>
           <label class="export-format">
             <input type="radio" name="format" value="pdf">
             <span class="export-format__icon"><i class="bi bi-filetype-pdf" aria-hidden="true"></i></span>
@@ -77,6 +86,7 @@ $exportToday = date('Y-m-d');
               <span>PDF, the figures that matter. For sending on or filing.</span>
             </span>
           </label>
+          <?php endif; ?>
 
           <label class="export-format">
             <input type="radio" name="format" value="csv">

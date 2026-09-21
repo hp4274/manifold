@@ -377,7 +377,6 @@ require __DIR__ . '/partials/head.php';
 
     <?php if (isset($_GET['pg_paid'])): ?>
       <p class="portal-alert portal-alert--ok">
-        <i class="bi bi-check-circle" aria-hidden="true"></i>
         Payment successful! Your <?= e(payment_stage_label($uploadedStage)) ?> has been verified
         automatically. A receipt is on its way to your email.
       </p>
@@ -385,7 +384,6 @@ require __DIR__ . '/partials/head.php';
 
     <?php if (isset($_GET['pg_pending'])): ?>
       <p class="portal-alert portal-alert--warn">
-        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
         We are still confirming this payment with the bank. If money left your account it is
         safe — the receipt will follow by email, usually within a few minutes. Please do not
         pay again; call +91 97251 54186 if you do not hear from us.
@@ -394,7 +392,6 @@ require __DIR__ . '/partials/head.php';
 
     <?php if (isset($_GET['pg_failed'])): ?>
       <p class="portal-alert portal-alert--error">
-        <i class="bi bi-x-circle" aria-hidden="true"></i>
         The payment did not go through. No money has been charged. You can try again, or pay
         via bank transfer and upload the receipt instead.
       </p>

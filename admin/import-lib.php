@@ -36,7 +36,7 @@ require_once __DIR__ . '/emails.php';
  * file of ten thousand would quietly drop most of its mail and nobody would know
  * which. Split a bigger list and import it in passes.
  */
-const IMPORT_MAX_ROWS = 500;
+const IMPORT_MAX_ROWS = 15000;
 
 /** Bigger than any client list of 500 rows, small enough to parse in memory. */
 const IMPORT_MAX_BYTES = 4 * 1024 * 1024;
