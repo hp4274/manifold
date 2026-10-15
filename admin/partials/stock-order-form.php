@@ -67,6 +67,13 @@ foreach (['stove', 'tuktuk'] as $soProduct) {
 
   <div class="form-grid">
     <div class="field">
+      <label for="order_paid">Amount paid now</label>
+      <input id="order_paid" name="paid_amount" type="number" min="1" step="0.01" inputmode="decimal"
+             placeholder="Blank = the full total" value="<?= e($so['paid'] ?? '') ?>">
+      <span class="field-hint">Paying less? The rest shows under Pending amount, where you add the next payment and its proof.</span>
+    </div>
+
+    <div class="field">
       <label for="order_proof">
         Proof of payment<span class="field__req" aria-hidden="true">*</span>
       </label>

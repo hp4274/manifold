@@ -16,4 +16,4 @@ require_once __DIR__ . '/lib.php';
 
 $order = stock_order((int) ($_GET['order'] ?? 0));
 
-stock_proof_send(stock_order_sold_by($order, $tier, (int) $me['id']) ? $order : null);
+stock_proof_send(stock_proof_row(stock_order_sold_by($order, $tier, (int) $me['id']) ? $order : null));

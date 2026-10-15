@@ -65,23 +65,21 @@ declare(strict_types=1);
           <td class="td-amount stock-figure" data-label="Units">
             <strong><?= stock_order_units((int) $ask['id']) ?></strong>
           </td>
-          <td class="td-amount" data-label="They paid"><strong><?= e(money((float) $ask['total_amount'])) ?></strong></td>
+          <td class="td-amount" data-label="They paid">
+            <div class="cell-stack">
+              <strong><?= e(money((float) $ask['paid_amount'])) ?></strong>
+              <?php if (stock_order_balance($ask) > 0): ?>
+                <span class="cell-sub">of <?= e(money((float) $ask['total_amount'])) ?> · <?= e(money(stock_order_balance($ask))) ?> pending</span>
+              <?php endif; ?>
+            </div>
+          </td>
           <td data-label="Proof">
-            <?php /* the proof is theirs to show and yours to check — it opens
-                     over the page rather than in a tab of its own */ ?>
-            <?php if (!empty($ask['proof_path'])): ?>
-              <div class="cell-stack">
-                <a class="link-arrow" data-viewer="Proof of payment"
-                   href="proof.php?order=<?= (int) $ask['id'] ?><?= e($queueProofQuery ?? '') ?>">
-                  <i class="bi bi-paperclip" aria-hidden="true"></i> Proof
-                </a>
-                <?php if (!empty($ask['reference'])): ?>
-                  <span class="cell-sub">ref <?= e($ask['reference']) ?></span>
-                <?php endif; ?>
-              </div>
-            <?php else: ?>
-              <span class="cell-sub">none uploaded</span>
-            <?php endif; ?>
+            <?php /* every payment is theirs to show and yours to check — each
+                     opens over the page rather than in a tab of its own */ ?>
+            <div class="cell-stack">
+              <?= stock_payments_html($ask, static fn (array $p): string =>
+                  'proof.php?order=' . (int) $ask['id'] . '&pay=' . (int) $p['id'] . ($queueProofQuery ?? '')) ?>
+            </div>
           </td>
           <td data-block="Decide" data-export="<?= e(stock_status_label((string) $ask['status'])
               . (!empty($ask['reject_reason']) ? ' — ' . $ask['reject_reason'] : '')) ?>">

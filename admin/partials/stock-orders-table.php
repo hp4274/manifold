@@ -52,7 +52,12 @@ declare(strict_types=1);
             <strong><?= stock_order_units((int) $ownOrder['id']) ?></strong>
           </td>
           <td class="td-amount" data-label="Paid">
-            <strong><?= e(money((float) $ownOrder['total_amount'])) ?></strong>
+            <div class="cell-stack">
+              <strong><?= e(money((float) ($ownOrder['paid_amount'] ?? $ownOrder['total_amount']))) ?></strong>
+              <?php if (stock_order_balance($ownOrder) > 0): ?>
+                <span class="cell-sub">of <?= e(money((float) $ownOrder['total_amount'])) ?> · <?= e(money(stock_order_balance($ownOrder))) ?> pending</span>
+              <?php endif; ?>
+            </div>
           </td>
           <td data-label="Status">
             <div class="cell-stack">

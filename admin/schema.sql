@@ -1010,3 +1010,16 @@ CREATE TABLE IF NOT EXISTS `stock_ledger` (
   CONSTRAINT `fk_ledger_order` FOREIGN KEY (`order_id`) REFERENCES `stock_orders` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_ledger_application` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- one row per installment  paid against a stock order; the order is settled when they sum to total_amount
+CREATE TABLE IF NOT EXISTS `stock_order_payments` (
+  `id`         int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `order_id`   int(10) unsigned NOT NULL,
+  `amount`     decimal(14,2) NOT NULL,
+  `reference`  varchar(120) DEFAULT NULL,
+  `proof_path` varchar(255) DEFAULT NULL,
+  `paid_at`    datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_order_payment_order` (`order_id`),
+  CONSTRAINT `fk_order_payment_order` FOREIGN KEY (`order_id`) REFERENCES `stock_orders` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

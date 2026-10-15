@@ -62,7 +62,7 @@
                             11px was below the floor for anything a person has
                             to read rather than glance at, and the blog date and
                             the legal metadata are set in it. */
-  --t-figure:38px;       /* numerals only: the price band and the instalment */
+  --t-figure:38px;       /* numerals only: the price band and the installment  */
 
   --sec-pad:110px;       /* uniform vertical rhythm below the hero */
   /* The page's own width. Capped in vw as well as pixels: a fixed 1463px
@@ -3328,7 +3328,7 @@ body.has-consent-bar .to-top{bottom:calc(26px + var(--consent-h,86px))}
   .price-offer__facts{gap:12px 28px}
 }
 
-/* --- instalment plan and the booking call to action under the band --- */
+/* --- installment  plan and the booking call to action under the band --- */
 .price-foot{
   display:flex;
   flex-wrap:wrap;
@@ -5983,7 +5983,7 @@ body{overflow-x:hidden}
   .portal-ledger__paid{font-size:22px}
 }
 
-/* receipt download beside a verified instalment */
+/* receipt download beside a verified installment  */
 .portal-entry__receipt{
   display:inline-flex;
   align-items:center;

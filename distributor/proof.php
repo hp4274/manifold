@@ -15,4 +15,4 @@ require_once __DIR__ . '/lib.php';
 $dist  = require_distributor();
 $order = stock_order((int) ($_GET['order'] ?? 0));
 
-stock_proof_send(stock_order_sold_by($order, 'distributor', (int) $dist['id']) ? $order : null);
+stock_proof_send(stock_proof_row(stock_order_sold_by($order, 'distributor', (int) $dist['id']) ? $order : null));

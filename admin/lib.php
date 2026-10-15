@@ -1337,9 +1337,15 @@ function child_cap_default(string $kind): int
 /** What this one parent may hold: their own number, else the default. 0 = no limit. */
 function child_cap(string $kind, int $parentId): int
 {
-    $stmt = db()->prepare('SELECT max_children FROM `' . CHILD_CAP_RULES[$kind][0] . '` WHERE id = ?');
-    $stmt->execute([$parentId]);
-    $own = $stmt->fetchColumn();
+    try {
+        $stmt = db()->prepare('SELECT max_children FROM `' . CHILD_CAP_RULES[$kind][0] . '` WHERE id = ?');
+        $stmt->execute([$parentId]);
+        $own = $stmt->fetchColumn();
+    } catch (PDOException $e) {
+        /* the column is added by admin/migrate_child_caps.php; until a server has
+           run it, follow the default rather than take the whole list page down */
+        $own = null;
+    }
 
     return $own === false || $own === null ? child_cap_default($kind) : (int) $own;
 }
@@ -2018,6 +2024,16 @@ function stock_order_create(
             . '. Split it into smaller ones.'];
     }
 
+    /* what is paid now: blank means the whole total; less leaves a balance to
+       settle later under "Pending amount" */
+    $paidText = trim((string) ($extra['paid'] ?? ''));
+    $paid     = $paidText === '' ? round($total, 2) : round((float) $paidText, 2);
+
+    if ($paid <= 0 || $paid > round($total, 2)) {
+        return [0, 'The amount paid must be more than zero and no more than the order total of '
+            . money($total) . '.'];
+    }
+
     $db = db();
     $db->beginTransaction();
 
@@ -2039,6 +2055,10 @@ function stock_order_create(
 
         $orderId = (int) $db->lastInsertId();
 
+        $db->prepare(
+            'INSERT INTO stock_order_payments (order_id, amount, reference, proof_path) VALUES (?, ?, ?, ?)'
+        )->execute([$orderId, $paid, $extra['reference'] ?? null, $extra['proof_path'] ?? null]);
+
         $item = $db->prepare(
             'INSERT INTO stock_order_items (order_id, product, quantity, unit_price, line_total)
              VALUES (?, ?, ?, ?, ?)'
@@ -2056,6 +2076,126 @@ function stock_order_create(
     }
 
     return [$orderId, ''];
+}
+
+/** Every installment  paid against an order, oldest first. */
+function stock_order_payments(int $orderId): array
+{
+    $stmt = db()->prepare('SELECT * FROM stock_order_payments WHERE order_id = ? ORDER BY id');
+    $stmt->execute([$orderId]);
+
+    return $stmt->fetchAll();
+}
+
+/** What is still owed on an order (a turned-down order owes nothing). */
+function stock_order_balance(array $order): float
+{
+    if (($order['status'] ?? '') === 'rejected') {
+        return 0.0;
+    }
+
+    return max(0.0, round((float) $order['total_amount'] - (float) ($order['paid_amount'] ?? $order['total_amount']), 2));
+}
+
+/**
+ * Records a later payment on one of the buyer's own orders. Returns '' or the
+ * reason it was refused. Never takes more than the balance, so an order cannot
+ * be overpaid.
+ */
+function stock_order_add_payment(string $buyerType, int $buyerId, int $orderId, float $amount, ?string $reference, string $proofPath): string
+{
+    $stmt = db()->prepare(
+        'SELECT o.*, (SELECT COALESCE(SUM(amount), 0) FROM stock_order_payments p WHERE p.order_id = o.id) AS paid_amount
+           FROM stock_orders o WHERE o.id = ? AND o.buyer_type = ? AND o.buyer_id = ?'
+    );
+    $stmt->execute([$orderId, $buyerType, $buyerId]);
+    $order = $stmt->fetch();
+
+    if (!$order) {
+        return 'That order is not yours.';
+    }
+
+    $balance = stock_order_balance($order);
+
+    if ($balance <= 0) {
+        return 'Nothing is pending on that order.';
+    }
+
+    $amount = round($amount, 2);
+
+    if ($amount <= 0 || $amount > $balance) {
+        return 'Enter an amount above zero and up to the pending ' . money($balance) . '.';
+    }
+
+    if ($reference !== null && $reference !== '' && !preg_match('/^[A-Za-z0-9][A-Za-z0-9 \/_-]{5,}$/', $reference)) {
+        return 'The payment reference should be the one printed on your transfer — at least six letters or digits.';
+    }
+
+    db()->prepare(
+        'INSERT INTO stock_order_payments (order_id, amount, reference, proof_path) VALUES (?, ?, ?, ?)'
+    )->execute([$orderId, $amount, $reference ?: null, $proofPath]);
+
+    return '';
+}
+
+/** Handles the "pay the pending amount" form for a buyer; returns [message, error]. */
+function stock_pay_post(string $buyerType, int $buyerId): array
+{
+    $proof = store_upload('payment_proof', PAYMENT_PROOF_DIR);
+
+    if ($proof === null) {
+        return ['', 'Upload the proof of payment — a JPG, PNG, WebP or PDF up to 10 MB.'];
+    }
+
+    $error = stock_order_add_payment(
+        $buyerType,
+        $buyerId,
+        (int) ($_POST['order_id'] ?? 0),
+        (float) ($_POST['amount'] ?? 0),
+        trim((string) ($_POST['reference'] ?? '')),
+        $proof
+    );
+
+    return $error === '' ? ['Payment recorded. The seller can see the amount and proof.', ''] : ['', $error];
+}
+
+/**
+ * The payments on an order as links to their proofs, for a seller's table.
+ * $urlFor(payment) gives each proof's address.
+ */
+function stock_payments_html(array $order, callable $urlFor): string
+{
+    $out = '';
+
+    foreach (stock_order_payments((int) $order['id']) as $p) {
+        $out .= '<span>' . e(money((float) $p['amount']));
+
+        if (!empty($p['proof_path'])) {
+            $out .= ' · <a class="link-arrow" data-viewer="Proof of payment" href="' . e($urlFor($p)) . '">'
+                . '<i class="bi bi-paperclip" aria-hidden="true"></i> Proof</a>';
+        }
+
+        if (!empty($p['reference'])) {
+            $out .= ' <span class="cell-sub">ref ' . e((string) $p['reference']) . '</span>';
+        }
+
+        $out .= '</span>';
+    }
+
+    return $out !== '' ? $out : '<span class="cell-sub">none uploaded</span>';
+}
+
+/** The proof file to stream: one payment of the order when ?pay= names it, else the order's own. */
+function stock_proof_row(?array $order): ?array
+{
+    if ($order === null || empty($_GET['pay'])) {
+        return $order;
+    }
+
+    $stmt = db()->prepare('SELECT * FROM stock_order_payments WHERE id = ? AND order_id = ?');
+    $stmt->execute([(int) $_GET['pay'], (int) $order['id']]);
+
+    return $stmt->fetch() ?: null;
 }
 
 /** What one order is for, a line per product. */
@@ -2232,7 +2372,8 @@ function stock_order_reject(int $orderId, string $reason = '', ?int $adminId = n
 function stock_orders_for(string $buyerType, int $buyerId): array
 {
     $stmt = db()->prepare(
-        'SELECT * FROM stock_orders WHERE buyer_type = ? AND buyer_id = ?
+        'SELECT o.*, (SELECT COALESCE(SUM(amount), 0) FROM stock_order_payments p WHERE p.order_id = o.id) AS paid_amount
+           FROM stock_orders o WHERE buyer_type = ? AND buyer_id = ?
           ORDER BY FIELD(status, \'pending\', \'approved\', \'rejected\'), requested_at DESC, id DESC'
     );
     $stmt->execute([$buyerType, $buyerId]);
@@ -2252,6 +2393,7 @@ function stock_orders_to_decide(string $sellerType, ?int $sellerId): array
 {
     $stmt = db()->prepare(
         "SELECT o.*,
+                (SELECT COALESCE(SUM(amount), 0) FROM stock_order_payments p WHERE p.order_id = o.id) AS paid_amount,
                 COALESCE(pc.full_name, zc.full_name, di.full_name, de.full_name) AS buyer_name,
                 COALESCE(pc.principal_code, zc.zonal_code, di.distributor_code, de.dealer_code) AS buyer_code
            FROM stock_orders o

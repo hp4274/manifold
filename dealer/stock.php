@@ -41,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'order
             'stove'  => (int) ($posted['stove'] ?? 0),
             'tuktuk' => (int) ($posted['tuktuk'] ?? 0),
         ],
+        'paid'      => trim((string) ($_POST['paid_amount'] ?? '')),
         'reference' => trim((string) ($_POST['reference'] ?? '')),
         'note'      => trim((string) ($_POST['note'] ?? '')),
     ];
@@ -55,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'order
             $dealerId,
             $stockValues['wanted'],
             [
+                'paid'       => $stockValues['paid'],
                 'reference'  => $stockValues['reference'] ?: null,
                 'note'       => $stockValues['note'] ?: null,
                 'proof_path' => $proof,
@@ -68,6 +70,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'order
             header('Location: stock');
             exit;
         }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pay_balance') {
+    csrf_check();
+
+    [$msg, $error] = stock_pay_post('dealer', $dealerId);
+
+    if ($error === '') {
+        $_SESSION['dealer_flash'] = $msg;
+
+        header('Location: stock');
+        exit;
     }
 }
 
@@ -104,6 +119,8 @@ require __DIR__ . '/partials/layout-top.php';
     <?php require __DIR__ . '/../admin/partials/stock-order-form.php'; ?>
   </div>
 </div>
+
+<?php require __DIR__ . '/../admin/partials/stock-pending.php'; ?>
 
 <div class="panel">
   <div class="panel__head">

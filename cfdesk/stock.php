@@ -49,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'stove'  => (int) ($posted['stove'] ?? 0),
                 'tuktuk' => (int) ($posted['tuktuk'] ?? 0),
             ],
+            'paid'      => trim((string) ($_POST['paid_amount'] ?? '')),
             'reference' => trim((string) ($_POST['reference'] ?? '')),
             'note'      => trim((string) ($_POST['note'] ?? '')),
         ];
@@ -59,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Upload the proof of payment — a JPG, PNG, WebP or PDF up to 10 MB.';
         } else {
             [$orderId, $error] = stock_order_create($tier, $meId, $stockValues['wanted'], [
+                'paid'       => $stockValues['paid'],
                 'reference'  => $stockValues['reference'] ?: null,
                 'note'       => $stockValues['note'] ?: null,
                 'proof_path' => $proof,
@@ -68,6 +70,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 cf_done('Order sent to ' . ($aboveRow['full_name'] ?? $stockFrom)
                     . '. The units are released once the payment has been confirmed.', 'stock', $tier);
             }
+        }
+    } elseif ($action === 'pay_balance') {
+        [$msg, $error] = stock_pay_post($tier, $meId);
+
+        if ($error === '') {
+            cf_done($msg, 'stock', $tier);
         }
     } elseif ($action === 'adjust_stock') {
         [$msg, $error] = stock_adjust_post($tier, $meId);
@@ -145,6 +153,8 @@ require __DIR__ . '/partials/layout-top.php';
     <?php require __DIR__ . '/../admin/partials/stock-order-form.php'; ?>
   </div>
 </div>
+
+<?php require __DIR__ . '/../admin/partials/stock-pending.php'; ?>
 
 <div class="panel">
   <div class="panel__head">

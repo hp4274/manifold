@@ -211,22 +211,18 @@ require __DIR__ . '/partials/layout-top.php';
               <strong><?= stock_order_units((int) $order['id']) ?></strong>
             </td>
             <td class="td-amount">
-              <strong><?= e(money((float) $order['total_amount'])) ?></strong>
+              <div class="cell-stack">
+                <strong><?= e(money((float) $order['paid_amount'])) ?></strong>
+                <?php if (stock_order_balance($order) > 0): ?>
+                  <span class="cell-sub">of <?= e(money((float) $order['total_amount'])) ?> · <?= e(money(stock_order_balance($order))) ?> pending</span>
+                <?php endif; ?>
+              </div>
             </td>
             <td>
-              <?php if (!empty($order['proof_path'])): ?>
-                <div class="cell-stack">
-                  <a class="link-arrow" data-viewer="Proof of payment"
-                     href="file.php?path=<?= e(rawurlencode((string) $order['proof_path'])) ?>&amp;dir=payments">
-                    <i class="bi bi-paperclip" aria-hidden="true"></i> Proof
-                  </a>
-                  <?php if (!empty($order['reference'])): ?>
-                    <span class="cell-sub">ref <?= e($order['reference']) ?></span>
-                  <?php endif; ?>
-                </div>
-              <?php else: ?>
-                <span class="cell-sub">none uploaded</span>
-              <?php endif; ?>
+              <div class="cell-stack">
+                <?= stock_payments_html($order, static fn (array $p): string =>
+                    'file.php?path=' . rawurlencode((string) $p['proof_path']) . '&dir=payments') ?>
+              </div>
             </td>
             <td data-export="<?= e(stock_status_label((string) $order['status'])
                 . (!empty($order['reject_reason']) ? ' — ' . $order['reject_reason'] : '')) ?>">
