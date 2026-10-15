@@ -146,15 +146,15 @@ if ($postDiscarded) {
     } elseif (!docs_refused($app)) {
         /* already answered, already verified, or never refused */
         $error = 'There is nothing to correct on that application just now.';
-    } elseif (!$chose('id_document_file') && !$chose('residence_proof_file')) {
+    } elseif (!$chose('aadhaar_doc_file') && !$chose('electricity_bill_file')) {
         $uploadError = 'Choose at least one corrected document to send.';
         $uploadStage = 'documents';
     } else {
         $saved  = [];
         $failed = [];
 
-        foreach (['id_document_file' => 'id_document_path',
-                  'residence_proof_file' => 'residence_proof_path'] as $field => $column) {
+        foreach (['aadhaar_doc_file' => 'aadhaar_doc_path',
+                  'electricity_bill_file' => 'electricity_bill_path'] as $field => $column) {
             if (!$chose($field)) {
                 continue;
             }
@@ -167,7 +167,7 @@ if ($postDiscarded) {
             $name = store_upload($field);
 
             if ($name === null) {
-                $failed[] = $field === 'id_document_file' ? 'ID document' : 'residence proof';
+                $failed[] = $field === 'aadhaar_doc_file' ? 'Aadhaar card' : 'electricity bill';
                 continue;
             }
 
@@ -180,7 +180,7 @@ if ($postDiscarded) {
                 . (int) (UPLOAD_MAX_BYTES / 1024 / 1024) . ' MB.';
             $uploadStage = 'documents';
         } else {
-            $idNumber = mb_substr(trim((string) ($_POST['id_number'] ?? '')), 0, 80);
+            $idNumber = preg_replace('/\D+/', '', (string) ($_POST['aadhaar_number'] ?? ''));
 
             $set    = ['docs_resent_at = NOW()'];
             $params = [];
@@ -190,8 +190,8 @@ if ($postDiscarded) {
                 $params[] = $name;
             }
 
-            if ($idNumber !== '' && $idNumber !== (string) ($app['id_number'] ?? '')) {
-                $set[]    = 'id_number = ?';
+            if (strlen($idNumber) === 12 && $idNumber !== (string) ($app['aadhaar_number'] ?? '')) {
+                $set[]    = 'aadhaar_number = ?';
                 $params[] = $idNumber;
             }
 
@@ -235,47 +235,36 @@ if ($postDiscarded) {
        the portal rather than something the office records for them. */
     $choice = (string) ($_POST['choice'] ?? '');
 
-    if ($app && in_array($choice, ['continue', 'cancel'], true)) {
-        /* Continue is answered once. Cancel is not: somebody who said yes by
-           mistake has until they pay the delivery amount to say otherwise, and
-           the money already in is refunded either way. Once a delivery receipt
-           is with us the order is past this — they call us instead. */
-        $answering = (string) ($app['status'] ?? '');
-        $canCancel = $choice === 'cancel'
-            && in_array($answering, ['confirm_pending', 'delivery_pending'], true);
-
-        if (!$canCancel && $answering !== 'confirm_pending') {
-            $error = 'That question has already been answered.';
+    if ($app && $choice === 'cancel') {
+        if (!cancel_window_open($app)) {
+            $error = 'You can no longer cancel. It is open for ' . payment_deadline_hours()
+                . ' hours after your booking payment is verified, and closes for good once your documents are verified.';
         } else {
             db()->prepare(
-                'UPDATE applications SET delivery_choice = ?, delivery_choice_at = NOW() WHERE id = ? AND email = ?'
-            )->execute([$choice, $id, $email]);
+                'UPDATE applications SET delivery_choice = ?, delivery_choice_at = NOW()
+                  WHERE id = ? AND email = ? AND docs_verified_at IS NULL AND kyc_verified_at IS NULL'
+            )->execute(['cancel', $id, $email]);
 
-            $status = sync_application_status($id);
+            sync_application_status($id);
 
             $fresh = db()->prepare('SELECT * FROM applications WHERE id = ?');
             $fresh->execute([$id]);
             $after = $fresh->fetch() ?: $app;
 
-            after_response(static function () use ($after, $choice): void {
-                $choice === 'cancel'
-                    ? send_order_cancelled_email($after)
-                    : send_delivery_open_email($after);
-
-                send_delivery_choice_admin($after, $choice);
+            after_response(static function () use ($after): void {
+                send_order_cancelled_email($after);
+                send_delivery_choice_admin($after, 'cancel');
             });
 
-            header('Location: status?choice=' . urlencode($choice) . '#app-' . $id);
+            header('Location: status?choice=cancel#app-' . $id);
             exit;
         }
-    }
-
-    if (!$app) {
+    } elseif (!$app) {
         $error = 'That application could not be found.';
-    } elseif ($due === null) {
+    } elseif ($due === null || (is_full_payment($app) && $stage !== 'full')) {
         $error = 'That payment could not be matched to your application.';
-    } elseif ($app['status'] === 'rejected') {
-        $error = 'This application is not going ahead, so there is nothing to pay.';
+    } elseif ($app['status'] === 'rejected' || $app['status'] === 'expired' || is_application_expired($app)) {
+        $error = 'This application is no longer active or the payment window has expired.';
     } elseif ($due['state'] === 'paid') {
         $error = 'Your ' . strtolower($due['label']) . ' is already verified.';
     } elseif ($due['state'] === 'checking') {
@@ -397,7 +386,24 @@ require __DIR__ . '/partials/head.php';
       </p>
     <?php endif; ?>
 
-    <?php if (isset($_GET['pg_error'])): ?>
+    <?php if (($_GET['pg_error'] ?? '') === 'expired'): ?>
+      <p class="portal-alert portal-alert--error">
+        <i class="bi bi-clock-history" aria-hidden="true"></i>
+        This application's 48-hour payment deadline has expired. Payments can no longer be processed.
+      </p>
+    <?php elseif (($_GET['pg_error'] ?? '') === 'partner'): ?>
+      <p class="portal-alert portal-alert--error">
+        <i class="bi bi-person-badge" aria-hidden="true"></i>
+        This order is paid to the dealer or distributor who sold it, not online. Their payment
+        details are on the order below — pay them and upload the proof.
+      </p>
+    <?php elseif (($_GET['pg_error'] ?? '') === 'low_stock'): ?>
+      <p class="portal-alert portal-alert--error">
+        <i class="bi bi-shield-exclamation" aria-hidden="true"></i>
+        This booking is held for a stock check and is waiting on approval from the office.
+        Nothing is owed until that is done — we will write to you as soon as it clears.
+      </p>
+    <?php elseif (isset($_GET['pg_error'])): ?>
       <p class="portal-alert portal-alert--error">
         <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
         We could not connect to the payment gateway just now. Please try again in a few minutes,
@@ -440,9 +446,26 @@ require __DIR__ . '/partials/head.php';
 
     <?php foreach ($applications as $app): ?>
       <?php
-        $status  = (string) $app['status'];
-        $stageIx = array_search($status, APPLICATION_STAGES, true);
-        [$title, $copy] = stage_copy($status);
+        $status    = (string) $app['status'];
+        $plan      = (string) ($app['payment_plan'] ?? '');
+        $appStages = application_stages($app);
+        $stageIx   = array_search($status, $appStages, true);
+        [$title, $copy] = stage_copy($status, $plan);
+
+        /* a sale made with a partner's code is paid to that partner, who also
+           checks the proof - for the booking and the delivery payment alike */
+        $payee   = application_payee($app);
+        $checker = $payee ? 'your ' . strtolower($payee['kind']) : 'our team';
+
+        if ($payee && in_array($status, ['booking_review', 'delivery_review'], true)) {
+            $copy = 'Your ' . strtolower($payee['kind']) . ' is checking your proof of payment and will confirm it '
+                . 'here. Nothing more is needed for now.';
+        }
+
+        $totals    = payment_totals($app);
+        $canCancel = cancel_window_open($app);
+        /* "locked" is news only once there was a booking to cancel */
+        $cancellationLocked = !$canCancel && booking_paid($app);
 
         /* Same stage, opposite news: the finance team has looked and cannot
            accept the paperwork. The step keeps its title — this is still where
@@ -491,39 +514,49 @@ require __DIR__ . '/partials/head.php';
               </p>
             <?php endif; ?>
           </div>
-          <?php /* No badge up here: the stage the timeline marks and the
-                   paragraph under it already say where this order is, and a
-                   third telling of it in the corner read as a second, different
-                   status to the person looking at it.
-
-                   What does belong here is the way back out. Continuing with
-                   delivery is one tap and easily one taken by mistake, so the
-                   answer stays undoable until the delivery amount is paid —
-                   after that the money is in flight and it is a phone call. */ ?>
-          <?php if ($status === 'delivery_pending'): ?>
+          <?php if ($canCancel): ?>
             <form class="portal-app__undo" method="post"
-                  data-confirm="Cancel this order? We refund everything you have paid.">
+                  data-confirm="Cancel this booking? We refund everything you have paid.">
               <?= csrf_field() ?>
               <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
               <input type="hidden" name="choice" value="cancel">
               <button type="submit" class="btn-pill portal-choice__cancel">
-                <i class="bi bi-x-circle" aria-hidden="true"></i> Cancel order
+                <i class="bi bi-x-circle" aria-hidden="true"></i> Cancel booking
               </button>
               <span class="portal-app__undo-note">Changed your mind? Everything you have paid comes back.</span>
             </form>
+          <?php elseif ($cancellationLocked): ?>
+            <span class="portal-lock-note">
+              <i class="bi bi-shield-lock-fill" aria-hidden="true"></i> Cancellation locked
+            </span>
           <?php endif; ?>
         </header>
+
+        <?php if ($canCancel): ?>
+          <div class="portal-deadline-banner portal-deadline-banner--active" data-deadline="<?= e(date('c', strtotime($app['payment_deadline_at']))) ?>">
+            <div class="portal-deadline-icon"><i class="bi bi-stopwatch-fill"></i></div>
+            <div class="portal-deadline-text">
+              <strong>You can still cancel</strong>
+              <p>You can cancel this booking and get everything back until
+                <?= e(format_datetime($app['payment_deadline_at'])) ?>, or until our finance team verifies
+                your documents if that comes first. After that the booking is final.</p>
+            </div>
+            <div class="portal-deadline-clock">
+              <span class="portal-timer-badge"><i class="bi bi-hourglass-split"></i> <span class="timer-countdown">Calculating...</span></span>
+            </div>
+          </div>
+        <?php endif; ?>
 
         <?php /* An order that ended - turned down, or cancelled by the client
                  and being refunded - is not somewhere on the timeline, so it
                  says what happened instead of drawing eight empty steps. */ ?>
-        <?php if (in_array($status, ['rejected', 'cancelled', 'refunded'], true)): ?>
-          <p class="portal-alert portal-alert--<?= $status === 'rejected' ? 'error' : 'warn' ?>">
+        <?php if (in_array($status, ['rejected', 'cancelled', 'refunded', 'expired'], true)): ?>
+          <p class="portal-alert portal-alert--<?= in_array($status, ['rejected', 'expired'], true) ? 'error' : 'warn' ?>">
             <strong><?= e($title) ?>.</strong> <?= e($copy) ?>
           </p>
         <?php else: ?>
           <ol class="portal-steps">
-            <?php foreach (APPLICATION_STAGES as $i => $stage): ?>
+            <?php foreach ($appStages as $i => $stage): ?>
               <?php
                 $state = $stageIx === false ? 'todo' : ($i < $stageIx ? 'done' : ($i === $stageIx ? 'now' : 'todo'));
 
@@ -533,7 +566,7 @@ require __DIR__ . '/partials/head.php';
                     $state = 'done';
                 }
 
-                [$stageTitle] = stage_copy($stage);
+                [$stageTitle] = stage_copy($stage, $plan);
               ?>
               <li class="portal-step is-<?= $state ?><?= $i === $stageIx ? ' is-current' : '' ?>">
                 <span class="portal-step__dot" aria-hidden="true">
@@ -549,51 +582,16 @@ require __DIR__ . '/partials/head.php';
 
           <p class="portal-app__copy"><strong><?= e($title) ?>.</strong> <?= e($copy) ?></p>
 
-          <?php /* The one question asked of somebody who came in through the
-                   website or a code: build it, or take the money back. Somebody
-                   whose partner already collected the whole price never sees
-                   this — there is nothing left to decide. */ ?>
-          <?php if ($status === 'confirm_pending'): ?>
-            <div class="portal-choice">
-              <p class="portal-choice__title">Shall we go ahead?</p>
-              <p class="portal-choice__note">
-                Continue and the delivery payment opens, and we build and deliver your unit.
-                Cancel and we refund everything you have paid, in full.
-              </p>
-
-              <div class="portal-choice__actions">
-                <form method="post">
-                  <?= csrf_field() ?>
-                  <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
-                  <input type="hidden" name="choice" value="continue">
-                  <button type="submit" class="btn-pill btn-pill--accent">
-                    Continue with delivery <i class="bi bi-arrow-right" aria-hidden="true"></i>
-                  </button>
-                </form>
-
-                <form method="post"
-                      data-confirm="Cancel this order? We refund everything you have paid.">
-                  <?= csrf_field() ?>
-                  <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
-                  <input type="hidden" name="choice" value="cancel">
-                  <button type="submit" class="btn-pill portal-choice__cancel">
-                    Cancel and refund me
-                  </button>
-                </form>
-              </div>
-            </div>
-          <?php endif; ?>
         <?php endif; ?>
-
-        <?php $totals = payment_totals($app); ?>
 
         <?php /* Nothing is owed until the office has approved it, so the QR
                  code and the upload box stay out of the way until then. */ ?>
-        <?php if ($status !== 'rejected' && $status !== 'submitted'): ?>
+        <?php if ($status !== 'rejected' && $status !== 'submitted' && $status !== 'expired'): ?>
           <div class="portal-plan">
             <p class="portal-plan__lead">
               <strong><?= e(money((float) $totals['paid'])) ?></strong> paid of
-              <?= e(money((float) $totals['due'])) ?> — two transfers, each verified by our team.
+              <?= e(money((float) $totals['due'])) ?> — <?= is_full_payment($app) ? 'one transfer' : 'two transfers, each' ?>
+              verified by <?= $payee ? 'your ' . e(strtolower($payee['kind'])) : 'our team' ?>.
               Quote booking number <strong><?= e($app['reference_code']) ?></strong> on every payment.
             </p>
 
@@ -602,6 +600,14 @@ require __DIR__ . '/partials/head.php';
                 $stage   = $totals['stages'][$stageKey];
                 $isOpen  = $stage['state'] === 'due';
                 $stageId = $stageKey . '-' . (int) $app['id'];
+
+                /* a full payer pays the one full transfer and nothing else; a loan
+                   customer sees it only once they have chosen it */
+                if (is_full_payment($app)
+                    ? $stageKey !== 'full'
+                    : ($stageKey === 'full' && !$stage['settled'] && $stage['waiting'] <= 0)) {
+                    continue;
+                }
               ?>
               <?php
                 /* The delivery payment is behind the finance check: the section
@@ -634,12 +640,16 @@ require __DIR__ . '/partials/head.php';
 
                 <p class="portal-stage__note">
                   <?php if ($stage['state'] === 'paid'): ?>
-                    Verified by our team<?= $stageKey === 'booking'
+                    Verified by <?= e($checker) ?><?= $stageKey === 'booking'
                         ? ' — your unit is reserved and this amount comes off the price.'
                         : ' — nothing further is owed to us.' ?>
                   <?php elseif ($stage['state'] === 'checking'): ?>
-                    Your receipt is with our team. We check every payment by hand, usually within
-                    two working days.
+                    <?php if ($payee): ?>
+                      Your proof is with <?= e($checker) ?>, who checks it and confirms it here.
+                    <?php else: ?>
+                      Your receipt is with our team. We check every payment by hand, usually within
+                      two working days.
+                    <?php endif; ?>
                   <?php elseif ($sealed && docs_refused($app)): ?>
                     Your booking is verified. This opens once our finance team can accept your
                     documents - see below for what they need.
@@ -648,11 +658,14 @@ require __DIR__ . '/partials/head.php';
                     documents - we email you the moment they do.
                   <?php elseif ($stage['state'] === 'locked'): ?>
                     This opens once your booking payment has been verified. We will email you when it does.
+                  <?php elseif ($stageKey === 'full'): ?>
+                    The whole price in one payment. Once it is verified your order is complete.
                   <?php elseif ($stageKey === 'booking'): ?>
                     Pay this to reserve your unit. It comes off the price, it is not a charge on top.
                   <?php else: ?>
-                    Due now that your booking is confirmed. Pay it and upload the receipt to complete
-                    the purchase.
+                    Your documents are verified.
+                    <?= $payee ? 'Pay ' . e($checker) . ' this amount and upload the proof' : 'Pay it and upload the receipt' ?>
+                    to complete the purchase.
                   <?php endif; ?>
                 </p>
 
@@ -700,21 +713,21 @@ require __DIR__ . '/partials/head.php';
                     <?php endif; ?>
 
                     <div class="field">
-                      <label for="idnum-<?= (int) $app['id'] ?>">ID / passport number</label>
-                      <input id="idnum-<?= (int) $app['id'] ?>" name="id_number" type="text"
-                             maxlength="80" value="<?= e((string) ($app['id_number'] ?? '')) ?>">
+                      <label for="idnum-<?= (int) $app['id'] ?>">Aadhaar number</label>
+                      <input id="idnum-<?= (int) $app['id'] ?>" name="aadhaar_number" type="text"
+                             inputmode="numeric" maxlength="14" value="<?= e((string) ($app['aadhaar_number'] ?? '')) ?>">
                     </div>
 
                     <div class="field">
-                      <label for="iddoc-<?= (int) $app['id'] ?>">ID document (proof of identity)</label>
-                      <input id="iddoc-<?= (int) $app['id'] ?>" name="id_document_file" type="file"
+                      <label for="iddoc-<?= (int) $app['id'] ?>">Aadhaar card</label>
+                      <input id="iddoc-<?= (int) $app['id'] ?>" name="aadhaar_doc_file" type="file"
                              accept="image/*,application/pdf">
                       <span class="field-hint">JPG, PNG, WebP or PDF, up to 10 MB</span>
                     </div>
 
                     <div class="field">
-                      <label for="resproof-<?= (int) $app['id'] ?>">Residence proof (proof of address)</label>
-                      <input id="resproof-<?= (int) $app['id'] ?>" name="residence_proof_file" type="file"
+                      <label for="resproof-<?= (int) $app['id'] ?>">Electricity bill</label>
+                      <input id="resproof-<?= (int) $app['id'] ?>" name="electricity_bill_file" type="file"
                              accept="image/*,application/pdf">
                       <span class="field-hint">JPG, PNG, WebP or PDF, up to 10 MB</span>
                     </div>
@@ -768,7 +781,10 @@ require __DIR__ . '/partials/head.php';
          what the blur already says to everyone who can see it. */ ?>
                   <div class="portal-pay"<?= $sealed ? ' inert aria-hidden="true"' : '' ?>>
 
-                    <?php /* ---- Pay Now: gateway button (primary path) ---- */ ?>
+                    <?php /* ---- Pay Now: gateway button (primary path) ----
+                             Not for a sale made with a partner's code: that money
+                             goes to the partner, never through the company. */ ?>
+                    <?php if (!$payee): ?>
                     <div class="portal-pay__gateway">
                       <p class="portal-pay__note">
                         Pay <strong><?= e(money((float) $stage['amount'])) ?></strong> securely
@@ -782,32 +798,86 @@ require __DIR__ . '/partials/head.php';
                         <span class="portal-pay__mode"><i class="bi bi-phone" aria-hidden="true"></i> UPI</span>
                       </div>
 
-                      <form method="post" action="pg-initiate.php">
-                        <fieldset<?= $sealed ? ' disabled' : '' ?> style="border:0;margin:0;padding:0;min-width:0">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
-                        <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
-                        <button type="submit" class="btn-pill btn-pill--accent portal-pay__btn">
-                          <i class="bi bi-shield-lock" aria-hidden="true"></i>
-                          Pay <?= e(money((float) $stage['amount'])) ?> Now
-                        </button>
-                        </fieldset>
-                      </form>
+                      <div class="portal-pay__action-row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+                        <form method="post" action="pg-initiate.php">
+                          <fieldset<?= $sealed ? ' disabled' : '' ?> style="border:0;margin:0;padding:0;min-width:0">
+                          <?= csrf_field() ?>
+                          <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
+                          <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
+                          <button type="submit" class="btn-pill btn-pill--accent portal-pay__btn">
+                            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                            Pay <?= e($stageKey === 'booking' ? 'Booking ' . money((float) $stage['amount']) : money((float) $stage['amount'])) ?> Now
+                          </button>
+                          </fieldset>
+                        </form>
+
+                        <?php if ($stageKey === 'booking' && !$totals['stages']['full']['settled']): ?>
+                          <form method="post" action="pg-initiate.php">
+                            <fieldset<?= $sealed ? ' disabled' : '' ?> style="border:0;margin:0;padding:0;min-width:0">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
+                            <input type="hidden" name="stage" value="full">
+                            <button type="submit" class="btn-pill btn-pill--outline portal-pay__btn">
+                              <i class="bi bi-check2-all" aria-hidden="true"></i>
+                              Pay Full Amount (<?= e(money((float) $totals['stages']['full']['amount'])) ?>)
+                            </button>
+                            </fieldset>
+                          </form>
+                        <?php endif; ?>
+                      </div>
 
                       <p class="portal-pay__secure">
                         <i class="bi bi-lock" aria-hidden="true"></i>
                         Secured by ICICI Bank Payment Gateway. Your payment is verified instantly.
                       </p>
                     </div>
+                    <?php endif; ?>
 
                     <?php /* ---- Fallback: manual receipt upload ---- */ ?>
+                    <?php if ($payee): ?>
+                    <div class="portal-pay__fallback portal-pay__fallback--payee">
+                    <?php else: ?>
                     <details class="portal-pay__fallback">
                       <summary class="portal-pay__fallback-toggle">
                         <i class="bi bi-upload" aria-hidden="true"></i>
                         Already paid via bank transfer? Upload receipt instead
                       </summary>
+                    <?php endif; ?>
 
-                      <div class="portal-pay__fallback-body">
+                      <div class="portal-pay__fallback-body<?= $payee ? ' portal-pay__fallback-body--payee' : '' ?>">
+                        <?php if ($payee): ?>
+                          <?php $payRows = array_filter([
+                              'Phone' => $payee['mobile_number'], 'Alternate phone' => $payee['alt_mobile_number'],
+                              'Email' => $payee['email'], 'UPI' => $payee['upi_id'], 'Bank' => $payee['bank_name'],
+                              'Account' => $payee['bank_account'], 'IFSC' => $payee['bank_ifsc'],
+                          ], static fn ($v): bool => !empty($v)); ?>
+                          <div class="portal-payee">
+                            <div class="portal-payee__who">
+                              <span class="portal-payee__kind">Pay your <?= e(strtolower($payee['kind'])) ?> directly</span>
+                              <strong class="portal-payee__name"><?= e($payee['full_name']) ?></strong>
+                              <span class="portal-app__code"><?= e($payee['code']) ?></span>
+                            </div>
+                            <p class="portal-payee__amount">
+                              Transfer <strong><?= e(money((float) $stage['amount'])) ?></strong> to
+                              <?= e($payee['full_name']) ?>, not to Manifold. Quote booking number
+                              <strong><?= e($app['reference_code']) ?></strong> on the payment.
+                            </p>
+                            <?php if ($payRows): ?>
+                              <dl class="portal-payee__rows">
+                                <?php foreach ($payRows as $payLabel => $payValue): ?>
+                                  <div><dt><?= e($payLabel) ?></dt><dd><?= e((string) $payValue) ?></dd></div>
+                                <?php endforeach; ?>
+                              </dl>
+                            <?php else: ?>
+                              <p class="portal-payee__amount">Ask your <?= e(strtolower($payee['kind'])) ?> for their payment details.</p>
+                            <?php endif; ?>
+                            <ol class="portal-payee__steps">
+                              <li>Pay <?= e($payee['full_name']) ?></li>
+                              <li>Upload the proof below</li>
+                              <li>They confirm it here</li>
+                            </ol>
+                          </div>
+                        <?php else: ?>
                         <div class="portal-pay__qr">
                           <?php
                             $qr = qr_path();
@@ -819,17 +889,36 @@ require __DIR__ . '/partials/head.php';
                                  alt="Payment QR code for <?= e($app['reference_code']) ?>">
                           <?php endif; ?>
                           <p class="portal-pay__note">
-                            Transfer exactly <strong><?= e(money((float) $stage['amount'])) ?></strong>,
-                            then upload that receipt. Quote booking number
-                            <strong><?= e($app['reference_code']) ?></strong> on the payment.
+                            <?php if ($stageKey === 'booking' && !$totals['stages']['full']['settled']): ?>
+                              Transfer <strong><?= e(money((float) $stage['amount'])) ?></strong> for Booking or
+                              <strong><?= e(money((float) $totals['stages']['full']['amount'])) ?></strong> for Full Payment,
+                              then upload your receipt below. Quote booking number
+                              <strong><?= e($app['reference_code']) ?></strong> on the payment.
+                            <?php else: ?>
+                              Transfer exactly <strong><?= e(money((float) $stage['amount'])) ?></strong>,
+                              then upload that receipt. Quote booking number
+                              <strong><?= e($app['reference_code']) ?></strong> on the payment.
+                            <?php endif; ?>
                           </p>
                         </div>
+                        <?php endif; ?>
 
                         <form class="portal-pay__form form-x" method="post" enctype="multipart/form-data">
                           <fieldset<?= $sealed ? ' disabled' : '' ?> style="border:0;margin:0;padding:0;min-width:0">
                           <?= csrf_field() ?>
                           <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
-                          <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
+
+                          <?php if ($stageKey === 'booking' && !$totals['stages']['full']['settled']): ?>
+                            <div class="field">
+                              <label for="stage-choice-<?= e($stageId) ?>">Payment Option</label>
+                              <select id="stage-choice-<?= e($stageId) ?>" name="stage" class="form-select">
+                                <option value="booking">Booking Payment (<?= e(money((float) $stage['amount'])) ?>)</option>
+                                <option value="full">Full Payment (<?= e(money((float) $totals['stages']['full']['amount'])) ?>)</option>
+                              </select>
+                            </div>
+                          <?php else: ?>
+                            <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
+                          <?php endif; ?>
 
                           <div class="field">
                             <label for="ref-<?= e($stageId) ?>">Payment reference or UTR (optional)</label>
@@ -840,7 +929,9 @@ require __DIR__ . '/partials/head.php';
                           <?php $stageFailed = $uploadError !== '' && $uploadStage === $stageKey; ?>
 
                           <div class="field<?= $stageFailed ? ' field--error' : '' ?>">
-                            <label for="proof-<?= e($stageId) ?>">Proof of this payment
+                            <label for="proof-<?= e($stageId) ?>"><?= $payee
+                                ? 'Upload proof of payment to ' . e($payee['full_name'])
+                                : 'Proof of this payment' ?>
                               <span class="req" aria-hidden="true">*</span></label>
                             <input id="proof-<?= e($stageId) ?>" name="payment_proof" type="file"
                                    accept="image/*,application/pdf" required
@@ -862,7 +953,11 @@ require __DIR__ . '/partials/head.php';
                         </fieldset>
                         </form>
                       </div>
+                    <?php if ($payee): ?>
+                    </div>
+                    <?php else: ?>
                     </details>
+                    <?php endif; ?>
 
                   </div>
                 <?php endif; ?>
@@ -1036,5 +1131,36 @@ require __DIR__ . '/partials/head.php';
 
   </div>
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var banners = document.querySelectorAll('.portal-deadline-banner--active[data-deadline]');
+  banners.forEach(function(banner) {
+    var deadlineStr = banner.getAttribute('data-deadline');
+    var deadline = new Date(deadlineStr).getTime();
+    var timerDisplay = banner.querySelector('.timer-countdown');
+    if (!deadline || !timerDisplay) return;
+
+    function update() {
+      var now = new Date().getTime();
+      var diff = deadline - now;
+      if (diff <= 0) {
+        timerDisplay.textContent = 'Expired';
+        banner.classList.remove('portal-deadline-banner--active');
+        banner.classList.add('portal-deadline-banner--expired');
+        var textP = banner.querySelector('.portal-deadline-text p');
+        if (textP) textP.textContent = 'The 48-hour payment window has expired.';
+        return;
+      }
+      var hours = Math.floor(diff / (1000 * 60 * 60));
+      var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      var seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      timerDisplay.textContent = hours + 'h ' + minutes + 'm ' + seconds + 's remaining';
+    }
+    update();
+    setInterval(update, 1000);
+  });
+});
+</script>
 
 <?php require __DIR__ . '/partials/foot.php'; ?>

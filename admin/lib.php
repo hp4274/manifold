@@ -37,8 +37,8 @@ if (!defined('ERROR_LOG_FILE')) {
 
 if (!defined('PAYMENT_PLAN')) {
     define('PAYMENT_PLAN', [
-        'stove'  => ['booking' => 3500.0, 'delivery' => 16500.0],
-        'tuktuk' => ['booking' => 6000.0, 'delivery' => 24000.0],
+        'stove'  => ['booking' => 3500.0, 'delivery' => 16500.0, 'full' => 35000.0],
+        'tuktuk' => ['booking' => 6000.0, 'delivery' => 24000.0, 'full' => 60000.0],
     ]);
 }
 
@@ -281,18 +281,36 @@ const STATUSES = ['new', 'accepted', 'contacted', 'rejected'];
  * the point — we do not take a payment for a place we have not agreed to.
  */
 const APPLICATION_STATUSES = [
-    'submitted', 'booking_pending', 'booking_review', 'docs_pending', 'confirm_pending',
+    'submitted', 'booking_pending', 'booking_review', 'docs_pending',
     'delivery_pending', 'delivery_review', 'complete', 'cancelled', 'refunded', 'rejected',
 ];
 
 /** The stages an applicant sees in the portal timeline (rejected sits outside). */
 const APPLICATION_STAGES = [
-    'submitted', 'booking_pending', 'booking_review', 'docs_pending', 'confirm_pending',
+    'submitted', 'booking_pending', 'booking_review', 'docs_pending',
     'delivery_pending', 'delivery_review', 'complete',
 ];
 
-/** The two transfers every application is made of, in the order they fall due. */
-const PAYMENT_STAGES = ['booking', 'delivery'];
+/** A sale paid in one go: no booking window, no finance documents, no loan. */
+function is_full_payment(array $app): bool
+{
+    return ($app['payment_plan'] ?? '') === 'full_payment';
+}
+
+/**
+ * The stages one applicant's timeline walks through. A full payer reuses the
+ * booking statuses for their single payment and skips the paperwork and the
+ * delivery tranche entirely.
+ */
+function application_stages(array $app): array
+{
+    return is_full_payment($app)
+        ? ['submitted', 'booking_pending', 'booking_review', 'complete']
+        : APPLICATION_STAGES;
+}
+
+/** The transfers an application may carry: booking, delivery, or one-shot full payment. */
+const PAYMENT_STAGES = ['booking', 'delivery', 'full'];
 
 /** Which status list applies to a submission type. */
 function statuses_for(string $type): array
@@ -305,8 +323,23 @@ function statuses_for(string $type): array
  * audiences: staff need to know there is a receipt waiting, the applicant
  * needs to know their payment landed.
  */
-function status_label(string $status, string $audience = 'admin'): string
+function status_label(string $status, string $audience = 'admin', string $plan = ''): string
 {
+    /* a full payer's one payment rides on the booking statuses */
+    if ($plan === 'full_payment') {
+        $full = [
+            'booking_pending' => $audience === 'applicant' ? 'Full payment due' : 'Full payment pending',
+            'booking_review'  => $audience === 'applicant'
+                ? 'Full payment submitted — verifying'
+                : 'Full payment receipt — verify',
+            'complete'        => $audience === 'applicant' ? 'Complete' : 'Full payment verified',
+        ];
+
+        if (isset($full[$status])) {
+            return $full[$status];
+        }
+    }
+
     $labels = [
         'submitted'        => $audience === 'applicant' ? 'Application received' : 'Waiting for approval',
         'booking_pending'  => $audience === 'applicant' ? 'Booking payment due' : 'Booking payment pending',
@@ -316,9 +349,6 @@ function status_label(string $status, string $audience = 'admin'): string
         'docs_pending'     => $audience === 'applicant'
             ? 'Finance documents - verifying'
             : 'Finance documents - verify',
-        'confirm_pending'  => $audience === 'applicant'
-            ? 'Go ahead with delivery?'
-            : 'Waiting on the client to confirm',
         'delivery_pending' => $audience === 'applicant' ? 'Delivery payment due' : 'Delivery payment pending',
         'delivery_review'  => $audience === 'applicant'
             ? 'Delivery payment submitted — verifying'
@@ -326,6 +356,7 @@ function status_label(string $status, string $audience = 'admin'): string
         'complete'         => $audience === 'applicant' ? 'Complete' : 'Both payments verified',
         'cancelled'        => $audience === 'applicant' ? 'Cancelled - refund due' : 'Refund requested',
         'refunded'         => $audience === 'applicant' ? 'Refunded' : 'Refunded - order closed',
+        'expired'          => $audience === 'applicant' ? 'Application expired' : 'Expired',
         'new'              => 'New',
         'accepted'         => 'Accepted',
         'contacted'        => 'Contacted',
@@ -336,47 +367,67 @@ function status_label(string $status, string $audience = 'admin'): string
 }
 
 /** Short label used in tables, pills and tiles. */
-function status_short(string $status): string
+function status_short(string $status, string $plan = ''): string
 {
+    if ($plan === 'full_payment' && in_array($status, ['booking_pending', 'booking_review'], true)) {
+        return $status === 'booking_pending' ? 'full payment due' : 'full receipt';
+    }
+
     $short = [
         'submitted'        => 'to approve',
         'booking_pending'  => 'booking due',
         'booking_review'   => 'booking receipt',
         'docs_pending'     => 'documents',
-        'confirm_pending'  => 'confirming',
         'delivery_pending' => 'delivery due',
         'delivery_review'  => 'delivery receipt',
         'complete'         => 'complete',
         'cancelled'        => 'refund requested',
         'refunded'         => 'refunded',
+        'expired'          => 'expired',
     ];
 
     return $short[$status] ?? $status;
 }
 
 /** What the applicant is told at each stage. */
-function stage_copy(string $status): array
+function stage_copy(string $status, string $plan = ''): array
 {
+    if ($plan === 'full_payment') {
+        $full = [
+            'booking_pending' => ['Full payment due',
+                                  'Pay the full price using the payment details below and upload the receipt. '
+                                  . 'There are no finance documents to check — once the payment is verified '
+                                  . 'your order is complete.'],
+            'booking_review'  => ['Full payment submitted',
+                                  'Your payment receipt is being checked. Nothing more is needed for now.'],
+            'complete'        => ['Complete',
+                                  'Your payment is verified. Your receipt is on its way and we will call you '
+                                  . 'to arrange the handover.'],
+        ];
+
+        if (isset($full[$status])) {
+            return $full[$status];
+        }
+    }
+
     $copy = [
         'submitted'        => ['Application received',
                                'We have your application and are looking at it. Nothing to pay yet — we '
                                . 'email you the payment details as soon as it is approved.'],
         'booking_pending'  => ['Booking payment due',
-                               'Pay the booking amount with the QR code below and upload the receipt. '
-                               . 'It reserves your unit and comes off the price.'],
+                               'Pay the booking amount using the payment details below and upload the '
+                               . 'receipt. It reserves your unit and comes off the price.'],
         'booking_review'   => ['Booking payment submitted',
                                'We are checking your booking receipt. Nothing more is needed for now.'],
         'docs_pending'     => ['Finance documents',
-                               'Your booking is confirmed. Our finance team is checking the documents you '
-                               . 'gave with the application. The delivery payment opens as soon as they are '
-                               . 'verified, and we email you when that happens.'],
-        'confirm_pending'  => ['Go ahead with delivery?',
-                               'Your documents are verified. Tell us whether to build and deliver your '
-                               . 'unit, or to cancel the order - if you cancel, everything you have paid '
-                               . 'is refunded in full.'],
+                               'Your booking payment is verified. Our finance team is checking the documents '
+                               . 'you gave with the application. Until they are verified you can cancel and '
+                               . 'get everything back, for ' . payment_deadline_hours() . ' hours after your '
+                               . 'booking payment; once they are verified the booking is final. The delivery '
+                               . 'payment opens as soon as they pass, and we email you when that happens.'],
         'delivery_pending' => ['Delivery payment due',
-                               'Your booking is confirmed. Pay the delivery amount and upload that receipt '
-                               . 'to complete the purchase.'],
+                               'Your documents are verified and the booking is final. Pay the delivery '
+                               . 'amount and upload that receipt to complete the purchase.'],
         'delivery_review'  => ['Delivery payment submitted',
                                'We are checking your delivery receipt. Nothing more is needed for now.'],
         'complete'         => ['Complete',
@@ -388,18 +439,24 @@ function stage_copy(string $status): array
         'refunded'         => ['Refunded',
                                'Your refund has been sent back to the account you paid from. It can take '
                                . 'a few working days to show on your statement.'],
+        'expired'          => ['Payment window expired',
+                               'This application is no longer active. Please contact your dealer or our '
+                               . 'office if you would like to renew it.'],
         'rejected'         => ['Not proceeding',
                                'This application is not moving forward. Contact us if you think that is a mistake.'],
     ];
 
-    return $copy[$status] ?? [status_label($status, 'applicant'), ''];
+    return $copy[$status] ?? [status_label($status, 'applicant', $plan), ''];
 }
 
 /* ---------- payments ---------- */
 
-/** Reading name for one of the two transfers. */
+/** Reading name for one of the transfers. */
 function payment_stage_label(string $stage): string
 {
+    if ($stage === 'full') {
+        return 'Full payment';
+    }
     return $stage === 'delivery' ? 'Delivery payment' : 'Booking payment';
 }
 
@@ -410,6 +467,13 @@ function payment_stage_label(string $stage): string
 function stage_amount(array $app, string $stage): float
 {
     $plan = payment_plan((string) ($app['product'] ?? 'stove'));
+
+    /* the whole price, loan portion included. payment_amount only holds it on
+       a full-payment row — on a booking row it is the booking figure */
+    if ($stage === 'full') {
+        $amount = ($app['payment_plan'] ?? '') === 'full_payment' ? (float) ($app['payment_amount'] ?? 0) : 0.0;
+        return $amount > 0 ? $amount : (float) ($plan['full'] ?? (float) $plan['booking'] + (float) $plan['delivery']);
+    }
 
     if ($stage === 'delivery') {
         $amount = (float) ($app['delivery_amount'] ?? 0);
@@ -495,46 +559,91 @@ function payment_stage(array $app, string $stage, ?array $payments = null, ?bool
 }
 
 /**
- * Both stages plus the totals across them. `current` is the stage the
- * applicant is being asked for, or null when there is nothing left to pay.
+ * Stages plus the totals across them. Supports booking, delivery, and full payment.
  */
 function payment_totals(array $app, ?array $payments = null): array
 {
     $payments = $payments ?? payments_for((int) $app['id']);
 
-    $booking  = payment_stage($app, 'booking', $payments);
+    $fullPaid = 0.0;
+    $fullWaiting = 0.0;
+    $fullRows = [];
+    foreach ($payments as $p) {
+        if (($p['stage'] ?? '') === 'full') {
+            $fullRows[] = $p;
+            if ($p['status'] === 'verified') {
+                $fullPaid += (float) $p['amount'];
+            } elseif ($p['status'] === 'pending') {
+                $fullWaiting += (float) $p['amount'];
+            }
+        }
+    }
 
-    /* the delivery payment opens on two things, not one: the booking verified
-       and the finance documents checked */
+    $fullPlanAmount = stage_amount($app, 'full');
+    $isFullSettled  = $fullPaid + 0.001 >= $fullPlanAmount;
+    $fullRefused    = array_values(array_filter($fullRows, static fn (array $p): bool => $p['status'] === 'rejected'));
+
+    $booking  = payment_stage($app, 'booking', $payments);
     $delivery = payment_stage(
         $app,
         'delivery',
         $payments,
-        $booking['settled']
-            && !empty($app['docs_verified_at'])
-            && ($app['delivery_choice'] ?? 'waiting') === 'continue'
+        ($booking['settled'] || $isFullSettled)
+            && (!empty($app['docs_verified_at']) || !empty($app['kyc_verified_at']))
     );
 
-    $due     = $booking['amount'] + $delivery['amount'];
-    $paid    = $booking['paid'] + $delivery['paid'];
-    $waiting = $booking['waiting'] + $delivery['waiting'];
+    if ($isFullSettled) {
+        $booking['settled']  = true;
+        $booking['state']    = 'paid';
+        $delivery['settled'] = true;
+        $delivery['state']   = 'paid';
+    } elseif ($fullWaiting > 0 && !$booking['settled']) {
+        $booking['state'] = 'checking';
+    }
+
+    /* a full payer owes the whole price; a booking customer owes the two
+       stages, the rest being their loan which never passes through us */
+    $due     = ($isFullSettled || $fullPaid + $fullWaiting > 0 || ($app['payment_plan'] ?? '') === 'full_payment')
+        ? $fullPlanAmount
+        : $booking['amount'] + $delivery['amount'];
+    $paid    = $booking['paid'] + $delivery['paid'] + $fullPaid;
+    $waiting = $booking['waiting'] + $delivery['waiting'] + $fullWaiting;
 
     $current = null;
 
-    if (!$booking['settled']) {
+    if (is_full_payment($app) && !$isFullSettled) {
+        $current = 'full';
+    } elseif (!$booking['settled'] && !$isFullSettled) {
         $current = 'booking';
-    } elseif (!$delivery['settled']) {
+    } elseif (!$delivery['settled'] && !$isFullSettled) {
         $current = 'delivery';
     }
+
+    $settled = $isFullSettled || ($booking['settled'] && $delivery['settled']);
 
     return [
         'due'     => $due,
         'paid'    => $paid,
         'waiting' => $waiting,
         'balance' => max($due - $paid, 0),
-        'settled' => $booking['settled'] && $delivery['settled'],
+        'settled' => $settled,
         'percent' => $due > 0 ? min(100, (int) round($paid / $due * 100)) : 100,
-        'stages'  => ['booking' => $booking, 'delivery' => $delivery],
+        'stages'  => [
+            'booking'  => $booking,
+            'delivery' => $delivery,
+            'full'     => [
+                'stage'   => 'full',
+                'label'   => 'Full payment',
+                'amount'  => $fullPlanAmount,
+                'paid'    => $fullPaid,
+                'waiting' => $fullWaiting,
+                'balance' => max($fullPlanAmount - $fullPaid, 0),
+                'settled' => $isFullSettled,
+                'state'   => $isFullSettled ? 'paid' : ($fullWaiting > 0 ? 'checking' : 'due'),
+                'payments'      => $fullRows,
+                'reject_reason' => $fullRefused ? ($fullRefused[count($fullRefused) - 1]['reject_reason'] ?? null) : null,
+            ],
+        ],
         'current' => $current,
     ];
 }
@@ -542,11 +651,18 @@ function payment_totals(array $app, ?array $payments = null): array
 /** Whether one stage of a sale has a verified payment against it. */
 function payment_stage_settled(int $applicationId, string $stage): bool
 {
+    /* One 'full' receipt settles what the customer owes us — the booking and
+       the delivery. It says nothing about the loan, which is the financier's
+       money and arrives on its own: counting it here stamped loan_paid_at on
+       every full payment and wrote a commission line of zero for each tier. */
+    $coversFull = $stage !== 'loan';
+
     $stmt = db()->prepare(
         "SELECT COUNT(*) FROM payments
-          WHERE application_id = ? AND stage = ? AND status = 'verified'"
+          WHERE application_id = ? AND (stage = ? OR (? = 1 AND stage = 'full'))
+            AND status = 'verified'"
     );
-    $stmt->execute([$applicationId, $stage]);
+    $stmt->execute([$applicationId, $stage, $coversFull ? 1 : 0]);
 
     return (int) $stmt->fetchColumn() > 0;
 }
@@ -561,17 +677,14 @@ function status_from_payments(array $app, ?array $payments = null): string
         return 'rejected';
     }
 
-    /* A refund that has been paid out is the end of the order. The payments it
-       was worked out from are still verified, so without this the machine would
-       read the money and put the sale back to 'cancelled' — asking the office to
-       refund a second time. */
     if ($app['status'] === 'refunded') {
         return 'refunded';
     }
 
-    /* An application nobody has approved yet has no payment stage to be at.
-       Without this, anything that recalculates a status would quietly approve
-       it — the decision is the office's, not a side effect. */
+    if ($app['status'] === 'expired') {
+        return 'expired';
+    }
+
     if ($app['status'] === 'submitted') {
         return 'submitted';
     }
@@ -581,32 +694,34 @@ function status_from_payments(array $app, ?array $payments = null): string
     $booking  = $totals['stages']['booking'];
     $delivery = $totals['stages']['delivery'];
 
-    if (!$booking['settled']) {
-        return $booking['state'] === 'checking' ? 'booking_review' : 'booking_pending';
+    /* A full payer: one payment, no finance documents, nothing to confirm. The
+       verified payment is the whole sale. */
+    if (is_full_payment($app)) {
+        if ($totals['settled']) {
+            return 'complete';
+        }
+
+        return $totals['waiting'] > 0 ? 'booking_review' : 'booking_pending';
     }
 
-    /* The booking is paid and the finance team has the paperwork. Nothing else
-       moves until they say it is in order, whichever form the client came in
-       on — a partner's or the website's. */
-    if (empty($app['docs_verified_at'])) {
-        return 'docs_pending';
+    if (!$booking['settled'] && !$totals['settled']) {
+        return ($booking['state'] === 'checking' || $totals['waiting'] > 0) ? 'booking_review' : 'booking_pending';
     }
 
-    /* Both transfers are in, so there is nothing left to decide. The question
-       below is for somebody who has paid the booking amount and not yet the
-       delivery one. */
-    if ($delivery['settled']) {
-        return 'complete';
-    }
-
-    $choice = (string) ($app['delivery_choice'] ?? 'waiting');
-
-    if ($choice === 'cancel') {
+    /* The booking is paid. Until the documents pass the client may still cancel
+       (cancel_window_open) - the only decision they are ever asked to make. */
+    if (($app['delivery_choice'] ?? 'waiting') === 'cancel') {
         return 'cancelled';
     }
 
-    if ($choice !== 'continue') {
-        return 'confirm_pending';
+    /* Documents check */
+    if (empty($app['docs_verified_at']) && empty($app['kyc_verified_at'])) {
+        return 'docs_pending';
+    }
+
+    /* Once settled and docs verified, order is complete */
+    if ($totals['settled'] || $delivery['settled']) {
+        return 'complete';
     }
 
     return $delivery['state'] === 'checking' ? 'delivery_review' : 'delivery_pending';
@@ -624,7 +739,8 @@ function status_from_payments(array $app, ?array $payments = null): string
  */
 const APPLICATION_MONEY_COLUMNS = 'id, product, status, dealer_id, distributor_id,
         dealer_commission, distributor_commission, booking_amount, delivery_amount,
-        loan_amount, booking_paid_at, delivery_paid_at, loan_paid_at,
+        loan_amount, payment_plan, payment_amount, booking_paid_at, delivery_paid_at, loan_paid_at,
+        created_at, zonal_cf_id, principal_cf_id, zonal_commission, principal_commission,
         docs_verified_at, delivery_choice, delivery_choice_at,
         payment_verified_at, completed_at';
 
@@ -647,6 +763,16 @@ function sync_application_status(int $applicationId): string
     if ($next !== $app['status']) {
         db()->prepare('UPDATE applications SET status = ? WHERE id = ?')->execute([$next, $applicationId]);
         log_status_change('application', $applicationId, (string) $app['status'], $next, null);
+    }
+
+    /* The 48 hours are the client's window to cancel, not a deadline to pay: they
+       start when the booking payment is verified and the documents are still
+       unchecked, and a booking that falls back to unpaid takes them with it. */
+    if ($next === 'docs_pending') {
+        db()->prepare('UPDATE applications SET payment_deadline_at = COALESCE(payment_deadline_at, ?) WHERE id = ?')
+            ->execute([date('Y-m-d H:i:s', time() + payment_deadline_hours() * 3600), $applicationId]);
+    } elseif (in_array($next, ['booking_pending', 'booking_review'], true)) {
+        db()->prepare('UPDATE applications SET payment_deadline_at = NULL WHERE id = ?')->execute([$applicationId]);
     }
 
     /* a stage that is no longer verified loses its timestamp, so a rejected
@@ -1148,6 +1274,16 @@ function make_distributor_code(): string
     return make_partner_code('MX', 'distributors', 'distributor_code');
 }
 
+function make_zonal_cf_code(): string
+{
+    return make_partner_code('MZ', 'zonal_cf', 'zonal_code');
+}
+
+function make_principal_cf_code(): string
+{
+    return make_partner_code('MP', 'principal_cf', 'principal_code');
+}
+
 /**
  * The dealer a quoted code belongs to, or null.
  *
@@ -1175,34 +1311,119 @@ function dealer_for_code(string $code): ?array
    A distributor signs dealers up, the office decides whether they are real, and
    there is a ceiling on how many one distributor may hold. */
 
-/** How many dealers one distributor may hold. Editable under Settings. */
-function dealer_limit(): int
+/* ---------- how many direct children one partner may hold ----------
+   Every parent row carries max_children: NULL follows the tier default under
+   Settings, a number is that partner's own ceiling. 0 means no limit, in both
+   places. Who may change a row's number is decided by the page that saves it:
+   the office any of them, a principal its zonals' and their distributors', a
+   zonal its own distributors' — never anybody their own. */
+
+/** parent kind => [parent table, child table, child's column naming the parent, default setting, plural] */
+const CHILD_CAP_RULES = [
+    'principal_cf' => ['principal_cf', 'zonal_cf', 'principal_cf_id', 'default_max_zonals', 'Zonal C&Fs'],
+    'zonal_cf'     => ['zonal_cf', 'distributors', 'zonal_cf_id', 'default_max_distributors', 'distributors'],
+    /* the dealer default predates the other two and keeps its setting name */
+    'distributor'  => ['distributors', 'dealers', 'distributor_id', 'dealer_limit', 'dealers'],
+];
+
+/** The tier default for a parent kind; 0 = no limit. */
+function child_cap_default(string $kind): int
 {
-    return max(0, (int) setting('dealer_limit', (string) DEALER_LIMIT_DEFAULT));
+    $fallback = $kind === 'distributor' ? (string) DEALER_LIMIT_DEFAULT : '0';
+
+    return max(0, (int) setting(CHILD_CAP_RULES[$kind][3], $fallback));
+}
+
+/** What this one parent may hold: their own number, else the default. 0 = no limit. */
+function child_cap(string $kind, int $parentId): int
+{
+    $stmt = db()->prepare('SELECT max_children FROM `' . CHILD_CAP_RULES[$kind][0] . '` WHERE id = ?');
+    $stmt->execute([$parentId]);
+    $own = $stmt->fetchColumn();
+
+    return $own === false || $own === null ? child_cap_default($kind) : (int) $own;
 }
 
 /**
- * How many of that allowance a distributor has used.
- *
- * A dealer waiting for approval counts. They were requested, and letting a
- * distributor queue up fifty pending dealers against a limit of ten would make
- * the limit meaningless.
+ * How much of the allowance is used. A child still waiting for approval
+ * counts — queueing fifty pending requests against a limit of ten would make
+ * the limit meaningless — a turned-down one does not. $exceptId leaves out the
+ * child being approved or moved, which is already in the count or about to be.
  */
-function distributor_dealer_count(int $distributorId): int
+function child_count(string $kind, int $parentId, int $exceptId = 0): int
 {
+    [, $child, $column] = CHILD_CAP_RULES[$kind];
+
     $stmt = db()->prepare(
-        "SELECT COUNT(*) FROM dealers
-          WHERE distributor_id = ? AND approval_status <> 'rejected'"
+        'SELECT COUNT(*) FROM `' . $child . '`
+          WHERE `' . $column . "` = ? AND approval_status <> 'rejected' AND id <> ?"
     );
-    $stmt->execute([$distributorId]);
+    $stmt->execute([$parentId, $exceptId]);
 
     return (int) $stmt->fetchColumn();
+}
+
+/** '' when there is room for one more under this parent, otherwise why not. */
+function child_cap_error(string $kind, int $parentId, int $exceptId = 0): string
+{
+    $cap = child_cap($kind, $parentId);
+
+    if ($cap === 0) {
+        return '';
+    }
+
+    $held = child_count($kind, $parentId, $exceptId);
+
+    if ($held < $cap) {
+        return '';
+    }
+
+    $label = ['principal_cf' => 'Principal C&F', 'zonal_cf' => 'Zonal C&F', 'distributor' => 'distributor'][$kind];
+
+    return 'This ' . $label . ' already has ' . $held . ' of ' . $cap . ' '
+        . CHILD_CAP_RULES[$kind][4] . ' allowed.';
+}
+
+/** "3 / 10" — or "3 / no limit" — for a list or a profile. */
+function child_cap_usage(string $kind, int $parentId): string
+{
+    $cap = child_cap($kind, $parentId);
+
+    return child_count($kind, $parentId) . ' / ' . ($cap === 0 ? 'no limit' : $cap);
+}
+
+/** [value|null, error] for a posted cap: blank = follow the default. */
+function child_cap_parse(?string $raw): array
+{
+    $raw = trim((string) $raw);
+
+    if ($raw === '') {
+        return [null, ''];
+    }
+
+    if (!ctype_digit($raw) || (int) $raw > 100000) {
+        return [null, 'The limit has to be a whole number, 0 for no limit, or blank for the default.'];
+    }
+
+    return [(int) $raw, ''];
+}
+
+/** How many dealers a distributor holds by default. Editable under Settings. */
+function dealer_limit(): int
+{
+    return child_cap_default('distributor');
+}
+
+/** How many of their allowance a distributor has used. */
+function distributor_dealer_count(int $distributorId): int
+{
+    return child_count('distributor', $distributorId);
 }
 
 /** Whether this distributor has room for another dealer. */
 function distributor_has_room(int $distributorId): bool
 {
-    return distributor_dealer_count($distributorId) < dealer_limit();
+    return child_cap_error('distributor', $distributorId) === '';
 }
 
 /**
@@ -1225,8 +1446,11 @@ function dealer_decide(int $dealerId, string $verdict, int $adminId): array
         return ['error' => 'That request has already been decided.'];
     }
 
-    if ($verdict === 'approved' && !distributor_has_room((int) $dealer['distributor_id'])) {
-        return ['error' => 'That distributor is already at the dealer limit. Raise it under Settings first.'];
+    /* the request is already in the count, so it is left out of it here */
+    $full = $verdict === 'approved' ? child_cap_error('distributor', (int) $dealer['distributor_id'], $dealerId) : '';
+
+    if ($full !== '') {
+        return ['error' => $full . ' Raise their limit first.'];
     }
 
     /* The code is issued here, not when the request was raised: until the
@@ -1310,10 +1534,19 @@ function store_upload(string $field, string $dir = UPLOAD_DIR): ?string
         return null;
     }
 
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime  = $finfo->file($file['tmp_name']);
+    $mime = null;
+    if (class_exists('finfo')) {
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime  = $finfo->file($file['tmp_name']);
+    } elseif (function_exists('mime_content_type')) {
+        $mime = mime_content_type($file['tmp_name']);
+    }
 
-    if (!isset(UPLOAD_ALLOWED_MIME[$mime])) {
+    /* What the file *is*, never what it is called. A name is the uploader's to
+       choose, so a type read back off it would let any content in under a .pdf.
+       With no sniffer available (or one that cannot tell), the upload is
+       refused rather than guessed from the filename. */
+    if ($mime === null || $mime === false || !isset(UPLOAD_ALLOWED_MIME[$mime])) {
         return null;
     }
 
@@ -1323,7 +1556,12 @@ function store_upload(string $field, string $dir = UPLOAD_DIR): ?string
 
     $name = date('Ymd-His') . '-' . bin2hex(random_bytes(6)) . '.' . UPLOAD_ALLOWED_MIME[$mime];
 
-    return move_uploaded_file($file['tmp_name'], $dir . '/' . $name) ? $name : null;
+    $stored = move_uploaded_file($file['tmp_name'], $dir . '/' . $name);
+    if (!$stored && php_sapi_name() === 'cli' && is_file($file['tmp_name'])) {
+        $stored = copy($file['tmp_name'], $dir . '/' . $name);
+    }
+
+    return $stored ? $name : null;
 }
 
 /** One dealer by id, or null. */
@@ -1343,13 +1581,15 @@ function dealer_by_id(int $id): ?array
  * and neither sees money the customer owes, so there is one definition of what
  * "progress" means rather than one per portal.
  */
-function partner_progress(string $status): array
+function partner_progress(string $status, string $plan = ''): array
 {
+    $stages = application_stages(['payment_plan' => $plan]);
+
     if ($status === 'rejected') {
-        return ['label' => 'Not proceeding', 'step' => 0, 'of' => count(APPLICATION_STAGES)];
+        return ['label' => 'Not proceeding', 'step' => 0, 'of' => count($stages)];
     }
 
-    $step = array_search($status, APPLICATION_STAGES, true);
+    $step = array_search($status, $stages, true);
 
     return [
         /* The short label, not the applicant's. A pill is white-space:nowrap, so
@@ -1357,9 +1597,9 @@ function partner_progress(string $status): array
            over the next column. It is also what the Progress column header shows
            when it is filtering, so the pill and the filter now say the same
            thing about the same row. */
-        'label' => status_short($status),
+        'label' => status_short($status, $plan),
         'step'  => $step === false ? 0 : (int) $step + 1,
-        'of'    => count(APPLICATION_STAGES),
+        'of'    => count($stages),
     ];
 }
 
@@ -1392,11 +1632,87 @@ function product_label(string $product): string
 const STOCK_ORDER_MAX_UNITS = 10000;
 const STOCK_ORDER_MAX_TOTAL = 9000000000.0;
 
+/** Every tier that buys stock, top of the chain first. The office sells, never buys. */
+const STOCK_TIERS = ['principal_cf', 'zonal_cf', 'distributor', 'dealer'];
+
+/** Who a tier is, in words, for the sentences the stock screens say. */
+function stock_tier_label(string $type): string
+{
+    return [
+        'office'       => 'the office',
+        'principal_cf' => 'Principal C&F',
+        'zonal_cf'     => 'Zonal C&F',
+        'distributor'  => 'distributor',
+        'dealer'       => 'dealer',
+    ][$type] ?? $type;
+}
+
+/** One partner row of any stock-holding tier, or null. */
+function stock_party(string $type, int $id): ?array
+{
+    switch ($type) {
+        case 'principal_cf': return principal_cf_by_id($id);
+        case 'zonal_cf':     return zonal_cf_by_id($id);
+        case 'distributor':  return distributor_by_id($id);
+        case 'dealer':       return dealer_by_id($id);
+    }
+
+    return null;
+}
+
+/**
+ * Who a buyer orders from: [seller_type, seller_id], seller_id null for the office.
+ *
+ * Always the tier directly above, read from the hierarchy rather than taken from
+ * the request, so nobody can point an order at a shelf of their choosing. When
+ * that tier is missing — a distributor the office signed up with no Zonal C&F,
+ * or a parent who has been switched off and so cannot sign in to release
+ * anything — the order climbs to the nearest ancestor who can, and the office
+ * catches whatever falls off the top.
+ */
+function stock_seller_for(string $buyerType, int $buyerId): array
+{
+    $live = static fn (?array $row): bool => $row !== null
+        && (int) ($row['is_active'] ?? 1) === 1
+        && ($row['approval_status'] ?? 'approved') === 'approved';
+
+    $buyer = stock_party($buyerType, $buyerId);
+
+    /* the chain upward from this buyer, nearest first */
+    $chain = [];
+
+    if ($buyerType === 'dealer' && $buyer && !empty($buyer['distributor_id'])) {
+        $buyerType = 'distributor';
+        $buyer     = distributor_by_id((int) $buyer['distributor_id']);
+        $chain[]   = ['distributor', $buyer];
+    }
+
+    if ($buyerType === 'distributor' && $buyer && !empty($buyer['zonal_cf_id'])) {
+        $buyerType = 'zonal_cf';
+        $buyer     = zonal_cf_by_id((int) $buyer['zonal_cf_id']);
+        $chain[]   = ['zonal_cf', $buyer];
+    }
+
+    if ($buyerType === 'zonal_cf' && $buyer && !empty($buyer['principal_cf_id'])) {
+        $chain[] = ['principal_cf', principal_cf_by_id((int) $buyer['principal_cf_id'])];
+    }
+
+    foreach ($chain as [$type, $row]) {
+        if ($live($row)) {
+            return [$type, (int) $row['id']];
+        }
+    }
+
+    return ['office', null];
+}
+
 /** What one unit costs the given tier, per product. Editable under Settings. */
 function stock_price(string $buyerType, string $product): float
 {
-    $key = 'stock_price_' . ($buyerType === 'dealer' ? 'dealer' : 'distributor') . '_'
-        . ($product === 'tuktuk' ? 'tuktuk' : 'stove');
+    /* an unknown tier reads the distributor's price rather than a key nobody
+       ever saved, which would be a free unit */
+    $tier = in_array($buyerType, STOCK_TIERS, true) ? $buyerType : 'distributor';
+    $key  = 'stock_price_' . $tier . '_' . ($product === 'tuktuk' ? 'tuktuk' : 'stove');
 
     return max(0.0, (float) setting($key, '0'));
 }
@@ -1491,14 +1807,114 @@ function stock_history(string $ownerType, int $ownerId, int $limit = 50): array
     return $stmt->fetchAll();
 }
 
+/**
+ * The shelves an actor may correct: the office any of them; a Principal C&F its
+ * Zonal C&Fs; a Zonal C&F its distributors; a distributor its dealers. Read from
+ * the hierarchy, never the request, so a correction cannot reach sideways or up.
+ * Returns [type, id, name, code] rows.
+ */
+function stock_adjust_targets(string $actorType, int $actorId = 0): array
+{
+    $sql = [
+        'principal_cf' => "SELECT 'zonal_cf' AS type, id, full_name, zonal_code AS code FROM zonal_cf
+                            WHERE principal_cf_id = ?",
+        'zonal_cf'     => "SELECT 'distributor' AS type, id, full_name, distributor_code AS code FROM distributors
+                            WHERE zonal_cf_id = ?",
+        'distributor'  => "SELECT 'dealer' AS type, id, full_name, dealer_code AS code FROM dealers
+                            WHERE distributor_id = ?",
+    ];
+
+    if ($actorType === 'office') {
+        return db()->query(
+            "SELECT 'principal_cf' AS type, id, full_name, principal_code AS code FROM principal_cf
+             UNION ALL SELECT 'zonal_cf', id, full_name, zonal_code FROM zonal_cf
+             UNION ALL SELECT 'distributor', id, full_name, distributor_code FROM distributors
+             UNION ALL SELECT 'dealer', id, full_name, dealer_code FROM dealers
+             ORDER BY FIELD(type, 'principal_cf', 'zonal_cf', 'distributor', 'dealer'), full_name"
+        )->fetchAll();
+    }
+
+    if (!isset($sql[$actorType])) {
+        return [];
+    }
+
+    $stmt = db()->prepare($sql[$actorType] . ' ORDER BY full_name');
+    $stmt->execute([$actorId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Correct one shelf by a signed number of units (a recount, a breakage). Valued
+ * at the holder's average cost so the shelf's value stays in step; never takes
+ * a shelf below zero. Returns '' on success, else the reason it was refused.
+ */
+function stock_adjust(string $actorType, int $actorId, string $targetType, int $targetId, string $product, int $units, string $note): string
+{
+    $allowed = false;
+
+    foreach (stock_adjust_targets($actorType, $actorId) as $t) {
+        if ($t['type'] === $targetType && (int) $t['id'] === $targetId) {
+            $allowed = true;
+            break;
+        }
+    }
+
+    if (!$allowed) {
+        return 'That shelf is not yours to correct.';
+    }
+
+    if (!in_array($product, ['stove', 'tuktuk'], true) || $units === 0) {
+        return 'Pick a product and enter a number of units other than zero (use a minus to take stock off).';
+    }
+
+    $held = stock_units($targetType, $targetId, $product);
+
+    if ($held + $units < 0) {
+        return 'They hold only ' . $held . ' — that would take the shelf below zero.';
+    }
+
+    stock_move(
+        $targetType,
+        $targetId,
+        $product,
+        $units,
+        round($units * stock_unit_cost($targetType, $targetId, $product), 2),
+        'adjustment',
+        null,
+        null,
+        mb_substr(trim($note) !== '' ? trim($note) : 'Corrected by ' . stock_tier_label($actorType), 0, 255)
+    );
+
+    return '';
+}
+
+/** Handle the adjust form's POST for an actor; returns [message, error]. */
+function stock_adjust_post(string $actorType, int $actorId): array
+{
+    [$tt, $tid] = array_pad(explode(':', (string) ($_POST['target'] ?? ''), 2), 2, '0');
+
+    $error = stock_adjust(
+        $actorType,
+        $actorId,
+        $tt,
+        (int) $tid,
+        (string) ($_POST['product'] ?? ''),
+        (int) ($_POST['units'] ?? 0),
+        (string) ($_POST['note'] ?? '')
+    );
+
+    return $error === '' ? ['Stock corrected. It is in the movement list.', ''] : ['', $error];
+}
+
 /** Reading name for why stock moved. */
 function stock_reason_label(string $reason): string
 {
     $labels = [
         'purchase'     => 'Bought in',
         'sale'         => 'Sold to a client',
-        'transfer_out' => 'Passed to a dealer',
-        'adjustment'   => 'Adjusted by the office',
+        'transfer_out' => 'Released down the chain',
+        'adjustment'   => 'Corrected (recount)',
     ];
 
     return $labels[$reason] ?? ucfirst($reason);
@@ -1527,18 +1943,22 @@ function stock_status_label(string $status): string
  *
  * Returns [orderId, error]. Every price is frozen onto its line at this moment,
  * so a change under Settings tomorrow never rewrites what was asked for today.
+ *
+ * The seller is not a parameter: it is worked out here from the hierarchy by
+ * stock_seller_for(), so the order lands in the queue of whoever is above the
+ * buyer on the day it is raised.
  */
 function stock_order_create(
     string $buyerType,
     int $buyerId,
     array $wanted,
-    ?int $sellerDistributorId,
     array $extra = []
 ): array {
-    if ($buyerType === 'dealer' && !$sellerDistributorId) {
-        return [0, 'You are not under a distributor yet, so there is nobody to order from. '
-            . 'Ask the office to assign you one.'];
+    if (!in_array($buyerType, STOCK_TIERS, true)) {
+        return [0, 'That kind of partner cannot order stock.'];
     }
+
+    [$sellerType, $sellerId] = stock_seller_for($buyerType, $buyerId);
 
     /* The reference is what ties this order to a line on a bank statement, so
        a keyboard smash in the box makes the order unreconcilable later. Only
@@ -1604,12 +2024,13 @@ function stock_order_create(
     try {
         $db->prepare(
             'INSERT INTO stock_orders
-                 (buyer_type, buyer_id, seller_distributor_id, total_amount, reference, proof_path, note)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
+                 (buyer_type, buyer_id, seller_type, seller_id, total_amount, reference, proof_path, note)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         )->execute([
             $buyerType,
             $buyerId,
-            $sellerDistributorId,
+            $sellerType,
+            $sellerId,
             round($total, 2),
             $extra['reference'] ?? null,
             $extra['proof_path'] ?? null,
@@ -1681,24 +2102,23 @@ function stock_order(int $id): ?array
     return $stmt->fetch() ?: null;
 }
 
+/** Whoever the units are for, with their name and email — any of the four tiers. */
+function stock_order_buyer(array $order): ?array
+{
+    return stock_party((string) ($order['buyer_type'] ?? ''), (int) ($order['buyer_id'] ?? 0));
+}
+
 /**
  * Releases the stock on an approved order.
  *
- * The buyer gains the units at what they paid. Where a distributor is the
- * seller, the same units leave their own shelf at what *they* paid for them —
- * their margin is the difference, and margin is not stock, so it is not counted
- * here. A seller who does not hold the units cannot release them.
+ * The buyer gains the units at what they paid. Where a partner is the seller
+ * (anyone but the office, whose shelf is bottomless), the same units leave
+ * their own shelf at what *they* paid for them — their margin is the
+ * difference, and margin is not stock, so it is not counted here. A seller who
+ * does not hold the units cannot release them.
  *
  * Returns an error string, or '' when the stock has moved.
  */
-/** Whoever the units are for, with their email. */
-function stock_order_buyer(array $order): ?array
-{
-    return ($order['buyer_type'] ?? '') === 'dealer'
-        ? dealer_by_id((int) $order['buyer_id'])
-        : distributor_by_id((int) $order['buyer_id']);
-}
-
 function stock_order_approve(int $orderId, ?int $adminId = null): string
 {
     $order = stock_order($orderId);
@@ -1707,8 +2127,9 @@ function stock_order_approve(int $orderId, ?int $adminId = null): string
         return 'That order has already been decided.';
     }
 
-    $items  = stock_order_items($orderId);
-    $seller = $order['seller_distributor_id'] === null ? null : (int) $order['seller_distributor_id'];
+    $items      = stock_order_items($orderId);
+    $sellerType = (string) $order['seller_type'];
+    $seller     = $sellerType === 'office' || $order['seller_id'] === null ? null : (int) $order['seller_id'];
 
     if (!$items) {
         return 'That order has nothing on it.';
@@ -1717,21 +2138,32 @@ function stock_order_approve(int $orderId, ?int $adminId = null): string
     /* every product is checked before any of them moves: releasing the stoves
        and then failing on the kits would leave half an order approved */
     if ($seller !== null) {
+        [$aboveType] = stock_seller_for($sellerType, $seller);
+
         foreach ($items as $item) {
             $product = (string) $item['product'];
-            $have    = stock_units('distributor', $seller, $product);
+            $have    = stock_units($sellerType, $seller, $product);
 
             if ($have < (int) $item['quantity']) {
                 return 'You hold ' . $have . ' ' . product_label($product) . ' and this order is for '
-                    . (int) $item['quantity'] . '. Order more from the office first.';
+                    . (int) $item['quantity'] . '. Order more from '
+                    . ($aboveType === 'office' ? 'the office' : 'your ' . stock_tier_label($aboveType))
+                    . ' first.';
             }
         }
     }
 
-    db()->prepare(
+    /* only a still-pending row flips: two clicks on "Payment received" in two
+       tabs would otherwise both pass the check above and move the units twice */
+    $flip = db()->prepare(
         'UPDATE stock_orders SET status = ?, decided_at = NOW(), decided_by_admin = ?, reject_reason = NULL
-          WHERE id = ?'
-    )->execute(['approved', $adminId, $orderId]);
+          WHERE id = ? AND status = ?'
+    );
+    $flip->execute(['approved', $adminId, $orderId, 'pending']);
+
+    if ($flip->rowCount() === 0) {
+        return 'That order has already been decided.';
+    }
 
     foreach ($items as $item) {
         $product  = (string) $item['product'];
@@ -1748,11 +2180,11 @@ function stock_order_approve(int $orderId, ?int $adminId = null): string
         );
 
         if ($seller !== null) {
-            /* off the distributor's shelf at their own cost, not at what they charged */
-            $cost = stock_unit_cost('distributor', $seller, $product);
+            /* off the seller's shelf at their own cost, not at what they charged */
+            $cost = stock_unit_cost($sellerType, $seller, $product);
 
             stock_move(
-                'distributor',
+                $sellerType,
                 $seller,
                 $product,
                 -$quantity,
@@ -1787,19 +2219,21 @@ function stock_order_reject(int $orderId, string $reason = '', ?int $adminId = n
         return 'That order has already been decided.';
     }
 
-    db()->prepare(
+    $flip = db()->prepare(
         'UPDATE stock_orders SET status = ?, reject_reason = ?, decided_at = NOW(), decided_by_admin = ?
-          WHERE id = ?'
-    )->execute(['rejected', $reason !== '' ? mb_substr($reason, 0, 255) : null, $adminId, $orderId]);
+          WHERE id = ? AND status = ?'
+    );
+    $flip->execute(['rejected', $reason !== '' ? mb_substr($reason, 0, 255) : null, $adminId, $orderId, 'pending']);
 
-    return '';
+    return $flip->rowCount() ? '' : 'That order has already been decided.';
 }
 
 /** One partner's own orders, newest first. */
 function stock_orders_for(string $buyerType, int $buyerId): array
 {
     $stmt = db()->prepare(
-        'SELECT * FROM stock_orders WHERE buyer_type = ? AND buyer_id = ? ORDER BY requested_at DESC, id DESC'
+        'SELECT * FROM stock_orders WHERE buyer_type = ? AND buyer_id = ?
+          ORDER BY FIELD(status, \'pending\', \'approved\', \'rejected\'), requested_at DESC, id DESC'
     );
     $stmt->execute([$buyerType, $buyerId]);
 
@@ -1807,34 +2241,70 @@ function stock_orders_for(string $buyerType, int $buyerId): array
 }
 
 /**
- * The orders one distributor has been asked to release, with the dealer's name.
- * Pass null for the office's own queue: everything a distributor asked for.
+ * The orders one seller has been asked to release, pending first, with the
+ * buyer's name and code. ('office', null) is the office's own queue.
+ *
+ * The buyer can be any tier — the office mostly hears from principals, but a
+ * distributor with no Zonal C&F above it orders from the office too — so each
+ * tier's table is joined on its own type and whichever matched names the row.
  */
-function stock_orders_to_decide(?int $sellerDistributorId): array
+function stock_orders_to_decide(string $sellerType, ?int $sellerId): array
 {
-    if ($sellerDistributorId === null) {
-        $stmt = db()->prepare(
-            'SELECT o.*, d.full_name AS buyer_name, d.distributor_code AS buyer_code
-               FROM stock_orders o
-               JOIN distributors d ON d.id = o.buyer_id
-              WHERE o.buyer_type = ? AND o.seller_distributor_id IS NULL
-              ORDER BY FIELD(o.status, ?, ?, ?), o.requested_at DESC'
-        );
-        $stmt->execute(['distributor', 'pending', 'approved', 'rejected']);
-
-        return $stmt->fetchAll();
-    }
-
     $stmt = db()->prepare(
-        'SELECT o.*, d.full_name AS buyer_name, d.dealer_code AS buyer_code
+        "SELECT o.*,
+                COALESCE(pc.full_name, zc.full_name, di.full_name, de.full_name) AS buyer_name,
+                COALESCE(pc.principal_code, zc.zonal_code, di.distributor_code, de.dealer_code) AS buyer_code
            FROM stock_orders o
-           JOIN dealers d ON d.id = o.buyer_id
-          WHERE o.buyer_type = ? AND o.seller_distributor_id = ?
-          ORDER BY FIELD(o.status, ?, ?, ?), o.requested_at DESC'
+           LEFT JOIN principal_cf pc ON o.buyer_type = 'principal_cf' AND pc.id = o.buyer_id
+           LEFT JOIN zonal_cf     zc ON o.buyer_type = 'zonal_cf'     AND zc.id = o.buyer_id
+           LEFT JOIN distributors di ON o.buyer_type = 'distributor'  AND di.id = o.buyer_id
+           LEFT JOIN dealers      de ON o.buyer_type = 'dealer'       AND de.id = o.buyer_id
+          WHERE o.seller_type = ? AND o.seller_id <=> ?
+          ORDER BY FIELD(o.status, 'pending', 'approved', 'rejected'), o.requested_at DESC, o.id DESC"
     );
-    $stmt->execute(['dealer', $sellerDistributorId, 'pending', 'approved', 'rejected']);
+    $stmt->execute([$sellerType, $sellerType === 'office' ? null : $sellerId]);
 
     return $stmt->fetchAll();
+}
+
+/**
+ * Streams the payment proof on an order the caller has already checked is
+ * theirs to see, or answers 404. The path comes from the order row, never the
+ * request, and is held inside the proofs folder all the same.
+ */
+function stock_proof_send(?array $order): void
+{
+    $name = basename((string) ($order['proof_path'] ?? ''));
+    $full = PAYMENT_PROOF_DIR . '/' . $name;
+
+    if ($name === '' || !is_file($full)
+        || strpos(realpath($full) ?: '', realpath(PAYMENT_PROOF_DIR) ?: "\0") !== 0) {
+        http_response_code(404);
+        exit('File not found.');
+    }
+
+    $mime = [
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png'  => 'image/png',
+        'webp' => 'image/webp',
+        'pdf'  => 'application/pdf',
+    ][strtolower(pathinfo($name, PATHINFO_EXTENSION))] ?? 'application/octet-stream';
+
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . filesize($full));
+    header('Content-Disposition: inline; filename="' . $name . '"');
+    header('X-Content-Type-Options: nosniff');
+    readfile($full);
+    exit;
+}
+
+/** Is this order one this seller was asked to release? The ownership check every queue page makes. */
+function stock_order_sold_by(?array $order, string $sellerType, int $sellerId): bool
+{
+    return $order !== null
+        && $order['seller_type'] === $sellerType
+        && (int) $order['seller_id'] === $sellerId;
 }
 
 /**
@@ -1861,6 +2331,246 @@ function stock_take_for_sale(string $ownerType, int $ownerId, string $product, i
     return '';
 }
 
+/** Checks if a partner is at or below the critical stock threshold (<= 100 units). */
+function is_stock_critical(string $ownerType, int $ownerId, string $product = ''): bool
+{
+    $critical = stock_critical_units();
+    if ($product !== '') {
+        return stock_units($ownerType, $ownerId, $product) <= $critical;
+    }
+    $bal = stock_balance($ownerType, $ownerId);
+    return ((int) ($bal['units'] ?? 0)) <= $critical;
+}
+
+/** Returns the visual CSS class for a stock tile based on units balance. */
+function stock_tile_class(int $units): string
+{
+    if ($units <= stock_critical_units()) {
+        return 'tile--stock-critical';
+    }
+    if ($units <= stock_warn_units()) {
+        return 'tile--stock-warn';
+    }
+    return '';
+}
+
+/**
+ * Returns a visual badge for a stock level.
+ *
+ * $short is the stat-tile form: one word, with the full sentence kept in the
+ * title. The long form beside a label in a 210px card wrapped onto two lines
+ * and pushed the card's own sub-text out of line with its neighbours.
+ */
+function stock_badge(int $units, bool $short = false): string
+{
+    if ($short) {
+        [$class, $word, $why] = $units <= stock_critical_units()
+            ? ['critical', 'Critical', '≤ ' . stock_critical_units() . ' units — sales need approval']
+            : ($units <= stock_warn_units()
+                ? ['warning', 'Low', '≤ ' . stock_warn_units() . ' units — time to reorder']
+                : ['good', 'In stock', 'Above ' . stock_warn_units() . ' units']);
+
+        return '<span class="pill pill--' . $class . '" title="' . e($why) . '">' . $word
+            . '<span class="visually-hidden"> — ' . e($why) . '</span></span>';
+    }
+
+    if ($units <= stock_critical_units()) {
+        return '<span class="pill pill--critical"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> &le; 100 units (Approval Required)</span>';
+    }
+    if ($units <= stock_warn_units()) {
+        return '<span class="pill pill--warning"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i> &le; 200 units (Stock Warning)</span>';
+    }
+    return '<span class="pill pill--good"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> In Stock</span>';
+}
+
+/** One application by ID. */
+function application_by_id(int $id): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM applications WHERE id = ? LIMIT 1');
+    $stmt->execute([$id]);
+    return $stmt->fetch() ?: null;
+}
+
+function application(int $id): ?array
+{
+    return application_by_id($id);
+}
+
+/**
+ * Is this sale still frozen behind the low-stock dual approval?
+ *
+ * A sale made off a shelf at or below the critical threshold is held until both
+ * the Principal C&F and the Manifold Office have said yes. Until they have, no
+ * money is taken for it — by a partner at the counter or by the customer online.
+ */
+function low_stock_blocked(array $app): bool
+{
+    return !empty($app['low_stock_hold']);
+}
+
+/** Why a held sale cannot be paid for yet, in the words the payer reads. */
+function low_stock_block_reason(): string
+{
+    return 'This sale is held because the seller is at or below the '
+        . stock_critical_units() . '-unit stock threshold. '
+        . 'It needs Principal C&F and Manifold Office approval before payment can be taken.';
+}
+
+/**
+ * Handles dual approval (Principal C&F + Manifold Office) for sales made at or below 100 units.
+ */
+function approve_low_stock_sale(int $appId, string $actorRole, int $userId): array
+{
+    $app = application($appId);
+    if (!$app) {
+        return ['error' => 'Application not found.'];
+    }
+    if (empty($app['low_stock_hold'])) {
+        return ['message' => 'Sale is not held for low stock.'];
+    }
+
+    $set = [];
+    $isPrincipal = in_array($actorRole, ['principal_cf', 'cf'], true);
+    $isOffice    = in_array($actorRole, ['admin', 'office'], true);
+
+    if ($isPrincipal) {
+        $set[] = 'low_stock_approved_by_principal = 1';
+    } elseif ($isOffice) {
+        $set[] = 'low_stock_approved_by_office = 1';
+    } else {
+        return ['error' => 'Unauthorized role for low-stock sale approval.'];
+    }
+
+    $hasPrincipal = $isPrincipal || !empty($app['low_stock_approved_by_principal']);
+    $hasOffice    = $isOffice || !empty($app['low_stock_approved_by_office']);
+
+    if ($hasPrincipal && $hasOffice) {
+        $set[] = 'low_stock_hold = 0';
+    }
+
+    $sql = 'UPDATE applications SET ' . implode(', ', $set) . ' WHERE id = ?';
+    db()->prepare($sql)->execute([$appId]);
+
+    $msg = ($hasPrincipal && $hasOffice)
+        ? 'Dual approval complete (Principal C&F + Manifold Office). Low-stock hold released!'
+        : 'Approval recorded. Awaiting required ' . (!$hasPrincipal ? 'Principal C&F' : 'Manifold Office') . ' approval.';
+
+    return ['message' => $msg];
+}
+
+/** All Principal C&F partners. */
+function principal_cf_all(bool $activeOnly = false): array
+{
+    $sql = 'SELECT * FROM principal_cf';
+    if ($activeOnly) {
+        $sql .= " WHERE is_active = 1 AND approval_status = 'approved'";
+    }
+    $sql .= ' ORDER BY full_name';
+    return db()->query($sql)->fetchAll();
+}
+
+/** All Zonal C&F partners with mapped Principal C&F name. */
+function zonal_cf_all(bool $activeOnly = false): array
+{
+    $sql = 'SELECT z.*, p.full_name AS principal_name, p.principal_code
+              FROM zonal_cf z
+              LEFT JOIN principal_cf p ON p.id = z.principal_cf_id';
+    if ($activeOnly) {
+        $sql .= " WHERE z.is_active = 1 AND z.approval_status = 'approved'";
+    }
+    $sql .= ' ORDER BY z.full_name';
+    return db()->query($sql)->fetchAll();
+}
+
+/** All Zonal C&Fs under a given Principal C&F. */
+function zonal_cf_for_principal(int $principalId): array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM zonal_cf WHERE principal_cf_id = ? ORDER BY is_active DESC, full_name'
+    );
+    $stmt->execute([$principalId]);
+    return $stmt->fetchAll();
+}
+
+/** All Distributors under a given Zonal C&F. */
+function distributors_for_zonal(int $zonalId): array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM distributors WHERE zonal_cf_id = ? ORDER BY is_active DESC, full_name'
+    );
+    $stmt->execute([$zonalId]);
+    return $stmt->fetchAll();
+}
+
+/** Approval decision for Principal C&F. */
+function principal_cf_decide(int $id, string $verdict, int $adminId): array
+{
+    if (!in_array($verdict, ['approved', 'rejected'], true)) {
+        return ['error' => 'Invalid verdict.'];
+    }
+    $p = principal_cf_by_id($id);
+    if (!$p) {
+        return ['error' => 'Principal C&F not found.'];
+    }
+    $code = (string) ($p['principal_code'] ?? '');
+    if ($verdict === 'approved' && $code === '') {
+        $code = make_principal_cf_code();
+        db()->prepare('UPDATE principal_cf SET principal_code = ? WHERE id = ?')->execute([$code, $id]);
+    }
+    db()->prepare('UPDATE principal_cf SET approval_status = ?, decided_at = NOW(), decided_by_label = ? WHERE id = ?')
+        ->execute([$verdict, 'Admin #' . $adminId, $id]);
+    return ['message' => 'Principal C&F ' . $verdict . ($verdict === 'approved' ? " with code $code." : '.')];
+}
+
+/** Approval decision for Zonal C&F. */
+function zonal_cf_decide(int $id, string $verdict, int $adminId): array
+{
+    if (!in_array($verdict, ['approved', 'rejected'], true)) {
+        return ['error' => 'Invalid verdict.'];
+    }
+    $z = zonal_cf_by_id($id);
+    if (!$z) {
+        return ['error' => 'Zonal C&F not found.'];
+    }
+    $full = $verdict === 'approved' ? child_cap_error('principal_cf', (int) $z['principal_cf_id'], $id) : '';
+    if ($full !== '') {
+        return ['error' => $full . ' Raise their limit first.'];
+    }
+    $code = (string) ($z['zonal_code'] ?? '');
+    if ($verdict === 'approved' && $code === '') {
+        $code = make_zonal_cf_code();
+        db()->prepare('UPDATE zonal_cf SET zonal_code = ? WHERE id = ?')->execute([$code, $id]);
+    }
+    db()->prepare('UPDATE zonal_cf SET approval_status = ?, decided_at = NOW(), decided_by_label = ? WHERE id = ?')
+        ->execute([$verdict, 'Admin #' . $adminId, $id]);
+    return ['message' => 'Zonal C&F ' . $verdict . ($verdict === 'approved' ? " with code $code." : '.')];
+}
+
+/** Approval decision for Distributor. */
+function distributor_decide(int $id, string $verdict, int $adminId): array
+{
+    if (!in_array($verdict, ['approved', 'rejected'], true)) {
+        return ['error' => 'Invalid verdict.'];
+    }
+    $d = distributor_by_id($id);
+    if (!$d) {
+        return ['error' => 'Distributor not found.'];
+    }
+    $full = $verdict === 'approved' && $d['zonal_cf_id'] !== null
+        ? child_cap_error('zonal_cf', (int) $d['zonal_cf_id'], $id) : '';
+    if ($full !== '') {
+        return ['error' => $full . ' Raise their limit first.'];
+    }
+    $code = (string) ($d['distributor_code'] ?? '');
+    if ($verdict === 'approved' && $code === '') {
+        $code = make_distributor_code();
+        db()->prepare('UPDATE distributors SET distributor_code = ? WHERE id = ?')->execute([$code, $id]);
+    }
+    db()->prepare('UPDATE distributors SET approval_status = ?, decided_at = NOW(), decided_by_label = ? WHERE id = ?')
+        ->execute([$verdict, 'Admin #' . $adminId, $id]);
+    return ['message' => 'Distributor ' . $verdict . ($verdict === 'approved' ? " with code $code." : '.')];
+}
+
 /* ---------- commission, tranche by tranche ----------
    A sale arrives as up to three payments — the booking amount, whatever a
    financier pays on the client's behalf, and the delivery amount — and each one
@@ -1879,6 +2589,9 @@ function stock_take_for_sale(string $ownerType, int $ownerId, string $product, i
 /** The tranches a sale can be made of, in the order they fall due. */
 const COMMISSION_STAGES = ['booking', 'loan', 'delivery'];
 
+/* Where a commission line is on its way to the partner's bank. */
+const COMMISSION_PAYOUT_STATUSES = ['pending', 'approved', 'disbursed'];
+
 /**
  * Saves the commission amounts, or says why it did not.
  *
@@ -1890,60 +2603,78 @@ const COMMISSION_STAGES = ['booking', 'loan', 'delivery'];
  */
 function commission_values_save(array $post): array
 {
-    $kinds = [
-        'dealer'   => 'The dealer commission',
-        'override' => 'The distributor override',
-        'direct'   => 'The distributor commission',
+    $tiers = [
+        'principal_cf' => 'The principal C&F rate',
+        'zonal_cf'     => 'The zonal C&F rate',
+        'distributor'  => 'The distributor rate',
+        'dealer'       => 'The dealer rate',
     ];
 
     $clean = [];
+    $total = 0.0;
 
-    foreach ($kinds as $kind => $label) {
-        foreach (array_keys(PAYMENT_PLAN) as $product) {
-            $name  = 'commission_' . $kind . '_' . $product;
-            $value = str_replace([',', PAYMENT_CURRENCY], '', trim((string) ($post[$name] ?? '')));
+    foreach ($tiers as $tier => $label) {
+        $name  = 'commission_rate_' . $tier;
+        $value = str_replace(['%', ','], '', trim((string) ($post[$name] ?? '')));
 
-            if (!is_numeric($value) || (float) $value < 0) {
-                return ['error' => $label . ' on a ' . $product . ' has to be an amount, zero or more.'];
-            }
-
-            $plan = payment_plan($product);
-            $sale = (float) $plan['booking'] + (float) $plan['delivery'];
-
-            /* paying out more than the sale brought in is a typo, not a policy */
-            if ((float) $value > $sale) {
-                return ['error' => $label . ' on a ' . $product . ' is more than the '
-                    . money($sale) . ' the sale is worth.'];
-            }
-
-            $clean[$name] = number_format((float) $value, 2, '.', '');
+        if (!is_numeric($value) || (float) $value < 0 || (float) $value > 100) {
+            return ['error' => $label . ' has to be a percentage between 0 and 100.'];
         }
+
+        $total            += (float) $value;
+        $clean[$name]      = number_format((float) $value, 2, '.', '');
     }
 
-    foreach (array_keys(PAYMENT_PLAN) as $product) {
-        $together = (float) $clean['commission_dealer_' . $product]
-            + (float) $clean['commission_override_' . $product];
-        $plan = payment_plan($product);
-        $sale = (float) $plan['booking'] + (float) $plan['delivery'];
-
-        if ($together > $sale) {
-            return ['error' => 'The dealer commission and the override on a ' . $product
-                . ' come to more than the ' . money($sale) . ' the sale is worth.'];
-        }
+    /* paying out more than the sale brought in is a typo, not a policy */
+    if ($total > 100) {
+        return ['error' => 'The four rates come to ' . number_format($total, 2)
+            . '% of the sale, which is more than the sale is worth.'];
     }
+
+    $gst = str_replace(['%', ','], '', trim((string) ($post['commission_gst_percent'] ?? '')));
+
+    if (!is_numeric($gst) || (float) $gst < 0 || (float) $gst > 100) {
+        return ['error' => 'The GST in the price has to be a percentage between 0 and 100.'];
+    }
+
+    $hours = trim((string) ($post['commission_release_hours'] ?? ''));
+
+    if (!ctype_digit($hours) || (int) $hours > 8760) {
+        return ['error' => 'The hold has to be a whole number of hours, up to 8760.'];
+    }
+
+    $clean['commission_gst_percent']   = number_format((float) $gst, 2, '.', '');
+    $clean['commission_release_hours'] = (string) (int) $hours;
 
     foreach ($clean as $name => $value) {
         save_setting($name, $value);
     }
 
-    return ['message' => 'Saved. A dealer sale of a stove from now on pays the dealer '
-        . money((float) $clean['commission_dealer_stove']) . ' and their distributor '
-        . money((float) $clean['commission_override_stove']) . '.'];
+    $plan = payment_plan('stove');
+    $sale = (float) $plan['booking'] + (float) $plan['delivery'];
+    $base = (float) $gst > 0 ? $sale / (1 + (float) $gst / 100) : $sale;
+
+    return ['message' => 'Saved. A stove sold by a dealer from now on pays the dealer '
+        . money(round($base * (float) $clean['commission_rate_dealer'] / 100, 2))
+        . ', and every line is held ' . (int) $hours . ' hour'
+        . ((int) $hours === 1 ? '' : 's') . ' before it releases.'];
 }
 
 /** What the client owes for one tranche of a sale. */
 function tranche_amount(array $app, string $stage): float
 {
+    /* A full payer has no loan: the one payment is the whole price, booked as
+       the booking tranche plus everything else on delivery, so the tranches
+       add up to the full amount exactly once. */
+    if (($app['payment_plan'] ?? '') === 'full_payment') {
+        if ($stage === 'loan') {
+            return 0.0;
+        }
+        if ($stage === 'delivery') {
+            return max(0.0, stage_amount($app, 'full') - (float) ($app['booking_amount'] ?? 0));
+        }
+    }
+
     if ($stage === 'loan') {
         return (float) ($app['loan_amount'] ?? 0);
     }
@@ -1967,7 +2698,58 @@ function commission_base(array $app, string $stage): array
         return ['paid' => 0.0, 'gst' => 0.0, 'base' => 0.0];
     }
 
+    /* percentage scheme: the rates apply to the payment with its GST taken out */
+    $gst = commission_gst_percent();
+
+    if ($gst > 0 && commission_is_percent_sale($app)) {
+        $base = round($paid / (1 + $gst / 100), 2);
+
+        return ['paid' => $paid, 'gst' => round($paid - $base, 2), 'base' => $base];
+    }
+
     return ['paid' => $paid, 'gst' => 0.0, 'base' => $paid];
+}
+
+/** GST included in the published prices, in percent. 0 = prices carry no GST to strip. */
+function commission_gst_percent(): float
+{
+    return max(0.0, (float) setting('commission_gst_percent', '0'));
+}
+
+/**
+ * Whether a sale earns the 20/15/10/6 percentage commission or the older flat amounts.
+ *
+ * Sales made before the switch keep their flat amounts, because their lines are
+ * already written and a line is never rewritten. `commission_percent_from` is
+ * stamped by the phase 5 migration; without it every sale is a percentage sale.
+ */
+function commission_is_percent_sale(array $app): bool
+{
+    $from = (string) setting('commission_percent_from', '');
+
+    return $from === '' || strtotime((string) ($app['created_at'] ?? 'now')) >= strtotime($from);
+}
+
+/**
+ * What each tier of the chain earns on a whole sale, for freezing onto the application.
+ *
+ * @return array{dealer: float, distributor: float, zonal: float, principal: float}
+ */
+function commission_percent_split(string $product, bool $dealer, bool $distributor, bool $zonal, bool $principal, bool $full = false, array $ids = []): array
+{
+    $plan  = payment_plan($product);
+    /* a full payer pays the whole price, so the chain is paid on all of it */
+    $base  = $full ? stage_amount(['product' => $product], 'full') : (float) $plan['booking'] + (float) $plan['delivery'];
+    $gst   = commission_gst_percent();
+    $base  = $gst > 0 ? $base / (1 + $gst / 100) : $base;
+    $share = static fn (bool $on, string $tier): float => $on ? round($base * commission_rate($tier, $ids[$tier] ?? null) / 100, 2) : 0.0;
+
+    return [
+        'dealer'      => $share($dealer, 'dealer'),
+        'distributor' => $share($distributor, 'distributor'),
+        'zonal'       => $share($zonal, 'zonal_cf'),
+        'principal'   => $share($principal, 'principal_cf'),
+    ];
 }
 
 /** Whether a tranche's payment has been verified, and so is earned. */
@@ -1978,6 +2760,84 @@ function tranche_is_paid(array $app, string $stage): bool
     }
 
     return !empty($app[$stage . '_paid_at']);
+}
+
+/**
+ * Who a sale belongs to, and what each tier of the chain is owed on it.
+ *
+ * One place for it, because a sale arrives either from the website form or from
+ * a spreadsheet import and the two have to freeze the same figures. A
+ * distributor carries their zonal C&F, who carries their principal, so naming
+ * the seller names the whole chain.
+ *
+ * @return array<string, int|float|null> columns to merge onto the application
+ */
+function commission_chain_columns(
+    string $product,
+    ?array $dealer,
+    ?array $distributor,
+    ?array $zonalDirect = null,
+    bool $full = false
+): array {
+    $split   = commission_split($product, $dealer, $distributor);
+    $zonalId = $distributor
+        ? (int) ($distributor['zonal_cf_id'] ?? 0)
+        : (int) ($zonalDirect['id'] ?? 0);
+    $principalId = null;
+
+    if ($zonalId > 0) {
+        /* The same test their own code is resolved by: a zonal who has been
+           switched off or not yet approved is not on the sale, and so neither is
+           the principal above them. Reading the link off the distributor without
+           it paid 15 % to a disabled partner. */
+        $stmt = db()->prepare(
+            "SELECT principal_cf_id FROM zonal_cf
+              WHERE id = ? AND is_active = 1 AND approval_status = 'approved'"
+        );
+        $stmt->execute([$zonalId]);
+        $row = $stmt->fetch();
+
+        if ($row === false) {
+            $zonalId = 0;
+        } else {
+            $principalId = (int) $row['principal_cf_id'] ?: null;
+        }
+    }
+
+    $columns = [
+        'dealer_id'              => $dealer ? (int) $dealer['id'] : null,
+        'dealer_commission'      => $split['dealer'],
+        'distributor_id'         => $distributor ? (int) $distributor['id'] : null,
+        'distributor_commission' => $split['distributor'],
+        'zonal_cf_id'            => $zonalId ?: null,
+        'principal_cf_id'        => $principalId,
+    ];
+
+    /* the 20/15/10/6 chain: every tier on the sale frozen at its own percentage
+       of the sale excluding GST, and earned tranche by tranche later */
+    if (commission_is_percent_sale(['created_at' => date('Y-m-d H:i:s')])) {
+        $pct = commission_percent_split(
+            $product,
+            (bool) $dealer,
+            (bool) $distributor,
+            $zonalId > 0,
+            (bool) $principalId,
+            $full,
+            [
+                'dealer'       => (int) ($dealer['id'] ?? 0),
+                'distributor'  => (int) ($distributor['id'] ?? 0),
+                'zonal_cf'     => $zonalId,
+                'principal_cf' => (int) $principalId,
+            ]
+        );
+
+        $columns['dealer_commission']      = $pct['dealer'];
+        $columns['distributor_commission'] = $pct['distributor'];
+        $columns['zonal_commission']       = $pct['zonal'];
+        $columns['principal_commission']   = $pct['principal'];
+    }
+
+    return $columns;
 }
 
 /**
@@ -2001,6 +2861,8 @@ function commission_write_lines(int $applicationId): void
         return;
     }
 
+    $percent = commission_is_percent_sale($app);
+
     /* The figures frozen onto the sale when it arrived, not today's: changing an
        amount under Settings never rewrites a sale already made. */
     $parties = [];
@@ -2023,15 +2885,30 @@ function commission_write_lines(int $applicationId): void
         ];
     }
 
+    if ($percent) {
+        /* the whole chain, each tier at its own percentage, on every verified tranche */
+        $parties = [];
+
+        foreach ([
+            'principal_cf' => 'principal_cf_id', 'zonal_cf' => 'zonal_cf_id',
+            'distributor' => 'distributor_id', 'dealer' => 'dealer_id',
+        ] as $tier => $column) {
+            if (!empty($app[$column])) {
+                $parties[] = ['type' => $tier, 'id' => (int) $app[$column], 'rate' => commission_rate($tier, (int) $app[$column])];
+            }
+        }
+    }
+
     $keep   = db()->prepare(
         'SELECT id FROM commission_lines
           WHERE application_id = ? AND party_type = ? AND party_id = ? AND stage = ?'
     );
     $insert = db()->prepare(
         'INSERT INTO commission_lines
-             (application_id, party_type, party_id, stage, paid_amount, gst_amount, base_amount, rate, amount)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+             (application_id, party_type, party_id, stage, paid_amount, gst_amount, base_amount, rate, amount, release_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
+    $releaseAt = date('Y-m-d H:i:s', time() + commission_release_hours() * 3600);
 
     foreach ($parties as $party) {
         foreach (COMMISSION_STAGES as $stage) {
@@ -2041,10 +2918,9 @@ function commission_write_lines(int $applicationId): void
             /* A flat amount is earned once, at delivery. The other stages are
                still looked at, so a line written under the old percentage
                scheme is taken away if its payment is ever un-verified. */
-            $earned = $stage === 'delivery'
-                && $app['status'] !== 'rejected'
+            $earned = $app['status'] !== 'rejected'
                 && tranche_is_paid($app, $stage)
-                && $party['amount'] > 0;
+                && ($percent ? $party['rate'] > 0 : ($stage === 'delivery' && $party['amount'] > 0));
 
             $base = commission_base($app, $stage);
 
@@ -2060,6 +2936,15 @@ function commission_write_lines(int $applicationId): void
 
             if ($existing) {
                 continue;   /* already written, and never rewritten */
+            }
+
+            if ($percent) {
+                $insert->execute([
+                    $applicationId, $party['type'], $party['id'], $stage, $base['paid'], $base['gst'],
+                    $base['base'], $party['rate'], round($base['base'] * $party['rate'] / 100, 2), $releaseAt,
+                ]);
+
+                continue;
             }
 
             $insert->execute([
@@ -2078,6 +2963,7 @@ function commission_write_lines(int $applicationId): void
                     ? min(999.99, round($party['amount'] / $base['base'] * 100, 2))
                     : 0,
                 round($party['amount'], 2),
+                $releaseAt,
             ]);
         }
     }
@@ -2095,7 +2981,15 @@ function commission_line_remove(int $lineId): void
     $claimed = db()->prepare('SELECT COUNT(*) FROM commission_voucher_lines WHERE commission_line_id = ?');
     $claimed->execute([$lineId]);
 
-    if ((int) $claimed->fetchColumn() > 0) {
+    /* a line the office has already paid out stays as the record of that transfer */
+    /* nor one whose money has already left the office down the chain */
+    $paid = db()->prepare(
+        "SELECT COUNT(*) FROM commission_lines
+          WHERE id = ? AND (payout_status IN ('proof_uploaded', 'disbursed') OR holder_type IS NOT NULL)"
+    );
+    $paid->execute([$lineId]);
+
+    if ((int) $claimed->fetchColumn() > 0 || (int) $paid->fetchColumn() > 0) {
         return;
     }
 
@@ -2118,6 +3012,12 @@ function commission_lines_for(int $applicationId, ?string $partyType = null, ?in
     $stmt->execute($params);
 
     return $stmt->fetchAll();
+}
+
+/** A percentage as it is read out: 10%, 7.5%, never 10.00%. */
+function rate_short(float $rate): string
+{
+    return rtrim(rtrim(number_format($rate, 2, '.', ''), '0'), '.') . '%';
 }
 
 /** Reading name for a tranche. */
@@ -2147,8 +3047,9 @@ function commission_earned(string $partyType, int $partyId): float
  */
 function commission_pipeline(string $partyType, int $partyId): float
 {
-    $column = $partyType === 'distributor' ? 'distributor_id' : 'dealer_id';
-    $frozen = $partyType === 'distributor' ? 'distributor_commission' : 'dealer_commission';
+    $column = $partyType . '_id';
+    $frozen = ['dealer' => 'dealer_commission', 'distributor' => 'distributor_commission',
+               'zonal_cf' => 'zonal_commission', 'principal_cf' => 'principal_commission'][$partyType] ?? 'dealer_commission';
 
     /* Summed in the database rather than by reading every sale into PHP: this
        is called once per row of the dealers and distributors lists, and an
@@ -2156,16 +3057,24 @@ function commission_pipeline(string $partyType, int $partyId): float
        payment, so a sale is either still to come in full or already earned in
        full — which makes it one WHERE rather than a loop. */
     $stmt = db()->prepare(
-        "SELECT COALESCE(SUM({$frozen}), 0)
-           FROM applications
-          WHERE {$column} = ? AND status <> 'rejected' AND delivery_paid_at IS NULL"
+        "SELECT COALESCE(SUM(GREATEST(0, a.{$frozen} - COALESCE((
+                    SELECT SUM(l.amount) FROM commission_lines l
+                     WHERE l.application_id = a.id AND l.party_type = ? AND l.party_id = ?), 0))), 0)
+           FROM applications a
+          WHERE a.{$column} = ? AND a.status <> 'rejected' AND a.delivery_paid_at IS NULL"
     );
-    $stmt->execute([$partyId]);
+    /* a percentage sale has already earned its paid tranches, so only the rest is pipeline */
+    $stmt->execute([$partyType, $partyId, $partyId]);
 
     return round((float) $stmt->fetchColumn(), 2);
 }
 
-/* ---------- commission vouchers ----------
+/* ---------- commission vouchers (RETIRED) ----------
+   Replaced by the pass-down transfers (commission_transfer() and friends):
+   nothing links to a voucher screen any more and nothing raises one. These
+   functions and the voucher tables stay as the record of claims settled that
+   way; do not build on them.
+
    Commission is earned when a sale completes. Getting it into a partner's bank
    is a separate journey: the claim travels up the chain and the money comes
    back down through C&F, the paying agent.
@@ -2238,6 +3147,16 @@ function voucher_claimable(string $partyType, int $partyId): array
            FROM commission_lines c
            JOIN applications a ON a.id = c.application_id
           WHERE c.party_type = ? AND c.party_id = ? AND c.amount > 0
+            /* the same sales commission_release_due() refuses to release: a
+               cancelled or refunded sale is not owed to anybody, and the claim
+               screen was still offering it */
+            AND a.status NOT IN ('rejected', 'cancelled', 'refunded', 'expired')
+            AND (c.release_at IS NULL OR c.release_at <= NOW())
+            /* There are two ways the money reaches a partner — a voucher through
+               C&F, and the office transferring against the payouts desk. A line
+               the office has already sent is gone from here, or the same tranche
+               would be paid twice. */
+            AND c.payout_status NOT IN ('proof_uploaded', 'disbursed')
             AND NOT EXISTS (
                   SELECT 1 FROM commission_voucher_lines l WHERE l.commission_line_id = c.id
                 )
@@ -2466,7 +3385,7 @@ function voucher_notify(int $voucherId, string $step, string $note = ''): void
             ? ['to' => 'distributor-of-dealer',
                'subject' => 'A dealer has claimed their commission',
                'line' => e((string) ($party['full_name'] ?? 'A dealer'))
-                   . ' has raised a claim. Approve it and it goes on your next bundle to C&amp;F.',
+                   . ' has a claim filed by the weekly run. Approve it and the run sends it to C&amp;F.',
                'link' => base_url() . '/distributor/payouts']
             : null,
         'bundled' => ['to' => 'cf',
@@ -2571,12 +3490,36 @@ function voucher_approve_dealer(int $voucherId, int $distributorId, string $acto
  * Turning one down. The lines are released with it — the sales go back to
  * claimable, so the next voucher picks them up rather than losing them.
  */
-function voucher_reject(int $voucherId, string $actor, string $reason = '', string $status = 'rejected'): string
-{
+function voucher_reject(
+    int $voucherId,
+    string $actor,
+    string $reason = '',
+    string $status = 'rejected',
+    array $from = [],
+    ?int $distributorId = null
+): string {
     $voucher = voucher($voucherId);
 
     if (!$voucher || in_array($voucher['status'], ['paid', 'rejected', 'cancelled'], true)) {
         return 'That voucher has already been settled.';
+    }
+
+    /* A desk may only turn down a claim that is actually on it. Without this a
+       distributor could reject another distributor's dealer, and C&F could
+       reject a claim that had not reached them — voucher_approve_dealer() has
+       always checked both and this, its opposite, did not. */
+    if ($from !== [] && !in_array($voucher['status'], $from, true)) {
+        return 'That voucher is not on your desk.';
+    }
+
+    if ($distributorId !== null) {
+        $dealer = (string) $voucher['party_type'] === 'dealer'
+            ? dealer_by_id((int) $voucher['party_id'])
+            : null;
+
+        if (!$dealer || (int) $dealer['distributor_id'] !== $distributorId) {
+            return 'That voucher is not yours to decide.';
+        }
     }
 
     db()->prepare(
@@ -2851,6 +3794,23 @@ function voucher_pay(int $bundleId, string $actor, string $reference = ''): stri
     db()->prepare('UPDATE commission_vouchers SET payment_reference = ? WHERE id = ?')
         ->execute([$reference !== '' ? $reference : null, $bundleId]);
 
+    /* The money has gone, so the lines it was raised over are closed. Without
+       this a line paid through C&F still read "Released" on every payouts
+       screen, as though the office had yet to send it. */
+    $ids = [$bundleId];
+
+    foreach (voucher_bundle_children($bundleId) as $child) {
+        $ids[] = (int) $child['id'];
+    }
+
+    $in = implode(',', array_fill(0, count($ids), '?'));
+    db()->prepare(
+        "UPDATE commission_lines SET payout_status = 'disbursed', disbursed_at = NOW()
+          WHERE payout_status <> 'disbursed'
+            AND id IN (SELECT commission_line_id FROM commission_voucher_lines
+                        WHERE voucher_id IN ($in) AND commission_line_id IS NOT NULL)"
+    )->execute($ids);
+
     return voucher_move_bundle($bundleId, 'paid', $actor, ['funded'],
         $reference !== '' ? 'Reference ' . $reference : null);
 }
@@ -3009,7 +3969,12 @@ function email_owner(string $email, string $selfRole = '', int $selfId = 0): ?st
         return null;
     }
 
-    foreach (['dealer' => 'dealers', 'distributor' => 'distributors'] as $role => $table) {
+    foreach ([
+        'principal_cf' => 'principal_cf',
+        'zonal_cf'     => 'zonal_cf',
+        'distributor'  => 'distributors',
+        'dealer'       => 'dealers',
+    ] as $role => $table) {
         $sql = 'SELECT 1 FROM `' . $table . '` WHERE LOWER(email) = ?';
         $args = [$email];
 
@@ -3039,9 +4004,11 @@ function email_owner(string $email, string $selfRole = '', int $selfId = 0): ?st
 function email_owner_message(string $owner): string
 {
     $labels = [
-        'dealer'      => 'a dealer',
-        'distributor' => 'a distributor',
-        'client'      => 'a customer',
+        'principal_cf' => 'a Principal C&F',
+        'zonal_cf'     => 'a Zonal C&F',
+        'distributor'  => 'a distributor',
+        'dealer'       => 'a dealer',
+        'client'       => 'a customer',
     ];
 
     return 'That email address already belongs to ' . ($labels[$owner] ?? 'somebody else')
@@ -3114,7 +4081,205 @@ function partner_values(array $post, string $role = '', int $id = 0): array
         return [$values, email_owner_message($owner)];
     }
 
+    /* Mandatory Terms & Conditions acceptance for partner registration */
+    if ($id === 0) {
+        if (empty($post['terms_accepted'])) {
+            return [$values, 'You must review and accept the '
+                . str_replace('&amp;', '&', partner_terms($role)['label']) . ' Terms & Conditions to proceed.'];
+        }
+        $values['terms_accepted']    = 1;
+        $values['terms_accepted_at'] = date('Y-m-d H:i:s');
+    }
+
     return [$values, ''];
+}
+
+/* ---------- partner terms ----------
+   A customer accepts one set of terms when they apply for an appliance. A partner
+   accepts another, and a Principal C&F, a Zonal C&F, a distributor and a dealer
+   do different jobs, so each reads the terms for their own.
+
+   Four clauses are the same in every set because the hierarchy is: where disputes
+   are heard, the 48-hour payment rule, non-cancellation, and the integrity of a
+   partner code. Each is worded for the role it is read by. The rest belong to the
+   role alone.
+
+   Items are [heading, html]. The html is written here, never taken from a
+   request, so it goes to the page as it is. */
+
+/**
+ * The Terms & Conditions one kind of partner agrees to.
+ *
+ * @return array{label: string, intro: string, summary: string, items: list<array{0: string, 1: string}>}
+ */
+function partner_terms(string $kind): array
+{
+    $kind = in_array($kind, ['principal_cf', 'zonal_cf', 'distributor', 'dealer'], true) ? $kind : 'dealer';
+
+    $water = static fn (string $who): array => ['Water Quality &amp; 1,200 TDS Limit',
+        'Manifold appliances and clean-fuel kits are engineered for water with Total Dissolved Solids not exceeding '
+        . '<strong>1,200 TDS</strong>. ' . $who . ' Running an appliance on water above 1,200 TDS causes scaling, '
+        . 'voids the product warranty and releases Manifold from liability for the fault.'];
+
+    $commission = static fn (string $tier, string $on): array => ['Commission, Vouchers &amp; Tax',
+        'Commission is paid at the percentage Manifold sets for the ' . $tier . ' tier, on ' . $on . ' excluding GST, '
+        . 'after the hold period shown in your portal and by bank transfer against a transfer reference. Manifold may '
+        . 'withhold or reverse commission on anything cancelled, refunded or rejected. Income-tax deducted at source '
+        . 'is taken as the law requires, and you are responsible for your own PAN, GST and returns.'];
+
+    $conduct = static fn (string $extra): array => ['KYC, Conduct &amp; Suspension',
+        'Your identity, PAN, GST and bank details must be true and kept current. ' . $extra . ' You will not misstate '
+        . 'a price, a warranty or a performance figure, or take payment outside the portal. Manifold may switch your '
+        . 'code off at once for a breach, which stops it booking commission; it may then end the appointment.'];
+
+    /* the four clauses every partner reads, worded for the role */
+    $shared = static fn (string $matters, string $payment, string $final, string $chain): array => [
+        ['Exclusive Legal Jurisdiction',
+            'Any dispute, controversy, claim, or legal proceeding arising under or in connection with partner '
+            . 'appointment, territory, orders, commissions, or vouchers' . $matters . ' shall be instituted strictly '
+            . 'and exclusively in the competent courts of <strong>Ahmedabad, Gujarat, India</strong>.'],
+        ['48-Hour Payment Policy',
+            'A loan customer may cancel in the portal for <strong>48 hours</strong> after their booking payment is '
+            . 'verified; after that, or once documents are verified, the booking is final. Bookings are not '
+            . 'cancelled automatically on a clock, and a full payer has no cancellation window. ' . $payment],
+        ['Strict Non-Cancellation Policy',
+            'Once applicant KYC and documentation are verified or payments are booked into the system, orders are '
+            . 'final and non-cancellable. No refund claims are entertained post-verification. ' . $final],
+        ['Hierarchy &amp; Code Integrity',
+            'Partner codes are permanent, non-transferable, and bound to the five-tier hierarchy (Manifold Office '
+            . '&rarr; Principal C&amp;F &rarr; Zonal C&amp;F &rarr; Distributor &rarr; Dealer). ' . $chain],
+    ];
+
+    $customerCancel = 'A loan customer may cancel in the portal for 48 hours after their booking payment is verified, '
+        . 'until their documents are verified; you may not promise any other refund.';
+
+    if ($kind === 'principal_cf') {
+        $label = 'Principal C&amp;F';
+        $own   = [
+            ['Appointment &amp; Territory',
+                'Manifold appoints you as a Principal C&amp;F, a Tier 2 partner reporting to the Manifold office, for '
+                . 'the states or regions agreed in writing. The appointment is non-exclusive unless it says otherwise '
+                . 'and does not make you an employee, agent or partner of Manifold.'],
+            ['Zonal C&amp;F Oversight',
+                'You answer for the Zonal C&amp;Fs you sponsor: the details given for each must be accurate, and a '
+                . 'Zonal C&amp;F can operate only once the office approves them. Their conduct, stock and sales '
+                . 'are part of your standing with Manifold.'],
+            ['Stock Orders &amp; Payment',
+                'You buy stock from the Manifold office at the price list in force on the day of the order. An order '
+                . 'is paid first, with a payment reference and proof of transfer, and the units are released only '
+                . 'when the office approves it. They are yours, and at your risk, from release.'],
+            $commission('Principal C&amp;F', 'the value of stock you buy'),
+            $water('You will see that every Zonal C&amp;F, distributor and dealer under you tells customers so.'),
+            $conduct('Anything you tell a Zonal C&amp;F about price, territory or payout must match these terms.'),
+        ];
+        $shared = $shared(
+            ', including any matter with the Zonal C&amp;Fs sponsored under you,',
+            'Payment for a stock order, and the proof of it, is due within 48 hours of the order being raised.',
+            'The same is true of your stock orders: once the office approves an order and releases the units, it '
+            . 'cannot be cancelled or returned. ' . $customerCancel,
+            'You sit at Tier 2: you report to the Manifold Office and Zonal C&amp;Fs report to you.'
+        );
+    } elseif ($kind === 'zonal_cf') {
+        $label = 'Zonal C&amp;F';
+        $own   = [
+            ['Appointment &amp; Territory',
+                'You are appointed as a Zonal C&amp;F, a regional hub sponsored by a Principal C&amp;F and approved by '
+                . 'the Manifold office, for the territory agreed in writing. The appointment is non-exclusive unless '
+                . 'it says otherwise and does not make you an employee, agent or partner of Manifold.'],
+            ['Distributor Network',
+                'You manage the distributors assigned to your territory. The details given for each must be accurate, '
+                . 'and a distributor can operate only once the office approves them. You may not reassign a '
+                . 'distributor to another Zonal C&amp;F yourself.'],
+            ['Stock Orders &amp; Payment',
+                'You buy stock from the tier above at the price list in force on the day of the order. An order is '
+                . 'paid first, with a payment reference and proof of transfer, and the units are released only when '
+                . 'it is approved. They are yours, and at your risk, from release.'],
+            $commission('Zonal C&amp;F', 'the value of stock you buy'),
+            $water('You will see that every distributor and dealer in your territory tells customers so.'),
+            $conduct('Anything you tell a distributor about price, territory or payout must match these terms.'),
+        ];
+        $shared = $shared(
+            ', including any matter with the distributors in your territory,',
+            'Payment for a stock order, and the proof of it, is due within 48 hours of the order being raised.',
+            'The same is true of your stock orders: once an order is approved and the units are released, it '
+            . 'cannot be cancelled or returned. ' . $customerCancel,
+            'You sit at Tier 3: you report to a Principal C&amp;F and distributors report to you.'
+        );
+    } elseif ($kind === 'distributor') {
+        $label = 'Distributor';
+        $own   = [
+            ['Appointment &amp; Territory',
+                'You are appointed as a distributor, a Tier 4 partner under a Zonal C&amp;F, to sell Manifold '
+                . 'appliances and sign up dealers in the area agreed in writing. The appointment is non-exclusive '
+                . 'unless it says otherwise and does not make you an employee, agent or partner of Manifold.'],
+            ['Dealer Network',
+                'You answer for the dealers you sign up: their details must be accurate, a dealer can operate only '
+                . 'once the office approves them, and you release stock to them only by approving a paid order.'],
+            ['Stock Orders &amp; Payment',
+                'You buy stock from the Manifold office at the price list in force on the day of the order. An order '
+                . 'is paid first, with a payment reference and proof of transfer, and the units are released only '
+                . 'when the office approves it. They are yours, and at your risk, from release.'],
+            ['Customer Payments &amp; Proof',
+                'On a sale made under your own code the customer pays you and uploads the proof in their portal. You '
+                . 'will verify or turn it down, with a reason, promptly and truthfully. The receipt a customer gets '
+                . 'is the one the portal issues; you will not issue your own.'],
+            $commission('distributor', 'the value of stock you buy'),
+            $water('You will see that every dealer under you, and every customer you sell to, is told so.'),
+            $conduct('Anything you tell a dealer about price, territory or payout must match these terms.'),
+        ];
+        $shared = $shared(
+            ', including any matter with the dealers you sign up,',
+            'A customer proof you receive must be verified or turned down within 48 hours of upload, and payment for '
+            . 'a stock order, with its proof, is due within 48 hours of the order being raised.',
+            'The same is true of your stock orders: once the office approves an order and releases the units, it '
+            . 'cannot be cancelled or returned. ' . $customerCancel,
+            'You sit at Tier 4: you report to a Zonal C&amp;F and dealers report to you.'
+        );
+    } else {
+        $label = 'Dealer';
+        $own   = [
+            ['Appointment &amp; Territory',
+                'You are appointed as a dealer, a Tier 5 partner under a distributor, to sell Manifold appliances to '
+                . 'customers in the area agreed with them. The appointment is non-exclusive unless it says otherwise '
+                . 'and does not make you an employee, agent or partner of Manifold.'],
+            ['Stock Orders &amp; Payment',
+                'You buy stock from your distributor at the price list in force on the day of the order. An order is '
+                . 'paid first, with a payment reference and proof of transfer, and the units are released only when '
+                . 'your distributor approves it. They are yours, and at your risk, from release.'],
+            ['Customer Payments &amp; Proof',
+                'On a sale made under your code the customer pays you and uploads the proof in their portal. You will '
+                . 'verify or turn it down, with a reason, promptly and truthfully. The receipt a customer gets is the '
+                . 'one the portal issues; you will not issue your own or accept a discount nobody recorded.'],
+            $commission('dealer', 'the value of stock you buy'),
+            $water('You will tell every customer so before the sale and again at installation.'),
+            ['Customer Data &amp; Conduct',
+                'A customer\'s details are used only to complete their sale and are never shared or sold. Your '
+                . 'identity, PAN, GST and bank details must be true and kept current, and you will not misstate a '
+                . 'price, a warranty or a performance figure. Manifold may switch your code off at once for a breach, '
+                . 'which stops it booking commission; it may then end the appointment.'],
+        ];
+        $shared = $shared(
+            ', including any matter with your distributor,',
+            'A customer proof you receive must be verified or turned down within 48 hours of upload, and payment for '
+            . 'a stock order, with its proof, is due within 48 hours of the order being raised.',
+            'The same is true of your stock orders: once your distributor approves an order and releases the units, '
+            . 'it cannot be cancelled or returned. ' . $customerCancel,
+            'You sit at Tier 5: you report to a distributor, and your code is the one customers quote.'
+        );
+    }
+
+    return [
+        'label'   => $label,
+        'intro'   => 'These terms are for ' . $label . ' partners only. They are separate from the terms a customer '
+            . 'accepts when they apply for an appliance.',
+        'summary' => 'the ' . str_replace('&amp;', '&', $label) . ' appointment, stock, commission, '
+            . '1,200 TDS water limit, Ahmedabad jurisdiction, 48-hour cancellation window and non-cancellation terms',
+        /* the water clause closes every set; usort is stable, so the rest keep their order */
+        'items'   => (static function (array $items): array {
+            usort($items, static fn (array $a, array $b): int => str_contains($a[0], 'TDS') <=> str_contains($b[0], 'TDS'));
+            return $items;
+        })([...$own, ...$shared]),
+    ];
 }
 
 /* ---------- distributors ----------
@@ -3130,7 +4295,14 @@ function distributor_for_code(string $code): ?array
         return null;
     }
 
-    $stmt = db()->prepare('SELECT * FROM distributors WHERE distributor_code = ? AND is_active = 1 LIMIT 1');
+    /* approval_status as well as is_active, exactly as dealer_for_code() and
+       zonal_cf_for_code() do: distributor_decide(..., 'rejected') leaves the row
+       active, so filtering on is_active alone kept a turned-down distributor's
+       code live and still booking them 10 % of every sale that quoted it. */
+    $stmt = db()->prepare(
+        "SELECT * FROM distributors
+          WHERE distributor_code = ? AND is_active = 1 AND approval_status = 'approved' LIMIT 1"
+    );
     $stmt->execute([$code]);
 
     return $stmt->fetch() ?: null;
@@ -3164,6 +4336,203 @@ function distributor_dealers(int $distributorId): array
     return $stmt->fetchAll();
 }
 
+/** Principal C&F by code, or null. */
+function principal_cf_for_code(string $code): ?array
+{
+    if ($code === '') {
+        return null;
+    }
+    $stmt = db()->prepare("SELECT * FROM principal_cf WHERE principal_code = ? AND is_active = 1 AND approval_status = 'approved' LIMIT 1");
+    $stmt->execute([$code]);
+    return $stmt->fetch() ?: null;
+}
+
+/** Principal C&F by id, or null. */
+function principal_cf_by_id(int $id): ?array
+{
+    $stmt = db()->prepare("SELECT * FROM principal_cf WHERE id = ? LIMIT 1");
+    $stmt->execute([$id]);
+    return $stmt->fetch() ?: null;
+}
+
+/** Zonal C&F by code, or null. */
+function zonal_cf_for_code(string $code): ?array
+{
+    if ($code === '') {
+        return null;
+    }
+    $stmt = db()->prepare("SELECT * FROM zonal_cf WHERE zonal_code = ? AND is_active = 1 AND approval_status = 'approved' LIMIT 1");
+    $stmt->execute([$code]);
+    return $stmt->fetch() ?: null;
+}
+
+/** Zonal C&F by id, or null. */
+function zonal_cf_by_id(int $id): ?array
+{
+    $stmt = db()->prepare("SELECT * FROM zonal_cf WHERE id = ? LIMIT 1");
+    $stmt->execute([$id]);
+    return $stmt->fetch() ?: null;
+}
+
+/** The Zonal C&F a distributor answers to, or null. */
+function zonal_cf_for_distributor(?array $distributor): ?array
+{
+    $id = (int) ($distributor['zonal_cf_id'] ?? 0);
+    return $id > 0 ? zonal_cf_by_id($id) : null;
+}
+
+/** The Principal C&F a Zonal C&F answers to, or null. */
+function principal_cf_for_zonal(?array $zonal): ?array
+{
+    $id = (int) ($zonal['principal_cf_id'] ?? 0);
+    return $id > 0 ? principal_cf_by_id($id) : null;
+}
+
+/**
+ * Resolves any partner code (Dealer, Distributor, Zonal C&F, Principal C&F)
+ * into its full mapped hierarchy chain.
+ */
+function partner_hierarchy_for_code(string $code): ?array
+{
+    $code = strtoupper(trim($code));
+    if ($code === '') {
+        return null;
+    }
+
+    $dealer       = null;
+    $distributor  = null;
+    $zonalCf      = null;
+    $principalCf  = null;
+    $tier         = null;
+
+    if (str_starts_with($code, 'MD')) {
+        $dealer = dealer_for_code($code);
+        if (!$dealer) {
+            return null;
+        }
+        $tier = 'dealer';
+        $distributor = distributor_for_dealer($dealer);
+        if ($distributor) {
+            $zonalCf = zonal_cf_for_distributor($distributor);
+            if ($zonalCf) {
+                $principalCf = principal_cf_for_zonal($zonalCf);
+            }
+        }
+    } elseif (str_starts_with($code, 'MX')) {
+        $distributor = distributor_for_code($code);
+        if (!$distributor) {
+            return null;
+        }
+        $tier = 'distributor';
+        $zonalCf = zonal_cf_for_distributor($distributor);
+        if ($zonalCf) {
+            $principalCf = principal_cf_for_zonal($zonalCf);
+        }
+    } elseif (str_starts_with($code, 'MZ')) {
+        $zonalCf = zonal_cf_for_code($code);
+        if (!$zonalCf) {
+            return null;
+        }
+        $tier = 'zonal_cf';
+        $principalCf = principal_cf_for_zonal($zonalCf);
+    } elseif (str_starts_with($code, 'MP')) {
+        $principalCf = principal_cf_for_code($code);
+        if (!$principalCf) {
+            return null;
+        }
+        $tier = 'principal_cf';
+    } else {
+        return null;
+    }
+
+    return [
+        'entered_code' => $code,
+        'tier'         => $tier,
+        'dealer'       => $dealer ? [
+            'id'      => (int) $dealer['id'],
+            'code'    => $dealer['dealer_code'],
+            'name'    => $dealer['full_name'],
+            'company' => $dealer['company'] ?? '',
+        ] : null,
+        'distributor'  => $distributor ? [
+            'id'      => (int) $distributor['id'],
+            'code'    => $distributor['distributor_code'],
+            'name'    => $distributor['full_name'],
+            'company' => $distributor['company'] ?? '',
+        ] : null,
+        'zonal_cf'     => $zonalCf ? [
+            'id'      => (int) $zonalCf['id'],
+            'code'    => $zonalCf['zonal_code'],
+            'name'    => $zonalCf['full_name'],
+            'company' => $zonalCf['company'] ?? '',
+        ] : null,
+        'principal_cf' => $principalCf ? [
+            'id'      => (int) $principalCf['id'],
+            'code'    => $principalCf['principal_code'],
+            'name'    => $principalCf['full_name'],
+            'company' => $principalCf['company'] ?? '',
+        ] : null,
+    ];
+}
+
+/**
+ * Commission hierarchy percentage for a given tier — or, when a party id is
+ * given, that one partner's own rate if their upline (or the office) set one
+ * (the `commission_rate` column; NULL means the tier default).
+ */
+function commission_rate(string $partyType, ?int $partyId = null): float
+{
+    static $own = [];
+
+    $table = [
+        'dealer'       => 'dealers',
+        'distributor'  => 'distributors',
+        'zonal_cf'     => 'zonal_cf',
+        'principal_cf' => 'principal_cf',
+    ][$partyType] ?? '';
+
+    if ($table !== '' && $partyId) {
+        $key = $partyType . ':' . $partyId;
+
+        if (!array_key_exists($key, $own)) {
+            $stmt = db()->prepare("SELECT commission_rate FROM $table WHERE id = ?");
+            $stmt->execute([$partyId]);
+            $own[$key] = $stmt->fetchColumn();
+        }
+
+        if ($own[$key] !== false && $own[$key] !== null) {
+            return max(0.0, (float) $own[$key]);
+        }
+    }
+
+    $default = COMMISSION_RATES_DEFAULT[$partyType] ?? 0.0;
+    return max(0.0, (float) setting('commission_rate_' . $partyType, (string) $default));
+}
+
+/** Commission auto-release hours from settings. */
+function commission_release_hours(): int
+{
+    return max(1, (int) setting('commission_release_hours', (string) COMMISSION_RELEASE_HOURS_DEFAULT));
+}
+
+/** Customer payment deadline hours from settings. */
+function payment_deadline_hours(): int
+{
+    return max(1, (int) setting('payment_deadline_hours', (string) PAYMENT_DEADLINE_HOURS_DEFAULT));
+}
+
+/** Stock warning threshold (yellow) in units. */
+function stock_warn_units(): int
+{
+    return max(1, (int) setting('stock_warn_units', (string) STOCK_WARN_UNITS_DEFAULT));
+}
+
+/** Stock critical threshold (red & requires approval) in units. */
+function stock_critical_units(): int
+{
+    return max(1, (int) setting('stock_critical_units', (string) STOCK_CRITICAL_UNITS_DEFAULT));
+}
+
 /** Everyone who applied with one distributor's own code or through their dealers. */
 /**
  * How many rows a drawer's own tables carry.
@@ -3192,6 +4561,7 @@ function distributor_clients(int $distributorId, int $limit = DRAWER_LIST_LIMIT)
         'SELECT a.id, a.reference_code, a.full_name, a.email, a.mobile_number, a.product, a.status,
                 a.created_at, a.booking_paid_at, a.delivery_paid_at, a.completed_at,
                 a.dealer_commission, a.distributor_commission, a.dealer_id,
+                a.kyc_verified_at, a.docs_verified_at, a.payment_deadline_at, a.cancellation_locked, a.payment_plan,
                 d.full_name AS dealer_name, d.dealer_code
            FROM applications a
            LEFT JOIN dealers d ON d.id = a.dealer_id
@@ -3264,7 +4634,8 @@ function dealer_clients(int $dealerId, int $limit = DRAWER_LIST_LIMIT): array
 {
     $stmt = db()->prepare(
         'SELECT id, reference_code, full_name, email, mobile_number, product, status,
-                created_at, booking_paid_at, delivery_paid_at, completed_at, dealer_commission
+                created_at, booking_paid_at, delivery_paid_at, completed_at, dealer_commission,
+                kyc_verified_at, docs_verified_at, payment_deadline_at, cancellation_locked, payment_plan
            FROM applications
           WHERE dealer_id = ?
           ORDER BY created_at DESC
@@ -3315,7 +4686,6 @@ function dealer_totals(int $dealerId): array
 function commission_totals(string $who, int $id): array
 {
     $column  = $who === 'distributor' ? 'distributor_id' : 'dealer_id';
-    $payouts = $who === 'distributor' ? 'distributor_payouts' : 'dealer_payouts';
 
     $stmt = db()->prepare(
         'SELECT COUNT(*) AS sales,
@@ -3326,8 +4696,14 @@ function commission_totals(string $who, int $id): array
     $stmt->execute([$id]);
     $row = $stmt->fetch() ?: [];
 
-    $paidStmt = db()->prepare('SELECT COALESCE(SUM(amount), 0) FROM ' . $payouts . ' WHERE ' . $column . ' = ?');
-    $paidStmt->execute([$id]);
+    /* Paid is what has reached them: lines disbursed, whether by a pass-down
+       transfer, a voucher C&F settled before those were retired, or the office's
+       old direct transfers. The payout tables only ever held the voucher ones. */
+    $paidStmt = db()->prepare(
+        "SELECT COALESCE(SUM(amount), 0) FROM commission_lines
+          WHERE party_type = ? AND party_id = ? AND payout_status = 'disbursed'"
+    );
+    $paidStmt->execute([$who, $id]);
 
     /* Earned is the sum of the tranches actually earned — one definition, read
        from `commission_lines` by every screen and every voucher alike. */
@@ -3371,8 +4747,7 @@ function commission_totals_map(string $who, array $ids): array
     }
 
     $column  = $who === 'distributor' ? 'distributor_id' : 'dealer_id';
-    $payouts = $who === 'distributor' ? 'distributor_payouts' : 'dealer_payouts';
-    $frozen  = $who === 'distributor' ? 'distributor_commission' : 'dealer_commission';
+    $frozen = $who === 'distributor' ? 'distributor_commission' : 'dealer_commission';
     $in      = implode(', ', array_fill(0, count($ids), '?'));
 
     $agg = static function (string $sql, array $args) use ($column): array {
@@ -3391,10 +4766,12 @@ function commission_totals_map(string $who, array $ids): array
            FROM applications WHERE ' . $column . ' IN (' . $in . ') GROUP BY ' . $column,
         $ids
     );
+    /* the same definition of paid as commission_totals(): disbursed lines */
     $paid = $agg(
-        'SELECT ' . $column . ' AS ' . $column . ', COALESCE(SUM(amount), 0) AS paid
-           FROM ' . $payouts . ' WHERE ' . $column . ' IN (' . $in . ') GROUP BY ' . $column,
-        $ids
+        'SELECT party_id AS ' . $column . ", COALESCE(SUM(amount), 0) AS paid
+           FROM commission_lines WHERE party_type = ? AND payout_status = 'disbursed'
+            AND party_id IN (" . $in . ') GROUP BY party_id',
+        array_merge([$who], $ids)
     );
     $pipe = $agg(
         'SELECT ' . $column . ' AS ' . $column . ", COALESCE(SUM(" . $frozen . "), 0) AS pipeline
@@ -3607,9 +4984,9 @@ function docs_resent(array $app): bool
         || strtotime((string) $app['docs_resent_at']) >= strtotime((string) $app['docs_rejected_at']);
 }
 
-function docs_verify(int $applicationId, int $adminId): array
+function docs_verify(int $applicationId, int $adminId, ?string $verifierLabel = null): array
 {
-    $stmt = db()->prepare('SELECT id, status, docs_verified_at FROM applications WHERE id = ?');
+    $stmt = db()->prepare('SELECT id, status, docs_verified_at, kyc_verified_at, payment_deadline_at, payment_plan FROM applications WHERE id = ?');
     $stmt->execute([$applicationId]);
     $app = $stmt->fetch();
 
@@ -3621,48 +4998,38 @@ function docs_verify(int $applicationId, int $adminId): array
         return ['error' => 'That application was turned down.'];
     }
 
-    if (!empty($app['docs_verified_at'])) {
+    if (!empty($app['docs_verified_at']) || !empty($app['kyc_verified_at'])) {
         return ['error' => 'The documents were already verified.'];
     }
 
-    if (!payment_stage_settled($applicationId, 'booking')) {
-        return ['error' => 'The booking payment has to be verified first.'];
-    }
+    $verifier = $verifierLabel ?: 'Staff #' . $adminId;
+    $fullPayer = is_full_payment($app);
 
-    /* Verifying clears an earlier refusal: the corrected paperwork is what is
-       being verified, and leaving the old reason on the row would keep telling
-       the applicant their documents were turned down after they were accepted. */
+    /* Verifying clears an earlier refusal and locks cancellation for good: the
+       window to cancel ends here, whatever time was left on it. */
     db()->prepare(
         'UPDATE applications
             SET docs_verified_at = NOW(), docs_verified_by = ?,
+                kyc_verified_at = NOW(), kyc_verified_by = ?,
+                cancellation_locked = 1,
                 docs_rejected_at = NULL, docs_rejected_by = NULL, docs_reject_reason = NULL,
+                kyc_reject_reason = NULL,
                 docs_resent_at = NULL
           WHERE id = ?'
-    )->execute([$adminId, $applicationId]);
+    )->execute([$adminId, $verifier, $applicationId]);
 
     $status = sync_application_status($applicationId);
 
     return [
         'message' => $status === 'complete'
             ? 'Documents verified. Everything on this sale is done.'
-            : 'Documents verified. The delivery payment is open to them now.',
+            : 'Documents verified. Cancellation is locked' . ($fullPayer ? '.' : ' and the delivery payment is open.'),
         'status'  => $status,
     ];
 }
 
 /**
  * The same verdict, the other way: the paperwork does not pass.
- *
- * Not terminal, and not a rejection of the application — the delivery payment
- * simply stays shut and the applicant is told what is wrong so they can send
- * corrected documents. The status does not move: it was `docs_pending` before
- * and it is `docs_pending` after, because that is still exactly what is true.
- *
- * The reason is required for the same reason it is on a refused payment: this
- * is the whole of what the applicant is told, and "your documents were not
- * accepted" with nothing after it is not something anybody can act on.
- *
- * Returns ['error' => …] or ['message' => …, 'reason' => …].
  */
 function docs_reject(int $applicationId, int $adminId, string $reason): array
 {
@@ -3684,26 +5051,451 @@ function docs_reject(int $applicationId, int $adminId, string $reason): array
         return ['error' => 'That application was turned down.'];
     }
 
-    if (!empty($app['docs_verified_at'])) {
-        return ['error' => 'The documents have already been verified. Ask an admin to reopen them first.'];
-    }
-
-    if (!payment_stage_settled($applicationId, 'booking')) {
-        return ['error' => 'The booking payment has to be verified first.'];
-    }
-
     $reason = mb_substr($reason, 0, 255);
 
     db()->prepare(
         'UPDATE applications
-            SET docs_rejected_at = NOW(), docs_rejected_by = ?, docs_reject_reason = ?
+            SET docs_rejected_at = NOW(), docs_rejected_by = ?, docs_reject_reason = ?,
+                kyc_reject_reason = ?,
+                docs_verified_at = NULL, docs_verified_by = NULL,
+                kyc_verified_at = NULL, kyc_verified_by = NULL
           WHERE id = ?'
-    )->execute([$adminId, $reason, $applicationId]);
+    )->execute([$adminId, $reason, $reason, $applicationId]);
 
     return [
         'message' => 'Documents turned down. The applicant has been emailed the reason.',
         'reason'  => $reason,
     ];
+}
+
+/** An application the office has let lapse. Nothing expires on a clock any more. */
+function is_application_expired(array $app): bool
+{
+    return ($app['status'] ?? '') === 'expired';
+}
+
+/**
+ * Whether the client can still cancel and take their money back.
+ *
+ * Only a loan customer, only between a verified booking payment and verified
+ * documents, and only for the 48 hours (payment_deadline_at, stamped when the
+ * booking was verified) after it. A full payer has no such window.
+ */
+function cancel_window_open(array $app): bool
+{
+    return !is_full_payment($app)
+        && ($app['status'] ?? '') === 'docs_pending'
+        && empty($app['cancellation_locked'])
+        && empty($app['docs_verified_at']) && empty($app['kyc_verified_at'])
+        && !empty($app['payment_deadline_at'])
+        && strtotime((string) $app['payment_deadline_at']) > time();
+}
+
+/**
+ * Partner direct payment collection with document verification precondition.
+ *
+ * Enforces:
+ * 1. Application exists and is not rejected/expired.
+ * 2. For a loan customer, KYC documents (Aadhaar & Electricity Bill) MUST be verified before payment
+ *    can be collected; a full payer has no finance documents and is exempt.
+ * 3. Records verified payment in payments table with receipt number.
+ * 4. Locks cancellation (cancellation_locked = 1).
+ * 5. Advances application status.
+ */
+function partner_collect_payment(
+    int $applicationId,
+    string $collectorType,
+    int $collectorId,
+    string $stage,
+    float $amount,
+    string $paymentMode,
+    ?string $reference,
+    ?string $proofPath = null
+): array {
+    $stmt = db()->prepare('SELECT * FROM applications WHERE id = ?');
+    $stmt->execute([$applicationId]);
+    $app = $stmt->fetch();
+
+    if (!$app) {
+        return ['error' => 'Application not found.'];
+    }
+
+    if (in_array($app['status'], ['rejected', 'cancelled', 'refunded'], true)) {
+        return ['error' => 'Cannot collect payment on a closed or rejected application.'];
+    }
+
+    if (is_application_expired($app)) {
+        return ['error' => 'This booking has expired.'];
+    }
+
+    // MANDATORY PRECONDITION: KYC documents must be verified — a loan customer only;
+    // a full payer has no finance documents to verify
+    if (!is_full_payment($app) && empty($app['kyc_verified_at']) && empty($app['docs_verified_at'])) {
+        return ['error' => 'Customer KYC documents (Aadhaar Card and Electricity Bill) must be verified before payment can be collected.'];
+    }
+
+    // MANDATORY PRECONDITION: a low-stock sale needs both approvals first
+    if (low_stock_blocked($app)) {
+        return ['error' => low_stock_block_reason()];
+    }
+
+    if (!in_array($stage, ['booking', 'delivery', 'full'], true)) {
+        return ['error' => 'Invalid payment stage.'];
+    }
+
+    if ($amount <= 0) {
+        return ['error' => 'Payment amount must be greater than zero.'];
+    }
+
+    $receipt = next_receipt_no($app);
+    $refText = trim(($reference ?: 'Direct-' . strtoupper($paymentMode)) . " [Collected by {$collectorType} #{$collectorId}]");
+
+    db()->prepare(
+        'INSERT INTO payments (application_id, stage, amount, reference, proof_path, status, receipt_no, decided_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())'
+    )->execute([
+        $applicationId,
+        $stage,
+        $amount,
+        $refText,
+        $proofPath,
+        'verified',
+        $receipt,
+    ]);
+
+    $updateSql = 'UPDATE applications SET cancellation_locked = 1, sale_channel = \'direct\'';
+    $params = [];
+
+    if ($stage === 'full') {
+        /* freeze the whole price on the row, as submit does for a full payer */
+        $updateSql .= ', payment_plan = \'full_payment\', payment_amount = ?, loan_amount = 0, booking_paid_at = NOW(), delivery_paid_at = NOW()';
+        $params[] = stage_amount($app, 'full');
+    } elseif ($stage === 'booking') {
+        $updateSql .= ', booking_paid_at = NOW()';
+    } elseif ($stage === 'delivery') {
+        $updateSql .= ', delivery_paid_at = NOW()';
+    }
+
+    if ($collectorType === 'dealer') {
+        $updateSql .= ', entered_by_dealer = ?';
+        $params[] = $collectorId;
+    } elseif ($collectorType === 'distributor') {
+        $updateSql .= ', entered_by_distributor = ?';
+        $params[] = $collectorId;
+    }
+
+    $updateSql .= ' WHERE id = ?';
+    $params[] = $applicationId;
+
+    db()->prepare($updateSql)->execute($params);
+
+    $newStatus = sync_application_status($applicationId);
+
+    /* Every field the receipt email and the PDF read. They were short of
+       'reference' and 'uploaded_at' before, which logged a warning on each
+       collection and left those lines blank on the customer's copy. */
+    $paymentRecord = [
+        'stage'       => $stage,
+        'amount'      => $amount,
+        'receipt_no'  => $receipt,
+        'status'      => 'verified',
+        'reference'   => $refText,
+        'proof_path'  => $proofPath,
+        'uploaded_at' => date('Y-m-d H:i:s'),
+        'decided_at'  => date('Y-m-d H:i:s'),
+    ];
+
+    $totals = payment_totals($app);
+
+    after_response(static function () use ($app, $paymentRecord, $totals): void {
+        send_receipt_email($app, $paymentRecord, $totals);
+    });
+
+    return [
+        'ok'         => true,
+        'success'    => true,
+        'message'    => "Payment of " . money($amount) . " collected and verified. Receipt {$receipt} issued.",
+        'receipt'    => $receipt,
+        'receipt_no' => $receipt,
+        'status'     => $newStatus,
+    ];
+}
+
+/**
+ * Whether this partner is the seller a customer pays on this sale.
+ *
+ * A dealer decides their own sales. A distributor decides only their direct
+ * sales — a sale through one of their dealers is paid to, and decided by, that
+ * dealer, even though the distributor's id is on the row for the override.
+ */
+function partner_sold(array $app, string $type, int $partnerId): bool
+{
+    if ($partnerId < 1) {
+        return false;
+    }
+
+    if ($type === 'dealer') {
+        return (int) ($app['dealer_id'] ?? 0) === $partnerId;
+    }
+
+    if ($type === 'distributor') {
+        return empty($app['dealer_id']) && (int) ($app['distributor_id'] ?? 0) === $partnerId;
+    }
+
+    return false;
+}
+
+/**
+ * Who the customer pays on a sale made with a partner's code: the dealer if
+ * there is one, else the distributor. Null means they pay the company.
+ */
+function application_payee(array $app): ?array
+{
+    if (!empty($app['dealer_id'])) {
+        $row  = dealer_by_id((int) $app['dealer_id']);
+        $kind = 'dealer';
+        $code = $row['dealer_code'] ?? '';
+    } elseif (!empty($app['distributor_id'])) {
+        $row  = distributor_by_id((int) $app['distributor_id']);
+        $kind = 'distributor';
+        $code = $row['distributor_code'] ?? '';
+    } else {
+        return null;
+    }
+
+    if (!$row) {
+        return null;
+    }
+
+    $out = ['kind' => ucfirst($kind), 'type' => $kind, 'id' => (int) $row['id'], 'code' => (string) $code];
+
+    foreach (['full_name', 'mobile_number', 'alt_mobile_number', 'email', 'upi_id',
+              'bank_name', 'bank_account', 'bank_ifsc'] as $column) {
+        $out[$column] = $row[$column] ?? null;
+    }
+
+    $out['full_name'] = (string) $out['full_name'];
+
+    return $out;
+}
+
+/** Customer-uploaded receipts waiting on this partner's decision, oldest first. */
+function partner_pending_proofs(string $type, int $partnerId): array
+{
+    $where = [
+        'dealer'      => 'a.dealer_id = ?',
+        'distributor' => 'a.distributor_id = ? AND a.dealer_id IS NULL',
+    ][$type] ?? null;
+
+    if ($where === null) {
+        return [];
+    }
+
+    $stmt = db()->prepare(
+        "SELECT p.id, p.stage, p.amount, p.reference, p.proof_path, p.uploaded_at,
+                a.id AS application_id, a.reference_code, a.full_name, a.product, a.payment_plan
+           FROM payments p
+           JOIN applications a ON a.id = p.application_id
+          WHERE p.status = 'pending' AND $where
+          ORDER BY p.uploaded_at, p.id"
+    );
+    $stmt->execute([$partnerId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Verify or turn down one uploaded receipt.
+ *
+ * One path for the office and for the partner a customer paid directly, so the
+ * status, receipt number, emails and commission that follow are identical
+ * whoever decides.
+ *
+ * $actor = ['type' => 'admin'|'dealer'|'distributor', 'id' => int, 'label' => ?string].
+ * A partner may only decide a payment on a sale partner_sold() gives them.
+ *
+ * Returns ['error' => …, 'code' => http status] or
+ *         ['ok' => true, 'status' => …, 'payment' => …, 'receipt' => ?string].
+ */
+function payment_decide(int $paymentId, string $decision, array $actor, string $reason = ''): array
+{
+    $type    = (string) ($actor['type'] ?? '');
+    $actorId = (int) ($actor['id'] ?? 0);
+
+    if (!in_array($decision, ['verify', 'reject'], true)) {
+        return ['error' => 'Unknown decision.', 'code' => 422];
+    }
+
+    $stmt = db()->prepare('SELECT * FROM payments WHERE id = ?');
+    $stmt->execute([$paymentId]);
+    $payment = $stmt->fetch();
+    $app     = $payment ? application_by_id((int) $payment['application_id']) : null;
+
+    if (!$payment || !$app) {
+        return ['error' => 'Payment not found.', 'code' => 404];
+    }
+
+    if (!($type === 'admin' && $actorId > 0) && !partner_sold($app, $type, $actorId)) {
+        return ['error' => 'That payment is not yours to decide.', 'code' => 403];
+    }
+
+    if ($payment['status'] !== 'pending') {
+        return ['error' => 'That payment has already been decided.', 'code' => 409];
+    }
+
+    $reason = trim($reason);
+
+    /* the applicant is emailed this, and it is the whole of what they are told */
+    if ($decision === 'reject' && $reason === '') {
+        return ['error' => 'Say why the payment is being turned down - the applicant is emailed the reason.', 'code' => 422];
+    }
+
+    /* decided_by is an office user's key; a partner is not one, so their name
+       goes on the reference instead, the way partner_collect_payment() does */
+    $adminId   = $type === 'admin' ? $actorId : null;
+    $reference = $payment['reference'];
+
+    if ($type !== 'admin') {
+        $who       = trim((string) ($actor['label'] ?? '')) ?: $type . ' #' . $actorId;
+        $reference = mb_substr(trim((string) $reference . ' [' . ($decision === 'verify' ? 'Verified' : 'Turned down')
+            . ' by ' . $who . ']'), 0, 120);
+    }
+
+    $applicationId = (int) $app['id'];
+    mailer();
+
+    if ($decision === 'verify') {
+        $receipt = next_receipt_no($app);
+
+        $upd = db()->prepare(
+            "UPDATE payments
+                SET status = 'verified', receipt_no = ?, decided_at = NOW(), decided_by = ?,
+                    reject_reason = NULL, reference = ?
+              WHERE id = ? AND status = 'pending'"
+        );
+        $upd->execute([$receipt, $adminId, $reference, $paymentId]);
+
+        /* two people deciding at once: only the first one counts */
+        if ($upd->rowCount() !== 1) {
+            return ['error' => 'That payment has already been decided.', 'code' => 409];
+        }
+
+        $status = sync_application_status($applicationId);
+
+        $payment['status']     = 'verified';
+        $payment['receipt_no'] = $receipt;
+        $payment['reference']  = $reference;
+        $payment['decided_at'] = date('Y-m-d H:i:s');
+
+        $totals = payment_totals($app);
+
+        /* the receipt carries a generated PDF and takes seconds to send */
+        after_response(static function () use ($app, $payment, $totals): void {
+            send_receipt_email($app, $payment, $totals);
+        });
+
+        return ['ok' => true, 'status' => $status, 'payment' => $payment, 'receipt' => $receipt];
+    }
+
+    $upd = db()->prepare(
+        "UPDATE payments
+            SET status = 'rejected', reject_reason = ?, decided_at = NOW(), decided_by = ?, reference = ?
+          WHERE id = ? AND status = 'pending'"
+    );
+    $upd->execute([mb_substr($reason, 0, 255), $adminId, $reference, $paymentId]);
+
+    if ($upd->rowCount() !== 1) {
+        return ['error' => 'That payment has already been decided.', 'code' => 409];
+    }
+
+    $status = sync_application_status($applicationId);
+
+    /* the proof is no longer evidence of anything — take it off disk */
+    if (!empty($payment['proof_path'])) {
+        $path = PAYMENT_PROOF_DIR . '/' . basename((string) $payment['proof_path']);
+
+        if (is_file($path)) {
+            unlink($path);
+        }
+    }
+
+    $payment['status'] = 'rejected';
+    $rejectTotals      = payment_totals($app);
+
+    after_response(static function () use ($app, $reason, $payment, $rejectTotals): void {
+        send_payment_rejected_email($app, $reason, $payment, $rejectTotals);
+    });
+
+    return ['ok' => true, 'status' => $status, 'payment' => $payment, 'receipt' => null];
+}
+
+/**
+ * A partner dashboard's Approve / Turn down on a customer's payment proof.
+ * Returns the error to show, or redirects back with a flash on success.
+ */
+function partner_proofs_handle(string $type, int $partnerId, string $label, string $flashKey): string
+{
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+        || !in_array($_POST['action'] ?? '', ['proof_verify', 'proof_reject'], true)) {
+        return '';
+    }
+
+    csrf_check();
+
+    $decision = $_POST['action'] === 'proof_verify' ? 'verify' : 'reject';
+    $done     = payment_decide(
+        (int) ($_POST['payment_id'] ?? 0),
+        $decision,
+        ['type' => $type, 'id' => $partnerId, 'label' => $label],
+        (string) ($_POST['reason'] ?? '')
+    );
+
+    if (isset($done['error'])) {
+        return $done['error'];
+    }
+
+    $_SESSION[$flashKey] = $decision === 'verify'
+        ? 'Payment verified. Receipt ' . $done['receipt'] . ' is on its way to the customer.'
+        : 'Payment turned down. The customer has been emailed your reason.';
+
+    header('Location: ./#proofs');
+    exit;
+}
+
+/**
+ * Streams the proof file of one payment to the partner it was paid to, or 404.
+ * The file comes from the payments row, never from the request.
+ */
+function serve_partner_payment_proof(string $type, int $partnerId, int $paymentId): void
+{
+    $stmt = db()->prepare('SELECT application_id, proof_path FROM payments WHERE id = ?');
+    $stmt->execute([$paymentId]);
+    $payment = $stmt->fetch();
+    $app     = $payment ? application_by_id((int) $payment['application_id']) : null;
+
+    $name = $payment ? basename((string) $payment['proof_path']) : '';
+    $full = PAYMENT_PROOF_DIR . '/' . $name;
+
+    if (!$app || $name === '' || !partner_sold($app, $type, $partnerId) || !is_file($full)
+        || strpos(realpath($full) ?: '', realpath(PAYMENT_PROOF_DIR) ?: "\0") !== 0) {
+        http_response_code(404);
+        exit('File not found.');
+    }
+
+    $mime = [
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png'  => 'image/png',
+        'webp' => 'image/webp',
+        'pdf'  => 'application/pdf',
+    ][strtolower(pathinfo($name, PATHINFO_EXTENSION))] ?? 'application/octet-stream';
+
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . filesize($full));
+    header('Content-Disposition: inline; filename="' . $name . '"');
+    header('X-Content-Type-Options: nosniff');
+    readfile($full);
+    exit;
 }
 
 /**
@@ -4107,7 +5899,10 @@ function csrf_check(): void
     $sent = $_POST['csrf'] ?? '';
 
     if (!is_string($sent) || !hash_equals(csrf_token(), $sent)) {
-        http_response_code(419);
+        /* 419 is Laravel's, not an HTTP one: Apache does not know it and sends
+           500 instead, so every stale form post read as a server fault in the
+           logs. 403 says the same thing in a code the server can return. */
+        http_response_code(403);
         exit('Session expired. Go back, reload the page and try again.');
     }
 }
@@ -4382,14 +6177,21 @@ function field_groups(string $type): array
                                       'nationality' => 'Nationality', 'gender' => 'Gender',
                                       'occupation' => 'Occupation', 'mobile_number' => 'Mobile',
                                       'alt_mobile_number' => 'Alternative mobile', 'email' => 'Email'],
-                'Identity &amp; address proofs' => ['id_number' => 'ID / passport number',
+                'Identity &amp; address proofs' => ['aadhaar_number' => 'Aadhaar number',
+                                                   'aadhaar_doc_path' => 'Aadhaar card',
+                                                   'electricity_bill_path' => 'Electricity bill',
+                                                   'registration_number' => 'Vehicle registration number',
+                                                   'rc_doc_path' => 'Vehicle RC',
+                                                   'dl_doc_path' => 'Driving licence',
+                                                   'id_number' => 'ID / passport number',
                                                    'id_document_path' => 'ID document (proof of identity)',
                                                    'residence_proof_path' => 'Residence proof (proof of address)'],
             ],
 
             'Site &amp; address' => [
-                'Address' => ['house_number' => 'House / unit', 'street' => 'Street', 'city' => 'City',
+                'Residential address' => ['house_number' => 'House / unit', 'street' => 'Street', 'city' => 'City',
                               'state' => 'State', 'country' => 'Country', 'pin_code' => 'Pin code'],
+                'Delivery address' => ['delivery_address' => 'Delivery address', 'landmark' => 'Landmark'],
                 'Property' => ['property_type' => 'Property type', 'property_type_other' => 'Property type (other)',
                                'ownership_status' => 'Ownership', 'household_members' => 'Household members',
                                'existing_fuel' => 'Existing fuel', 'existing_fuel_other' => 'Existing fuel (other)'],
@@ -4460,8 +6262,17 @@ function render_value(string $key, $value): string
         return ((int) $value) === 1 ? 'Yes' : 'No';
     }
 
-    if (in_array($key, ['id_document_path', 'residence_proof_path'], true)) {
-        $label = $key === 'id_document_path' ? 'ID document' : 'Proof of residence';
+    $documents = [
+        'aadhaar_doc_path'      => 'Aadhaar card',
+        'electricity_bill_path' => 'Electricity bill',
+        'rc_doc_path'           => 'Vehicle RC',
+        'dl_doc_path'           => 'Driving licence',
+        'id_document_path'      => 'ID document',
+        'residence_proof_path'  => 'Proof of residence',
+    ];
+
+    if (isset($documents[$key])) {
+        $label = $documents[$key];
 
         return '<a class="link-arrow" data-viewer="' . $label . '" href="file.php?path='
             . e(rawurlencode((string) $value)) . '">Open file <i class="bi bi-box-arrow-up-right"></i></a>';
@@ -4506,4 +6317,436 @@ function format_date(?string $value): string
     }
 
     return date('j M Y', strtotime($value));
+}
+
+/** mailto: link for an email cell; enquiries get a subject and their reference. */
+function email_mailto(string $type, array $row): string
+{
+    $href = 'mailto:' . rawurlencode((string) $row['email']);
+
+    if ($type === 'contact') {
+        $href .= '?subject=' . rawurlencode('Re: Your enquiry to Manifold Clean Energy (ENQ-' . (int) $row['id'] . ')')
+            . '&body=' . rawurlencode('Hello ' . (string) ($row['name'] ?? '') . ",
+
+");
+    }
+
+    return $href;
+}
+
+/** Gmail web compose for an enquiry reply — opens in a new tab, no mail app needed. */
+function enquiry_reply_url(array $row): string
+{
+    return 'https://mail.google.com/mail/?' . http_build_query([
+        'view' => 'cm',
+        'fs'   => 1,
+        'to'   => (string) $row['email'],
+        'su'   => 'Re: Your enquiry to Manifold Clean Energy (ENQ-' . (int) $row['id'] . ')',
+        'body' => 'Hello ' . (string) ($row['name'] ?? '') . ",\n\n",
+    ], '', '&', PHP_QUERY_RFC3986);
+}
+
+/* ---------- commission release and pass-down ----------
+   pending -> approved (released commission_release_hours after the tranche was
+   verified; the money is now travelling) -> disbursed (it has reached its own
+   party). proof_uploaded belonged to the retired "office pays everybody" step
+   and is no longer written.
+
+   Released money does not go from the office to each partner. It goes back down
+   the road the sale came up — office -> Principal C&F -> Zonal C&F ->
+   Distributor -> Dealer — one hop at a time, each hop a commission_transfers
+   row with the sender's UTR and receipt. A tier that is not on the sale is
+   skipped, so a distributor with no zonal is paid by the office directly.
+
+   commission_lines.holder_* says who has a line's money right now (NULL = the
+   office). The route is read from the sale's own chain columns, not today's
+   hierarchy: a distributor who moves to another zonal does not drag the money
+   of their earlier sales with them — the zonal who was on those sales holds it
+   and passes it on. */
+
+/** Moves every line whose release time has passed from pending to approved. Idempotent. Returns lines moved. */
+function commission_release_due(): int
+{
+    $stmt = db()->prepare(
+        "UPDATE commission_lines c
+           JOIN applications a ON a.id = c.application_id
+            SET c.payout_status = 'approved'
+          WHERE c.payout_status = 'pending' AND c.release_at IS NOT NULL AND c.release_at <= NOW()
+            AND a.status NOT IN ('rejected', 'cancelled', 'refunded', 'expired')"
+    );
+    $stmt->execute();
+
+    return $stmt->rowCount();
+}
+
+/** Reading names for the tiers money passes through. */
+const COMMISSION_TIER_LABELS = [
+    'office'       => 'Manifold office',
+    'principal_cf' => 'Principal C&F',
+    'zonal_cf'     => 'Zonal C&F',
+    'distributor'  => 'Distributor',
+    'dealer'       => 'Dealer',
+];
+
+/**
+ * The hops a line's money takes, top first, ending with its own party:
+ * [[tier, id], ...]. Only tiers above the party that are on the sale.
+ */
+function commission_line_route(array $line): array
+{
+    $route = [];
+
+    foreach (['principal_cf' => 'principal_cf_id', 'zonal_cf' => 'zonal_cf_id', 'distributor' => 'distributor_id'] as $tier => $column) {
+        if ($tier === $line['party_type']) {
+            break;
+        }
+
+        if (!empty($line[$column])) {
+            $route[] = [$tier, (int) $line[$column]];
+        }
+    }
+
+    $route[] = [(string) $line['party_type'], (int) $line['party_id']];
+
+    return $route;
+}
+
+/** Where a held line goes next: [tier, id], or null if its holder is not on its road. */
+function commission_next_hop(array $line): ?array
+{
+    $route = commission_line_route($line);
+
+    if ($line['holder_type'] === null) {
+        return $route[0];
+    }
+
+    foreach ($route as $i => [$tier, $id]) {
+        if ($tier === $line['holder_type'] && $id === (int) $line['holder_id']) {
+            return $route[$i + 1] ?? null;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Everything one holder has to pass on, grouped by who it goes to next:
+ * ['tier:id' => ['to_type', 'to_id', 'amount', 'lines' => [...]]].
+ *
+ * $holderType 'office' = lines nobody has been sent yet. Only the office's
+ * money is held back for a sale that has since been cancelled or refunded:
+ * money already sent down is with somebody, and only they can pass it on.
+ * $lock reads FOR UPDATE, for commission_transfer()'s transaction.
+ */
+function commission_passdown_due(string $holderType, ?int $holderId, bool $lock = false): array
+{
+    commission_release_due();   /* a hold that ran out counts now, not at the next cron */
+
+    $sql = "SELECT c.id, c.application_id, c.party_type, c.party_id, c.stage, c.amount,
+                   c.holder_type, c.holder_id, a.reference_code,
+                   a.principal_cf_id, a.zonal_cf_id, a.distributor_id
+              FROM commission_lines c JOIN applications a ON a.id = c.application_id
+             WHERE c.payout_status = 'approved' AND ";
+
+    if ($holderType === 'office') {
+        $sql   .= "c.holder_type IS NULL AND a.status NOT IN ('rejected', 'cancelled', 'refunded', 'expired')";
+        $params = [];
+    } else {
+        $sql   .= 'c.holder_type = ? AND c.holder_id = ?';
+        $params = [$holderType, (int) $holderId];
+    }
+
+    $stmt = db()->prepare($sql . ' ORDER BY c.id' . ($lock ? ' FOR UPDATE' : ''));
+    $stmt->execute($params);
+
+    $due = [];
+
+    foreach ($stmt->fetchAll() as $line) {
+        $hop = commission_next_hop($line);
+
+        if ($hop === null) {
+            continue;
+        }
+
+        $key = $hop[0] . ':' . $hop[1];
+        $due[$key] ??= ['to_type' => $hop[0], 'to_id' => $hop[1], 'amount' => 0.0, 'lines' => []];
+        $due[$key]['amount']  = round($due[$key]['amount'] + (float) $line['amount'], 2);
+        $due[$key]['lines'][] = $line;
+    }
+
+    return $due;
+}
+
+/** A partner's row by tier, or null. */
+function commission_party_row(string $type, int $id): ?array
+{
+    $fn = ['principal_cf' => 'principal_cf_by_id', 'zonal_cf' => 'zonal_cf_by_id',
+           'distributor' => 'distributor_by_id', 'dealer' => 'dealer_by_id'][$type] ?? null;
+
+    return $fn ? $fn($id) : null;
+}
+
+/** Who a transfer end is, in words. */
+function commission_party_name(string $type, ?int $id): string
+{
+    if ($type === 'office') {
+        return COMMISSION_TIER_LABELS['office'];
+    }
+
+    $row = commission_party_row($type, (int) $id);
+
+    return $row ? (string) $row['full_name'] : (COMMISSION_TIER_LABELS[$type] ?? $type) . ' #' . (int) $id;
+}
+
+/**
+ * Records one hop: $fromType has sent $toType/$toId everything it holds that is
+ * on its way to them. Returns [transferId, ''] or [0, error].
+ *
+ * The amount is never the sender's to choose — it is what they hold for that
+ * recipient, read under lock. $expect is what the page showed: if more money
+ * was released or another tab already sent it, the sum no longer matches and
+ * the transfer is refused rather than recording a UTR against a figure that
+ * was not the one actually paid. A recipient who is not the next hop of any
+ * line the sender holds has nothing due, which is what makes "only your own
+ * direct children" hold without a separate check.
+ */
+function commission_transfer(
+    string $fromType,
+    ?int $fromId,
+    string $toType,
+    int $toId,
+    float $expect,
+    string $utr,
+    string $proofPath,
+    string $actor
+): array {
+    $utr = mb_substr(trim($utr), 0, 120);
+
+    if ($utr === '' || $proofPath === '') {
+        return [0, 'A UTR / reference number and the transfer receipt are both required.'];
+    }
+
+    /* a sale can still name a partner whose row has since been deleted: nobody
+       could sign in to receive or pass that money on, so the office sorts it out */
+    if (commission_party_row($toType, $toId) === null) {
+        return [0, 'That partner no longer exists, so nothing can be sent to them.'];
+    }
+
+    $pdo = db();
+    $pdo->beginTransaction();
+
+    try {
+        $due = commission_passdown_due($fromType, $fromId, true)[$toType . ':' . $toId] ?? null;
+
+        if ($due === null || $due['amount'] <= 0) {
+            $pdo->rollBack();
+
+            return [0, 'Nothing you hold is due to that partner — it may already have been sent.'];
+        }
+
+        if (abs($due['amount'] - $expect) >= 0.005) {
+            $pdo->rollBack();
+
+            return [0, 'What is due to ' . commission_party_name($toType, $toId) . ' is now '
+                . money($due['amount']) . ', not ' . money($expect) . '. Check the figure and send it again.'];
+        }
+
+        $pdo->prepare(
+            'INSERT INTO commission_transfers (from_type, from_id, to_type, to_id, amount, utr, proof_path, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([$fromType, $fromType === 'office' ? null : $fromId, $toType, $toId,
+                    $due['amount'], $utr, $proofPath, mb_substr($actor, 0, 160)]);
+        $transferId = (int) $pdo->lastInsertId();
+
+        $ids = array_map(static fn (array $l): int => (int) $l['id'], $due['lines']);
+        $in  = implode(',', array_fill(0, count($ids), '?'));
+
+        $pdo->prepare("UPDATE commission_lines SET holder_type = ?, holder_id = ? WHERE id IN ($in)")
+            ->execute(array_merge([$toType, $toId], $ids));
+
+        /* the recipient's own lines have arrived: this hop's receipt is theirs */
+        $pdo->prepare(
+            "UPDATE commission_lines
+                SET payout_status = 'disbursed', disbursed_at = NOW(), transfer_id = ?,
+                    proof_path = ?, payout_utr = ?, proof_by = ?, proof_at = NOW()
+              WHERE id IN ($in) AND party_type = ? AND party_id = ?"
+        )->execute(array_merge([$transferId, $proofPath, $utr, mb_substr($actor, 0, 160)], $ids, [$toType, $toId]));
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        throw $e;
+    }
+
+    commission_transfer_notify($transferId);
+
+    return [$transferId, ''];
+}
+
+/**
+ * The POST side of every pass-down form (office, C&F desk, distributor):
+ * stores the receipt, then commission_transfer(). Returns [flash, error].
+ * A refused transfer takes its uploaded receipt with it.
+ */
+function commission_transfer_post(string $fromType, ?int $fromId, string $actor): array
+{
+    $toType = (string) ($_POST['to_type'] ?? '');
+
+    if (!in_array($toType, ['principal_cf', 'zonal_cf', 'distributor', 'dealer'], true)) {
+        return ['', 'Pick who the money is going to.'];
+    }
+
+    $proof = store_upload('proof_file', PAYMENT_PROOF_DIR);
+
+    if ($proof === null) {
+        return ['', 'Attach the transfer receipt (JPG, PNG, WebP or PDF, up to 10 MB).'];
+    }
+
+    $toId = (int) ($_POST['to_id'] ?? 0);
+    [$id, $error] = commission_transfer($fromType, $fromId, $toType, $toId,
+        (float) ($_POST['expect'] ?? 0), (string) ($_POST['utr'] ?? ''), $proof, $actor);
+
+    if ($id === 0) {
+        @unlink(PAYMENT_PROOF_DIR . '/' . $proof);
+
+        return ['', $error];
+    }
+
+    return ['Recorded the transfer to ' . commission_party_name($toType, $toId) . '.', ''];
+}
+
+/**
+ * Transfers one party sent ($side 'from') or received ($side 'to'), newest
+ * first, with both ends' names.
+ */
+function commission_transfers_for(string $side, string $type, ?int $id, int $limit = 200): array
+{
+    $sql = $side === 'from'
+        ? ($type === 'office' ? "SELECT * FROM commission_transfers WHERE from_type = 'office'"
+                              : 'SELECT * FROM commission_transfers WHERE from_type = ? AND from_id = ?')
+        : 'SELECT * FROM commission_transfers WHERE to_type = ? AND to_id = ?';
+    $stmt = db()->prepare($sql . ' ORDER BY id DESC LIMIT ' . max(1, $limit));
+    $stmt->execute($side === 'from' && $type === 'office' ? [] : [$type, (int) $id]);
+
+    $rows = $stmt->fetchAll();
+
+    foreach ($rows as &$row) {
+        $row['from_name'] = commission_party_name((string) $row['from_type'], $row['from_id'] === null ? null : (int) $row['from_id']);
+        $row['to_name']   = commission_party_name((string) $row['to_type'], (int) $row['to_id']);
+    }
+
+    return $rows;
+}
+
+/** Emails the recipient of a transfer that it has been sent. Best effort. */
+function commission_transfer_notify(int $transferId): void
+{
+    $stmt = db()->prepare('SELECT * FROM commission_transfers WHERE id = ?');
+    $stmt->execute([$transferId]);
+    $t   = $stmt->fetch();
+    $row = $t ? commission_party_row((string) $t['to_type'], (int) $t['to_id']) : null;
+
+    if (!$row || empty($row['email'])) {
+        return;
+    }
+
+    require_once __DIR__ . '/emails.php';
+
+    $page = ['principal_cf' => '/cfdesk/payouts?as=principal_cf', 'zonal_cf' => '/cfdesk/payouts?as=zonal_cf',
+             'distributor' => '/distributor/payouts', 'dealer' => '/dealer/payouts'][$t['to_type']];
+
+    send_commission_transfer_email(
+        (string) $row['email'],
+        (string) $row['full_name'],
+        (float) $t['amount'],
+        (string) $t['utr'],
+        commission_party_name((string) $t['from_type'], $t['from_id'] === null ? null : (int) $t['from_id']),
+        base_url() . $page
+    );
+}
+
+/**
+ * Streams the receipt of one transfer to either end of it, or answers 404.
+ * The file comes from the transfer row; the caller has to be its sender or recipient.
+ */
+function commission_transfer_receipt_send(int $transferId, string $partyType, int $partyId): void
+{
+    $stmt = db()->prepare(
+        'SELECT proof_path FROM commission_transfers
+          WHERE id = ? AND ((from_type = ? AND from_id = ?) OR (to_type = ? AND to_id = ?))'
+    );
+    $stmt->execute([$transferId, $partyType, $partyId, $partyType, $partyId]);
+
+    commission_proof_stream((string) ($stmt->fetchColumn() ?: ''));
+}
+
+/** Reading name for a payout status. */
+function payout_status_label(string $status): string
+{
+    return ['pending' => 'Held ' . commission_release_hours() . ' h', 'approved' => 'Released',
+            'proof_uploaded' => 'Proof uploaded', 'disbursed' => 'Disbursed'][$status] ?? ucfirst($status);
+}
+
+/**
+ * A partner's commission lines with their payout status, newest first.
+ * $partyId null = every party of those types (the C&F desk, which sees the whole tier).
+ */
+function commission_payout_lines(array $partyTypes, ?int $partyId = null, int $limit = 200): array
+{
+    commission_release_due();   /* a line whose hold has run out shows as released without waiting for cron */
+
+    $in     = implode(',', array_fill(0, count($partyTypes), '?'));
+    $params = $partyTypes;
+    $sql    = "SELECT c.*, a.reference_code
+                 FROM commission_lines c JOIN applications a ON a.id = c.application_id
+                WHERE c.party_type IN ($in)";
+
+    if ($partyId !== null) {
+        $sql     .= ' AND c.party_id = ?';
+        $params[] = $partyId;
+    }
+
+    $stmt = db()->prepare($sql . ' ORDER BY c.id DESC LIMIT ' . max(1, $limit));
+    $stmt->execute($params);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Streams the transfer receipt on one commission line, or answers 404.
+ * The file is found from the line, and the line has to belong to the caller —
+ * nothing here takes a path from the request.
+ */
+function commission_receipt_send(int $lineId, array $partyTypes, ?int $partyId = null): void
+{
+    $lines = array_filter(
+        commission_payout_lines($partyTypes, $partyId, 100000),
+        static fn (array $l): bool => (int) $l['id'] === $lineId && !empty($l['proof_path'])
+    );
+    commission_proof_stream($lines ? (string) reset($lines)['proof_path'] : '');
+}
+
+/** Streams one file out of PAYMENT_PROOF_DIR, or 404. The name is always read off a row, never the request. */
+function commission_proof_stream(string $name): void
+{
+    $name = basename($name);
+    $full = PAYMENT_PROOF_DIR . '/' . $name;
+
+    if ($name === '' || !is_file($full) || strpos(realpath($full) ?: '', realpath(PAYMENT_PROOF_DIR) ?: '') !== 0) {
+        http_response_code(404);
+        exit('File not found.');
+    }
+
+    $mime = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp',
+             'pdf' => 'application/pdf'][strtolower(pathinfo($name, PATHINFO_EXTENSION))] ?? 'application/octet-stream';
+
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . filesize($full));
+    header('Content-Disposition: inline; filename="' . $name . '"');
+    header('X-Content-Type-Options: nosniff');
+    readfile($full);
+    exit;
 }

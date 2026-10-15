@@ -23,6 +23,42 @@ foreach (array_keys($srcGroups) as $groupLabel) {
 ?>
 <div class="drawer-source" id="detail-<?= e($srcType) ?>-<?= $srcId ?>" hidden>
 
+  <?php if ($srcIsApp && !empty($srcRow['low_stock_hold'])): ?>
+    <div class="decide-bar decide-bar--refund" style="border-color:var(--critical);background:rgba(217,45,32,0.06);margin-bottom:14px">
+      <div class="decide-bar__text">
+        <p class="decide-bar__title" style="color:var(--critical)"><i class="bi bi-shield-exclamation"></i> Low-Stock Hold Active (&le; 100 units)</p>
+        <p class="decide-bar__note">
+          Seller stock is at or below the 100-unit threshold. Dual approval is required before fulfillment.<br>
+          Manifold Office: <?= !empty($srcRow['low_stock_approved_by_office']) ? '<strong style="color:var(--good)">Approved</strong>' : '<span style="color:var(--critical)">Pending Approval</span>' ?> &bull;
+          Principal C&amp;F: <?= !empty($srcRow['low_stock_approved_by_principal']) ? '<strong style="color:var(--good)">Approved</strong>' : '<span style="color:var(--critical)">Pending Approval</span>' ?>
+        </p>
+      </div>
+
+      <?php
+        /* The Principal C&F signs one half and the office signs the other, so the
+           button offers the half belonging to whoever is reading, and goes once
+           they have signed it. */
+        $srcIsPrincipal = in_array($user['role'] ?? 'admin', ['principal_cf', 'cf'], true);
+        $srcMyApproval  = $srcIsPrincipal ? 'low_stock_approved_by_principal' : 'low_stock_approved_by_office';
+        $srcMyDesk      = $srcIsPrincipal ? 'Principal C&F' : 'Manifold Office';
+      ?>
+      <?php if (empty($srcRow[$srcMyApproval])): ?>
+        <div class="decide-bar__actions">
+          <form method="post" action="status.php"
+                data-confirm="Grant <?= e($srcMyDesk) ?> low-stock approval for <?= e($srcRow['full_name']) ?>?">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="approve_low_stock">
+            <input type="hidden" name="id" value="<?= $srcId ?>">
+            <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
+            <button type="submit" class="btn btn--primary">
+              <i class="bi bi-shield-check" aria-hidden="true"></i> Approve as <?= e($srcMyDesk) ?>
+            </button>
+          </form>
+        </div>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+
   <?php /* An application waiting on the office is waiting on one decision, and
            this is where somebody is when they have finished reading it. The
            same two answers as the row, at the point the reading ends. */ ?>
@@ -76,7 +112,7 @@ foreach (array_keys($srcGroups) as $groupLabel) {
         <p class="decide-bar__note">
           <?= e($srcRow['full_name']) ?> cancelled on
           <?= e(format_datetime((string) ($srcRow['delivery_choice_at'] ?? $srcRow['created_at']))) ?>,
-          after the documents were verified. Transfer the money back to the account they paid from,
+          before the documents were verified. Transfer the money back to the account they paid from,
           then record it here — that emails them the confirmation and closes the order.
         </p>
       </div>
@@ -161,4 +197,15 @@ foreach (array_keys($srcGroups) as $groupLabel) {
       <?php $srcIndex++; ?>
     <?php endforeach; ?>
   </div>
+
+  <?php /* An enquiry is answered in a new tab: Gmail's web compose, with the sender's
+           address, a subject and a greeting already filled in. A mailto: link did
+           nothing on machines with no mail app registered. */ ?>
+  <?php if ($srcType === 'contact' && filter_var((string) $srcRow['email'], FILTER_VALIDATE_EMAIL)): ?>
+    <div class="drawer__reply">
+      <a class="btn btn--primary" href="<?= e(enquiry_reply_url($srcRow)) ?>" target="_blank" rel="noopener">
+        <i class="bi bi-reply" aria-hidden="true"></i> Reply
+      </a>
+    </div>
+  <?php endif; ?>
 </div>

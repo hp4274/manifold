@@ -18,12 +18,12 @@
   <meta property="og:url" content="https://manifoldcleanenergy.co.in/apply-stove">
   <meta property="og:title" content="Stove Application - Kinetic Hydrogen Cooking Stove | Manifold Clean Energy">
   <meta property="og:description" content="Apply for the Manifold Kinetic Hydrogen Cooking Stove. Complete the application to reserve a technical assessment and installation slot.">
-  <meta property="og:image" content="https://manifoldcleanenergy.co.in/assets/images/product-stove.webp">
+  <meta property="og:image" content="https://manifoldcleanenergy.co.in/assets/images/product-stove.png">
   <meta property="og:image:alt" content="Stove Application - Kinetic Hydrogen Cooking Stove | Manifold Clean Energy">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Stove Application - Kinetic Hydrogen Cooking Stove | Manifold Clean Energy">
   <meta name="twitter:description" content="Apply for the Manifold Kinetic Hydrogen Cooking Stove. Complete the application to reserve a technical assessment and installation slot.">
-  <meta name="twitter:image" content="https://manifoldcleanenergy.co.in/assets/images/product-stove.webp">
+  <meta name="twitter:image" content="https://manifoldcleanenergy.co.in/assets/images/product-stove.png">
 
 <!-- Figtree and Bootstrap Icons, self-hosted. The grid is ours, in style.css. -->
 <link rel="stylesheet" href="assets/vendor/figtree/figtree.css">
@@ -130,7 +130,7 @@
   <div class="container-x">
     <p class="eyebrow eyebrow--rule reveal">Application</p>
     <div class="section-head reveal">
-      <h2 class="section-title">Six short steps, one submission.</h2>
+      <h2 class="section-title">Three short steps, one submission.</h2>
       <p class="section-sub">Fields marked with an asterisk are required. Everything else helps us prepare a faster, more accurate assessment.</p>
     </div>
 
@@ -141,7 +141,7 @@
       <section class="form-step reveal">
         <div class="form-step__head">
           <span class="form-step__num">01</span>
-          <h2>Who you are</h2>
+          <h2>Applicant &amp; delivery details</h2>
         </div>
 
         <h3 class="form-substep">Applicant information</h3>
@@ -723,47 +723,6 @@
           </div>
         </div>
 
-        <h3 class="form-substep">Identification details</h3>
-
-
-        <div class="field-grid">
-          <div class="field">
-            <label for="id_number">National ID / Passport number</label>
-            <input id="id_number" name="id_number" type="text" maxlength="20"
-                   pattern="[A-Za-z0-9\-\/]{4,20}"
-                   title="The number as printed, letters and digits only">
-          </div>
-
-          <div class="field">
-            <label for="id_document_file">Upload copy of ID</label>
-            <label class="upload" for="id_document_file">
-              <i class="bi bi-upload" aria-hidden="true"></i>
-              <span class="upload__name" data-file-label>Choose file…</span>
-              <input id="id_document_file" name="id_document_file" type="file" accept="image/*,application/pdf">
-            </label>
-            <span class="field-hint">JPG, PNG or PDF, max 10 MB</span>
-          </div>
-
-          <div class="field">
-            <label for="residence_proof_file">Residence proof</label>
-            <label class="upload" for="residence_proof_file">
-              <i class="bi bi-upload" aria-hidden="true"></i>
-              <span class="upload__name" data-file-label>Choose file…</span>
-              <input id="residence_proof_file" name="residence_proof_file" type="file" accept="image/*,application/pdf">
-            </label>
-            <span class="field-hint">Utility bill or tenancy contract</span>
-          </div>
-        </div>
-
-        <p class="form-info">Files are stored securely and are only visible to our review team.</p>
-      </section>
-
-      <section class="form-step reveal">
-        <div class="form-step__head">
-          <span class="form-step__num">02</span>
-          <h2>Where it goes</h2>
-        </div>
-
         <h3 class="form-substep">Residential address</h3>
 
 
@@ -776,6 +735,13 @@
           <div class="field">
             <label for="street">Street name <span class="req" aria-hidden="true">*</span></label>
             <input id="street" name="street" type="text" autocomplete="address-line1" required>
+          </div>
+
+          <div class="field">
+            <label for="pin_code">Pin code <span class="req" aria-hidden="true">*</span></label>
+            <input id="pin_code" name="pin_code" type="text" autocomplete="postal-code"
+                   inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                   title="Six digits" required>
           </div>
 
           <div class="field">
@@ -965,12 +931,25 @@
               <option value="Zimbabwe">Zimbabwe</option>
             </select>
           </div>
+        </div>
+
+        <h3 class="form-substep">Delivery address</h3>
+
+        <label class="field-consent" for="delivery_same">
+          <input id="delivery_same" name="delivery_same" type="checkbox" value="1" checked>
+          <span>Delivery address is the same as my residential address</span>
+        </label>
+
+        <div class="field-grid">
+          <div class="field field--wide">
+            <label for="delivery_address">Delivery address <span class="req" aria-hidden="true" hidden>*</span></label>
+            <textarea id="delivery_address" name="delivery_address" rows="3" maxlength="1000" autocomplete="shipping street-address"></textarea>
+            <span class="field-hint">Only needed if it should go somewhere other than your residential address.</span>
+          </div>
 
           <div class="field">
-            <label for="pin_code">Pin code <span class="req" aria-hidden="true">*</span></label>
-            <input id="pin_code" name="pin_code" type="text" autocomplete="postal-code"
-                   inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
-                   title="Six digits" required>
+            <label for="landmark">Landmark</label>
+            <input id="landmark" name="landmark" type="text" autocomplete="address-line3" placeholder="e.g. Near City Garden">
           </div>
         </div>
 
@@ -1035,19 +1014,13 @@
 
       <section class="form-step reveal">
         <div class="form-step__head">
-          <span class="form-step__num">03</span>
-          <h2>What you need</h2>
+          <span class="form-step__num">02</span>
+          <h2>Technical specs &amp; documents</h2>
         </div>
 
-        <h3 class="form-substep">Product requirement</h3>
-
+        <h3 class="form-substep">Installation &amp; operational requirements</h3>
 
         <div class="field-grid">
-          <div class="field">
-            <label for="units_required">Number of stoves required</label>
-            <input id="units_required" name="units_required" type="number"
-                   min="1" max="99" step="1" inputmode="numeric">
-          </div>
 
           <div class="field">
             <label for="intended_usage">Intended usage</label>
@@ -1145,40 +1118,61 @@
             </div>
           </fieldset>
         </div>
+
+        <div data-kyc-block>
+          <h3 class="form-substep">Document verification (KYC)</h3>
+
+          <div class="field-grid">
+            <div class="field">
+              <label for="aadhaar_number">Aadhaar number <span class="req" aria-hidden="true">*</span></label>
+              <input id="aadhaar_number" name="aadhaar_number" type="text" inputmode="numeric" maxlength="14" placeholder="12-digit Aadhaar number" required>
+            </div>
+
+            <div class="field">
+              <label for="aadhaar_doc_file">Aadhaar card upload <span class="req" aria-hidden="true">*</span></label>
+              <label class="upload" for="aadhaar_doc_file">
+                <i class="bi bi-upload" aria-hidden="true"></i>
+                <span class="upload__name" data-file-label>Choose file…</span>
+                <input id="aadhaar_doc_file" name="aadhaar_doc_file" type="file" accept="image/*,application/pdf" required>
+              </label>
+              <span class="field-hint">Front &amp; back or combined PDF, max 10 MB</span>
+            </div>
+
+            <div class="field">
+              <label for="electricity_bill_file">Electricity bill upload <span class="req" aria-hidden="true">*</span></label>
+              <label class="upload" for="electricity_bill_file">
+                <i class="bi bi-upload" aria-hidden="true"></i>
+                <span class="upload__name" data-file-label>Choose file…</span>
+                <input id="electricity_bill_file" name="electricity_bill_file" type="file" accept="image/*,application/pdf" required>
+              </label>
+              <span class="field-hint">Recent utility bill of the installation address</span>
+            </div>
+          </div>
+
+          <p class="form-info"><i class="bi bi-shield-check"></i> Files are stored securely and are only visible to our verification team.</p>
+        </div>
       </section>
 
       <section class="form-step reveal">
         <div class="form-step__head">
-          <span class="form-step__num">04</span>
-          <h2>Paying for it</h2>
+          <span class="form-step__num">03</span>
+          <h2>Payment &amp; confirmation</h2>
         </div>
 
-        <h3 class="form-substep">Payment information</h3>
-
+        <h3 class="form-substep">Payment choice</h3>
 
         <div class="field-grid">
           <div class="field">
-            <label for="payment_method">Preferred payment method</label>
-            <select id="payment_method" name="payment_method">
-              <option value="" selected>Select…</option>
-              <option value="Loan">Loan</option>
-              <option value="Installments">Installments</option>
-              <option value="Lease-to-Own">Lease-to-Own</option>
+            <label for="payment_plan">Payment option <span class="req" aria-hidden="true">*</span></label>
+            <select id="payment_plan" name="payment_plan" required>
+              <option value="booking" selected>Loan — pay ₹3,500 booking now, balance financed</option>
+              <option value="full_payment">Full payment — ₹35,000 promotional price till 31 Dec, MRP ₹50,000 (no loan)</option>
             </select>
-          </div>
-
-          <div class="field">
-            <label for="financing_option">Preferred financing option</label>
-            <input id="financing_option" name="financing_option" type="text">
-          </div>
-
-          <div class="field">
-            <label for="bank_name">Bank name</label>
-            <input id="bank_name" name="bank_name" type="text">
+            <span class="field-hint">Loan: pay the ₹3,500 booking amount once the office approves you. For 48 hours after it is verified, and until your documents are verified, you can cancel for a full refund. Full payment: no document verification — the office approves your application, then you pay and we deliver.</span>
           </div>
         </div>
 
-        <h3 class="form-substep">Referral</h3>
+        <h3 class="form-substep">Partner code &amp; referral</h3>
 
 
         <div class="field-grid">
@@ -1207,6 +1201,7 @@
                    autocapitalize="characters" spellcheck="false" placeholder="e.g. MD7K2QP4">
             <span class="field-hint">The code of the dealer or distributor you are buying through.
               A code from their own link arrives here already filled in.</span>
+            <div class="field-hint" data-partner-lookup aria-live="polite"></div>
           </div>
 
           <div class="field">
@@ -1218,13 +1213,7 @@
               is verified. It is a different code from the dealer's above; both can be used together.</span>
           </div>
         </div>
-      </section>
-
-      <section class="form-step reveal">
-        <div class="form-step__head">
-          <span class="form-step__num">05</span>
-          <h2>Before you send it</h2>
-        </div>
+      
 
         <h3 class="form-substep">Environmental impact</h3>
 
@@ -1265,21 +1254,19 @@
           <input id="testimonial_consent" name="testimonial_consent" type="checkbox">
           <span>I consent to being contacted for a customer testimonial.</span>
         </label>
-      </section>
+      
 
-      <section class="form-step reveal">
-        <div class="form-step__head">
-          <span class="form-step__num">06</span>
-          <h2>Terms &amp; conditions</h2>
-        </div>
+        <h3 class="form-substep">Terms &amp; conditions</h3>
 
         <div class="terms-box" tabindex="0" role="region" aria-label="Terms and conditions">
           <ul>
-            <li>Submission of this application does not constitute approval, sale, financing or installation of the appliance.</li>
+            <li><strong>48-Hour Cancellation Window:</strong> For the Loan option, once your booking amount has been received and verified you may cancel the booking for a full refund within forty-eight (48) hours, provided your documents have not yet been verified. Full-payment applicants have no document verification step: the office approves the application, then the full price is paid.</li>
+            <li><strong>Strict No-Cancellation Policy:</strong> Once your documents have been verified, or the 48-hour cancellation window has passed, or on a full-payment order once payment is confirmed, bookings, orders, and product allocations are strictly final, non-cancellable, and non-refundable.</li>
+            <li><strong>Exclusive Jurisdiction:</strong> Any dispute, difference, or claim arising out of or related to this application, booking, or purchase shall be subject exclusively to the competent courts of Ahmedabad, Gujarat, India.</li>
+            <li>Submission of this application does not constitute an automatic grant or immediate delivery until technical assessment and, for the Loan option, document verification are completed.</li>
             <li>The Company reserves the right to accept, reject or defer any application without assigning a reason.</li>
-            <li>All information provided by the applicant must be accurate and complete.</li>
-            <li>The applicant authorises the Company to conduct verification, technical assessment and site inspection where required.</li>
-            <li>Any false or misleading information may result in immediate rejection of the application.</li>
+            <li>The applicant authorises the Company to conduct verification, technical assessment, and site inspection where required.</li>
+            <li>All information and documentation submitted by the applicant must be authentic, valid, and accurate. Any misrepresentation will result in immediate termination of the application without refund.</li>
             <li>Installation timelines are estimates and may vary depending on location, product availability and regulatory approvals.</li>
             <li>If the financing application is rejected, any amount already paid towards the order is refunded in full.</li>
             <li>Product specifications, performance figures and operating requirements are subject to change without prior notice.</li>
@@ -1287,13 +1274,16 @@
             <li>The applicant consents to the collection and processing of personal information for application review, installation, customer support and warranty administration.</li>
             <li>Financing approvals, where applicable, remain subject to the independent review of the financing institution.</li>
             <li>Warranty terms shall be governed by the official Warranty Certificate supplied with the appliance upon installation.</li>
+            <li><strong>Water Quality &amp; TDS Limit:</strong> Safe and warranty-compliant operation requires source water Total Dissolved Solids (TDS) strictly at or below 1,200 ppm (TDS &le; 1200). Supplying water exceeding 1,200 TDS voids equipment warranty and performance guarantees.</li>
           </ul>
           <p><strong>Processing fee:</strong> An application processing fee may apply. It covers administrative review, technical assessment, verification and site inspection. Payment of it does not guarantee approval, allocation, financing or installation — and if the financing application is rejected, any amount already paid is refunded in full.</p>
+          <p><strong>Processing &amp; Booking Terms:</strong> Booking amounts secure priority production allocation and technical dispatch scheduling. Terms are governed under Ahmedabad legal jurisdiction.</p>
         </div>
+        <p class="terms-download"><a class="btn-pill btn-pill--outline" href="terms-pdf?kind=stove" target="_blank" rel="noopener">Download PDF <i class="bi bi-download" aria-hidden="true"></i></a></p>
 
         <label class="field-consent" for="terms_accepted">
           <input id="terms_accepted" name="terms_accepted" type="checkbox" required>
-          <span>I have read and accept the Terms &amp; Conditions above. <span class="req" aria-hidden="true">*</span></span>
+          <span>I have read and accept the Terms &amp; Conditions above, including the 1200 TDS limit, Ahmedabad jurisdiction, 48-hour cancellation window, and strict no-cancellation policy. <span class="req" aria-hidden="true">*</span></span>
         </label>
       </section>
 
@@ -1486,5 +1476,6 @@
 <script src="assets/js/datepicker.js?v=1788783205"></script>
 <script src="assets/js/main.js?v=1788847103"></script>
 <script src="assets/js/apply.js?v=1788766146"></script>
+<script src="assets/js/pincode.js"></script>
 </body>
 </html>

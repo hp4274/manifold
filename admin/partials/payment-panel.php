@@ -39,104 +39,145 @@ $payWaiting = array_filter($payList, static fn (array $p): bool => $p['status'] 
     <span style="width:<?= (int) $payTotals['percent'] ?>%"></span>
   </div>
 
-  <?php /* Between the two payments: the finance team's check of the paperwork.
-           Until it is done the delivery payment stays shut, which is what the
-           applicant sees in their portal too. */ ?>
+  <?php /* Finance & Customer Documents check. In Phase 4, documents are uploaded
+           upfront during application submission and audited here. */ ?>
   <?php
-    $docsDone   = !empty($srcRow['docs_verified_at']);
-    /* an earlier refusal still standing — answered by corrected documents from
-       the applicant's portal, and cleared the moment they are verified */
+    $docsDone    = !empty($srcRow['docs_verified_at']) || !empty($srcRow['kyc_verified_at']);
     $docsRefused = docs_refused($srcRow);
     $docsResent  = docs_resent($srcRow);
   ?>
-  <?php if ($payTotals['stages']['booking']['settled'] || $docsDone): ?>
-    <section class="pay-stage pay-stage--<?= $docsDone ? 'paid' : ($docsRefused ? 'rejected' : ($docsResent ? 'checking' : 'due')) ?>">
-      <header class="pay-stage__head">
-        <h4 class="pay-stage__title">Finance documents</h4>
-        <span class="pay-stage__state">
-          <?php if ($docsDone): ?>
-            <i class="bi bi-patch-check" aria-hidden="true"></i>
-            verified <?= e(format_datetime((string) $srcRow['docs_verified_at'])) ?>
-          <?php elseif ($docsRefused): ?>
-            <i class="bi bi-x-circle" aria-hidden="true"></i>
-            turned down <?= e(format_datetime((string) $srcRow['docs_rejected_at'])) ?>
-          <?php elseif ($docsResent): ?>
-            <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
-            corrected <?= e(format_datetime((string) $srcRow['docs_resent_at'])) ?>
-          <?php else: ?>
-            <i class="bi bi-hourglass-split" aria-hidden="true"></i> waiting on finance
-          <?php endif; ?>
-        </span>
-      </header>
-
-      <?php if (!$docsDone): ?>
-        <?php if ($docsRefused): ?>
-          <p class="pay-stage__note pay-stage__note--reject">
-            Turned down: <?= e((string) $srcRow['docs_reject_reason']) ?>
-          </p>
-          <p class="pay-stage__note">
-            They have been emailed this and asked to reply with corrected documents. Verify below
-            once the new ones are in order — that clears this and opens the delivery payment.
-          </p>
+  <section class="pay-stage pay-stage--<?= $docsDone ? 'paid' : ($docsRefused ? 'rejected' : ($docsResent ? 'checking' : 'due')) ?>">
+    <header class="pay-stage__head">
+      <h4 class="pay-stage__title">Customer Documents & KYC Verification</h4>
+      <span class="pay-stage__state">
+        <?php if ($docsDone): ?>
+          <i class="bi bi-patch-check" aria-hidden="true"></i>
+          verified <?= e(format_datetime((string) ($srcRow['docs_verified_at'] ?? $srcRow['kyc_verified_at']))) ?>
+        <?php elseif ($docsRefused): ?>
+          <i class="bi bi-x-circle" aria-hidden="true"></i>
+          turned down <?= e(format_datetime((string) $srcRow['docs_rejected_at'])) ?>
         <?php elseif ($docsResent): ?>
-          <?php /* they answered the refusal from their portal: the files on the
-                   record are the new ones, and what was wrong last time is
-                   still on the row to check them against */ ?>
-          <p class="pay-stage__note pay-stage__note--reject">
-            Turned down: <?= e((string) $srcRow['docs_reject_reason']) ?>
-          </p>
-          <p class="pay-stage__note">
-            They sent corrected documents on
-            <?= e(format_datetime((string) $srcRow['docs_resent_at'])) ?> — the ID and residence
-            proof under Applicant are the new ones. Verify below once they are in order.
-          </p>
+          <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+          corrected <?= e(format_datetime((string) $srcRow['docs_resent_at'])) ?>
         <?php else: ?>
-          <p class="pay-stage__note">
-            The delivery payment opens for the applicant the moment this is verified, and they are
-            emailed. On a sale a partner recorded as paid in full, this is the only step left.
-          </p>
+          <i class="bi bi-hourglass-split" aria-hidden="true"></i> waiting on verification
         <?php endif; ?>
+      </span>
+    </header>
 
-        <div class="pay-stage__actions">
-          <form method="post" action="payment.php"
-                data-confirm="Mark the finance documents verified for <?= e(record_title($srcType, $srcRow)) ?>?">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="docs">
-            <input type="hidden" name="type" value="<?= e($srcType) ?>">
-            <input type="hidden" name="id" value="<?= $payId ?>">
-            <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
-            <button type="submit" class="btn btn--primary btn--sm">
-              <i class="bi bi-check-lg" aria-hidden="true"></i> Documents verified
-            </button>
-          </form>
-
-          <?php /* The reason is required, here as on a refused payment: it is the
-                   whole of what the applicant is told, and they cannot correct
-                   paperwork nobody has said anything about. */ ?>
-          <form method="post" action="payment.php" class="pay-panel__reject"
-                data-confirm="Turn these documents down? The applicant is emailed the reason and asked for corrected ones.">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="docs_reject">
-            <input type="hidden" name="type" value="<?= e($srcType) ?>">
-            <input type="hidden" name="id" value="<?= $payId ?>">
-            <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
-            <label class="visually-hidden" for="docs-reason-<?= $payId ?>">
-              What is wrong with the documents
-            </label>
-            <input id="docs-reason-<?= $payId ?>" name="reason" type="text" maxlength="255"
-                   required placeholder="What is wrong? (goes in the email)"
-                   value="<?= e((string) ($srcRow['docs_reject_reason'] ?? '')) ?>">
-            <button type="submit" class="btn btn--danger btn--sm">
-              <i class="bi bi-x-lg" aria-hidden="true"></i> Turn down
-            </button>
-          </form>
+    <?php
+      /* What the applicant uploaded with the form: the Aadhaar card and the
+         electricity bill, plus a TukTuk's RC and licence. The two older columns
+         (ID / residence proof) are listed only when an older row has them. A full
+         payer is asked for none of it, so a gap there is not a fault. */
+      $docIsTuk   = ($srcRow['product'] ?? '') === 'tuktuk';
+      $docNeeded  = !is_full_payment($srcRow);
+      $docList    = [
+          ['aadhaar_doc_path',      'Aadhaar card',       'bi-file-earmark-person', $docNeeded],
+          ['electricity_bill_path', 'Electricity bill',   'bi-file-earmark-text',   $docNeeded],
+          ['rc_doc_path',           'Vehicle RC',         'bi-file-earmark-check',  $docNeeded && $docIsTuk],
+          ['dl_doc_path',           'Driving licence',    'bi-card-heading',        $docNeeded && $docIsTuk],
+          ['id_document_path',      'ID document',        'bi-file-earmark-person', false],
+          ['residence_proof_path',  'Proof of residence', 'bi-file-earmark-text',   false],
+      ];
+    ?>
+    <div class="pay-stage__docs-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:12px;margin:12px 0;padding:12px;background:var(--color-bg-subtle, #f8f9fa);border-radius:6px;">
+      <?php foreach ($docList as [$docCol, $docLabel, $docIcon, $docWanted]): ?>
+        <?php if (empty($srcRow[$docCol]) && !$docWanted) { continue; } ?>
+        <div>
+          <small style="color:var(--color-text-muted);display:block;font-size:11px;text-transform:uppercase;"><?= e($docLabel) ?><?= $docCol === 'aadhaar_doc_path' && !empty($srcRow['aadhaar_number']) ? ' · ' . e((string) $srcRow['aadhaar_number']) : '' ?></small>
+          <?php if (!empty($srcRow[$docCol])): ?>
+            <a href="file.php?path=<?= e(rawurlencode((string) $srcRow[$docCol])) ?>" data-viewer="<?= e($docLabel) ?>"
+               class="btn btn--sm btn--ghost" style="margin-top:4px;">
+              <i class="bi <?= e($docIcon) ?>"></i> View <?= e($docLabel) ?>
+            </a>
+          <?php else: ?>
+            <span style="color:var(--color-text-muted);font-size:13px;">Not uploaded</span>
+          <?php endif; ?>
         </div>
+      <?php endforeach; ?>
+      <?php if (!array_filter(array_column($docList, 3)) && empty($srcRow['aadhaar_doc_path'])): ?>
+        <span style="color:var(--color-text-muted);font-size:13px;">No documents are needed on a full payment.</span>
       <?php endif; ?>
-    </section>
-  <?php endif; ?>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-bottom:12px;font-size:13px;flex-wrap:wrap;align-items:center;">
+      <span><strong>Cancellation:</strong>
+        <?php if (cancel_window_open($srcRow)): ?>
+          <span class="pill pill--booking_pending"><i class="bi bi-stopwatch"></i> Open until <?= e(format_datetime((string) $srcRow['payment_deadline_at'])) ?></span>
+          <small style="color:var(--color-text-muted);">48 hours from the verified booking payment, or until the documents are verified</small>
+        <?php elseif (!empty($srcRow['cancellation_locked']) || $docsDone || booking_paid($srcRow)): ?>
+          <span class="pill pill--complete"><i class="bi bi-shield-lock-fill"></i> Locked (No cancellations)</span>
+        <?php else: ?>
+          <span class="pill pill--neutral">Opens when the booking payment is verified</span>
+        <?php endif; ?>
+      </span>
+    </div>
+
+    <?php if (!$docsDone): ?>
+      <?php if ($docsRefused): ?>
+        <p class="pay-stage__note pay-stage__note--reject">
+          Turned down: <?= e((string) $srcRow['docs_reject_reason']) ?>
+        </p>
+        <p class="pay-stage__note">
+          They have been emailed this and asked to reply with corrected documents. Verify below
+          once the new ones are in order — that clears this, locks cancellation, and enables collection.
+        </p>
+      <?php elseif ($docsResent): ?>
+        <p class="pay-stage__note pay-stage__note--reject">
+          Turned down: <?= e((string) $srcRow['docs_reject_reason']) ?>
+        </p>
+        <p class="pay-stage__note">
+          They sent corrected documents on
+          <?= e(format_datetime((string) $srcRow['docs_resent_at'])) ?>. Verify below once they are in order.
+        </p>
+      <?php else: ?>
+        <p class="pay-stage__note">
+          Documents were submitted with the application. Verify them below to lock cancellation and enable partner payment collection.
+        </p>
+      <?php endif; ?>
+
+      <div class="pay-stage__actions">
+        <form method="post" action="payment.php"
+              data-confirm="Mark documents verified and LOCK cancellation for <?= e(record_title($srcType, $srcRow)) ?>?">
+          <?= csrf_field() ?>
+          <input type="hidden" name="action" value="docs">
+          <input type="hidden" name="type" value="<?= e($srcType) ?>">
+          <input type="hidden" name="id" value="<?= $payId ?>">
+          <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
+          <button type="submit" class="btn btn--primary btn--sm">
+            <i class="bi bi-check-lg" aria-hidden="true"></i> Verify Documents & Lock Cancellation
+          </button>
+        </form>
+
+        <form method="post" action="payment.php" class="pay-panel__reject"
+              data-confirm="Turn these documents down? The applicant is emailed the reason and asked for corrected ones.">
+          <?= csrf_field() ?>
+          <input type="hidden" name="action" value="docs_reject">
+          <input type="hidden" name="type" value="<?= e($srcType) ?>">
+          <input type="hidden" name="id" value="<?= $payId ?>">
+          <input type="hidden" name="return" value="<?= e($srcReturn) ?>">
+          <label class="visually-hidden" for="docs-reason-<?= $payId ?>">
+            What is wrong with the documents
+          </label>
+          <input id="docs-reason-<?= $payId ?>" name="reason" type="text" maxlength="255"
+                 required placeholder="What is wrong? (goes in the email)"
+                 value="<?= e((string) ($srcRow['docs_reject_reason'] ?? '')) ?>">
+          <button type="submit" class="btn btn--danger btn--sm">
+            <i class="bi bi-x-lg" aria-hidden="true"></i> Turn down
+          </button>
+        </form>
+      </div>
+    <?php endif; ?>
+  </section>
 
   <?php foreach (PAYMENT_STAGES as $stageKey): ?>
-    <?php $stage = $payTotals['stages'][$stageKey]; ?>
+    <?php
+      $stage = $payTotals['stages'][$stageKey];
+      if ($stageKey === 'full' && !$stage['settled'] && $stage['waiting'] <= 0) {
+          continue;
+      }
+    ?>
     <section class="pay-stage pay-stage--<?= e($stage['state']) ?>">
 
       <header class="pay-stage__head">

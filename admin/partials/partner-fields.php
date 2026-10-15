@@ -25,7 +25,12 @@ $pCode   = $partnerCode ?? '';
    Only the wording changes. */
 $pSelf   = $partnerSelf ?? false;
 $pWhose  = $pSelf ? 'you are' : 'they are';
-$pBlank  = $pKind === 'distributor' ? 'MX••••••' : 'MD••••••';
+$pBlank  = match ($pKind) {
+    'principal_cf' => 'MP••••••',
+    'zonal_cf'     => 'MZ••••••',
+    'distributor'  => 'MX••••••',
+    default        => 'MD••••••',
+};
 
 /* The number is national digits here and stored with the dial code in front,
    the same way the apply form works. dial_digits() decides the length, so the
@@ -86,7 +91,7 @@ $pTelTitle   = ($pTelMin === $pTelMax ? $pTelMin . ' digits' : $pTelMin . ' to '
           <?php
             /* whichever kind this is, and blank while a dealer is still waiting
                on the office — a code is issued with the approval, not before */
-            $pHeld = (string) ($pf['dealer_code'] ?? $pf['distributor_code'] ?? $pCode ?? '');
+            $pHeld = (string) ($pf['principal_code'] ?? $pf['zonal_code'] ?? $pf['dealer_code'] ?? $pf['distributor_code'] ?? $pCode ?? '');
           ?>
           <div class="code-preview">
             <span class="code-preview__chip<?= $pHeld === '' ? ' code-preview__chip--pending' : '' ?>">
@@ -106,6 +111,80 @@ $pTelTitle   = ($pTelMin === $pTelMax ? $pTelMin . ' digits' : $pTelMin . ' to '
             </span>
           </div>
 
+          <?php if ($pKind === 'zonal_cf'): ?>
+            <?php
+              $pCurrentPrincipalId = (int) ($pf['principal_cf_id'] ?? 0);
+              $pCurrentPrincipal   = $pCurrentPrincipalId > 0 ? principal_cf_by_id($pCurrentPrincipalId) : null;
+              $pPrincipalChoices   = principal_cf_all(true);
+            ?>
+            <div class="field field--wide">
+              <label for="zonal_principal_cf_id">
+                Principal C&amp;F<span class="field__req" aria-hidden="true">*</span>
+              </label>
+              <?php if (!empty($pIsEdit) && $pCurrentPrincipal): ?>
+                <div class="code-preview">
+                  <span class="code-preview__chip"><?= e($pCurrentPrincipal['principal_code'] ?: 'MP••••••') ?></span>
+                  <span class="code-preview__text">
+                    <?= e($pCurrentPrincipal['full_name']) ?>. Assigned to this Principal C&amp;F.
+                  </span>
+                </div>
+                <input type="hidden" name="principal_cf_id" value="<?= $pCurrentPrincipalId ?>">
+              <?php else: ?>
+                <select id="zonal_principal_cf_id" name="principal_cf_id" required>
+                  <option value="" disabled <?= $pCurrentPrincipalId === 0 ? 'selected' : '' ?>>Pick a Principal C&amp;F</option>
+                  <?php foreach ($pPrincipalChoices as $choice): ?>
+                    <option value="<?= (int) $choice['id'] ?>" <?= $pCurrentPrincipalId === (int) $choice['id'] ? 'selected' : '' ?>>
+                      <?= e($choice['full_name']) ?> · <?= e($choice['principal_code'] ?: 'Pending') ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+                <span class="field-hint">Every Zonal C&amp;F reports to a Principal C&amp;F in the 5-tier chain.</span>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
+
+          <?php if ($pKind === 'distributor'): ?>
+            <?php
+              $pCurrentZonalId = (int) ($pf['zonal_cf_id'] ?? 0);
+              $pCurrentZonal   = $pCurrentZonalId > 0 ? zonal_cf_by_id($pCurrentZonalId) : null;
+              $pZonalChoices   = zonal_cf_all(true);
+            ?>
+            <div class="field field--wide">
+              <label for="distributor_zonal_cf_id">Zonal C&amp;F</label>
+              <select id="distributor_zonal_cf_id" name="zonal_cf_id">
+                <option value="" <?= $pCurrentZonalId === 0 ? 'selected' : '' ?>>None (Direct Office Assignment)</option>
+                <?php foreach ($pZonalChoices as $choice): ?>
+                  <option value="<?= (int) $choice['id'] ?>" <?= $pCurrentZonalId === (int) $choice['id'] ? 'selected' : '' ?>>
+                    <?= e($choice['full_name']) ?> · <?= e($choice['zonal_code'] ?: 'Pending') ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+              <span class="field-hint">The Zonal C&amp;F that manages this distributor.</span>
+            </div>
+          <?php endif; ?>
+
+          <?php /* How many direct children this partner may hold. Only shown where
+                   the page has decided its reader has authority over this row
+                   ($partnerCapEdit) — the page that saves it checks again. */ ?>
+          <?php if (!empty($partnerCapEdit) && isset(CHILD_CAP_RULES[$pKind])): ?>
+            <?php
+              $pCapNoun    = CHILD_CAP_RULES[$pKind][4];
+              $pCapDefault = child_cap_default($pKind);
+              $pCapId      = (int) ($pf['id'] ?? 0);
+            ?>
+            <div class="field">
+              <label for="<?= e($pKind) ?>_max_children">Max <?= e($pCapNoun) ?> under this person</label>
+              <input id="<?= e($pKind) ?>_max_children" name="max_children" type="number" step="1" min="0"
+                     max="100000" inputmode="numeric"
+                     value="<?= isset($pf['max_children']) && $pf['max_children'] !== null ? (int) $pf['max_children'] : '' ?>"
+                     placeholder="<?= $pCapDefault === 0 ? 'No limit' : (int) $pCapDefault ?>">
+              <span class="field-hint">
+                Blank follows the default (<?= $pCapDefault === 0 ? 'no limit' : (int) $pCapDefault ?>); 0 means no limit.
+                <?php if ($pIsEdit && $pCapId > 0): ?>Using <?= e(child_cap_usage($pKind, $pCapId)) ?>.<?php endif; ?>
+              </span>
+            </div>
+          <?php endif; ?>
+
           <?php /* a dealer also answers to a distributor; a distributor does not */ ?>
           <?php if (!empty($partnerExtra)) { require __DIR__ . '/' . $partnerExtra; } ?>
         </section>
@@ -123,6 +202,12 @@ $pTelTitle   = ($pTelMin === $pTelMax ? $pTelMin . ' digits' : $pTelMin . ' to '
             </div>
 
             <div class="field">
+              <label for="<?= e($pKind) ?>_pin">Pin code<span class="field__req" aria-hidden="true">*</span></label>
+              <input id="<?= e($pKind) ?>_pin" name="pin_code" type="text" maxlength="20" required
+                     value="<?= e($pf['pin_code'] ?? '') ?>">
+            </div>
+
+            <div class="field">
               <label for="<?= e($pKind) ?>_city">City<span class="field__req" aria-hidden="true">*</span></label>
               <input id="<?= e($pKind) ?>_city" name="city" type="text" maxlength="120" required
                      value="<?= e($pf['city'] ?? '') ?>">
@@ -132,12 +217,6 @@ $pTelTitle   = ($pTelMin === $pTelMax ? $pTelMin . ' digits' : $pTelMin . ' to '
               <label for="<?= e($pKind) ?>_state">State<span class="field__req" aria-hidden="true">*</span></label>
               <input id="<?= e($pKind) ?>_state" name="state" type="text" maxlength="120" required
                      value="<?= e($pf['state'] ?? '') ?>">
-            </div>
-
-            <div class="field">
-              <label for="<?= e($pKind) ?>_pin">Pin code<span class="field__req" aria-hidden="true">*</span></label>
-              <input id="<?= e($pKind) ?>_pin" name="pin_code" type="text" maxlength="20" required
-                     value="<?= e($pf['pin_code'] ?? '') ?>">
             </div>
           </div>
         </section>
@@ -202,3 +281,42 @@ $pTelTitle   = ($pTelMin === $pTelMax ? $pTelMin . ' digits' : $pTelMin . ' to '
                       placeholder="Which area they cover, who introduced them, anything worth knowing on the next call."><?= e($pf['note'] ?? '') ?></textarea>
           </div>
         </section>
+
+        <section class="form-section">
+          <div class="form-section__head">
+            <h3 class="form-section__title">Terms &amp; Conditions Agreement<?php if (!$pIsEdit): ?><span class="field__req" aria-hidden="true">*</span><?php endif; ?></h3>
+            <span class="form-section__note">Mandatory compliance before partner operations</span>
+            <?php /* every page that includes this sits one folder below the site root */ ?>
+            <a class="btn btn--ghost btn--sm" href="../terms-pdf?kind=<?= e($pKind) ?>" target="_blank" rel="noopener"><i class="bi bi-download" aria-hidden="true"></i> Download PDF</a>
+          </div>
+
+          <?php $pTerms = partner_terms($pKind); ?>
+
+          <?php if (!empty($pf['terms_accepted'])): ?>
+            <div class="field field--wide">
+              <span class="pill pill--good"><i class="bi bi-check-circle" aria-hidden="true"></i> <?= $pTerms['label'] ?> Terms &amp; Conditions Accepted</span>
+              <span class="field-hint">
+                Accepted on <?= e(format_datetime($pf['terms_accepted_at'] ?? '')) ?>,
+                binding <?= e($pTerms['summary']) ?>.
+              </span>
+            </div>
+          <?php else: ?>
+            <div class="terms-scroll" tabindex="0" role="region" aria-label="<?= e(html_entity_decode($pTerms['label'])) ?> terms and conditions">
+              <p><strong>Manifold Clean Energy &mdash; <?= $pTerms['label'] ?> Terms &amp; Conditions</strong></p>
+              <p><?= $pTerms['intro'] ?></p>
+              <ul>
+                <?php foreach ($pTerms['items'] as [$pHead, $pBody]): ?>
+                  <li><strong><?= $pHead ?>:</strong> <?= $pBody ?></li>
+                <?php endforeach; ?>
+              </ul>
+            </div>
+
+            <div class="field-consent field-consent--control">
+              <label for="<?= e($pKind) ?>_terms_accepted">
+                <input id="<?= e($pKind) ?>_terms_accepted" name="terms_accepted" type="checkbox" value="1" <?= !$pIsEdit ? 'required' : '' ?>>
+                <span><strong>I accept the <?= $pTerms['label'] ?> Terms &amp; Conditions</strong> on behalf of <?= $pSelf ? 'myself' : 'this partner' ?>, agreeing to <?= e($pTerms['summary']) ?>.<?php if (!$pIsEdit): ?><span class="field__req" aria-hidden="true">*</span><?php endif; ?></span>
+              </label>
+            </div>
+          <?php endif; ?>
+        </section>
+

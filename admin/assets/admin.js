@@ -625,15 +625,171 @@
     show(1);
   }
 
-  /* the drawer copies its markup in fresh each time it opens, so the tables
-     inside it are paged then rather than once at load */
-  if (drawer) {
-    drawer.addEventListener('drawer:open', function () {
-      Array.prototype.forEach.call(drawerBody.querySelectorAll('[data-paged]'), pageTable);
+  /* ---------- exporting a table ----------
+     A table marked data-export="file-name" gets an Export CSV button above it.
+     It reads the rows from the DOM, so every page of a paged table is included
+     (paging only sets row.hidden; textContent ignores it). A cell can override
+     what it exports with data-export="…" — the decision column does, so the
+     file says "Approved", not the button labels. */
+  function cellText(cell) {
+    if (cell.dataset.export !== undefined) return cell.dataset.export;
+
+    var stack = cell.querySelector('.cell-stack');
+    var parts = stack ? Array.prototype.slice.call(stack.children) : [cell];
+
+    return parts.map(function (p) { return p.textContent.replace(/\s+/g, ' ').trim(); })
+      .filter(Boolean).join(' | ');
+  }
+
+  /* A real .xlsx needs a zip; this one stores its five small XML parts
+     uncompressed, which Excel, Sheets and Numbers all open. Text goes in as
+     inline strings, so there is no shared-strings part to keep in step. */
+  var crcTable = (function () {
+    var t = [], c, n, k;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+
+  function crc32(bytes) {
+    var c = 0xFFFFFFFF;
+    for (var i = 0; i < bytes.length; i++) c = crcTable[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function zipStore(files) {
+    var enc = new TextEncoder(), parts = [], central = [], offset = 0;
+
+    function u16(v) { return [v & 255, v >>> 8 & 255]; }
+    function u32(v) { return [v & 255, v >>> 8 & 255, v >>> 16 & 255, v >>> 24 & 255]; }
+
+    Object.keys(files).forEach(function (name) {
+      var nameB = enc.encode(name), data = enc.encode(files[name]), crc = crc32(data);
+      var common = [].concat(u16(20), u16(0x0800), u16(0), u16(0), u16(0x21), u32(crc),
+        u32(data.length), u32(data.length), u16(nameB.length), u16(0));
+
+      parts.push(new Uint8Array([0x50, 0x4B, 3, 4].concat(common)), nameB, data);
+      central.push(new Uint8Array([0x50, 0x4B, 1, 2].concat(u16(20), common, u16(0), u16(0),
+        u16(0), u32(0), u32(offset))), nameB);
+      offset += 30 + nameB.length + data.length;
+    });
+
+    var size = central.reduce(function (n, p) { return n + p.length; }, 0);
+    var count = Object.keys(files).length;
+
+    return new Blob(parts.concat(central, [new Uint8Array([0x50, 0x4B, 5, 6, 0, 0, 0, 0]
+      .concat(u16(count), u16(count), u32(size), u32(offset), u16(0)))]),
+    { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+
+  function xlsxBlob(rows) {
+    function esc(s) {
+      return s.replace(/[&<>"]/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+      });
+    }
+
+    function col(i) { return String.fromCharCode(65 + i % 26); }
+
+    var sheet = rows.map(function (r, y) {
+      return '<row r="' + (y + 1) + '">' + r.map(function (v, x) {
+        return '<c r="' + col(x) + (y + 1) + '" t="inlineStr"><is><t xml:space="preserve">'
+          + esc(v) + '</t></is></c>';
+      }).join('') + '</row>';
+    }).join('');
+
+    var xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    var rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    var pkg = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+    return zipStore({
+      '[Content_Types].xml': xml + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        + '<Default Extension="xml" ContentType="application/xml"/>'
+        + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+      '_rels/.rels': xml + '<Relationships xmlns="' + pkg + '"><Relationship Id="rId1" Type="' + rel
+        + '/officeDocument" Target="xl/workbook.xml"/></Relationships>',
+      'xl/workbook.xml': xml + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="'
+        + rel + '"><sheets><sheet name="Export" sheetId="1" r:id="rId1"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels': xml + '<Relationships xmlns="' + pkg + '"><Relationship Id="rId1" Type="'
+        + rel + '/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
+      'xl/worksheets/sheet1.xml': xml + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        + '<sheetData>' + sheet + '</sheetData></worksheet>'
     });
   }
 
-  Array.prototype.forEach.call(document.querySelectorAll('.main [data-paged]'), pageTable);
+  function exportTable(table, kind) {
+    var skip = [];
+    var rows = [Array.prototype.map.call(table.tHead.rows[0].cells, function (th, i) {
+      if (th.hasAttribute('data-skip')) skip.push(i);
+      return th.textContent.trim();
+    })];
+
+    Array.prototype.forEach.call(table.tBodies[0].rows, function (tr) {
+      if (tr.classList.contains('row-empty')) return;
+      rows.push(Array.prototype.map.call(tr.cells, cellText));
+    });
+
+    rows = rows.map(function (r) {
+      return r.filter(function (v, i) { return skip.indexOf(i) < 0; });
+    });
+
+    var blob;
+
+    if (kind === 'xlsx') {
+      blob = xlsxBlob(rows);
+    } else {
+      /* BOM so Excel reads the ₹ and − as UTF-8 */
+      blob = new Blob(['﻿' + rows.map(function (r) {
+        return r.map(function (v) { return '"' + v.replace(/"/g, '""') + '"'; }).join(',');
+      }).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    }
+
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = table.dataset.export + '-' + new Date().toISOString().slice(0, 10) + '.' + kind;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  }
+
+  function addExport(table) {
+    var wrap = table.closest('.table-wrap');
+    if (!wrap || !table.tHead || !table.tBodies.length || wrap.previousElementSibling &&
+        wrap.previousElementSibling.classList.contains('table-tools')) return;
+
+    var bar = document.createElement('div');
+    bar.className = 'table-tools';
+    bar.innerHTML = '<button type="button" class="btn btn--ghost btn--sm" data-kind="csv">'
+      + '<i class="bi bi-filetype-csv" aria-hidden="true"></i> CSV</button>'
+      + '<button type="button" class="btn btn--ghost btn--sm" data-kind="xlsx">'
+      + '<i class="bi bi-file-earmark-excel" aria-hidden="true"></i> Excel workbook</button>';
+    bar.addEventListener('click', function (e) {
+      var hit = e.target.closest('[data-kind]');
+      if (hit) exportTable(table, hit.dataset.kind);
+    });
+    wrap.parentNode.insertBefore(bar, wrap);
+  }
+
+  function enhanceTables(root) {
+    Array.prototype.forEach.call(root.querySelectorAll('[data-export]'), function (t) {
+      if (t.tagName === 'TABLE') addExport(t);
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-paged]'), pageTable);
+  }
+
+  /* the drawer copies its markup in fresh each time it opens, so the tables
+     inside it are paged then rather than once at load */
+  if (drawer) {
+    drawer.addEventListener('drawer:open', function () { enhanceTables(drawerBody); });
+  }
+
+  enhanceTables(document.querySelector('.main') || document);
 
   /* ---------- copy to clipboard ----------
      Anything with data-copy="text" puts that text on the clipboard and says so
@@ -1568,4 +1724,44 @@
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, true);
 
+})();
+
+/* Pin code -> City/State autofill (copy of assets/js/pincode.js) */
+(function () {
+  'use strict';
+
+  var seq = 0;
+
+  function set(el, value) {
+    if (!el || !value) return;
+    if (el.tagName === 'SELECT') {
+      var want = value.toLowerCase();
+      var opt = Array.prototype.find.call(el.options, function (o) {
+        return o.value.toLowerCase() === want || o.text.toLowerCase() === want;
+      });
+      if (!opt) return;
+      value = opt.value;
+    }
+    el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  document.addEventListener('input', function (e) {
+    var pin = e.target;
+    if (!pin || pin.name !== 'pin_code' || !pin.form) return;
+    var digits = pin.value.trim();
+    if (!/^[1-9][0-9]{5}$/.test(digits)) return;
+
+    var mine = ++seq;
+    fetch('https://api.postalpincode.in/pincode/' + digits)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var office = data && data[0] && data[0].Status === 'Success' && data[0].PostOffice && data[0].PostOffice[0];
+        if (!office || mine !== seq || pin.value.trim() !== digits) return;
+        set(pin.form.elements.city, office.District);
+        set(pin.form.elements.state, office.State);
+      })
+      .catch(function () {});
+  });
 })();

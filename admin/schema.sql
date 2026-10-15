@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(120) NOT NULL,
   `email` varchar(190) NOT NULL,
-  `role` enum('admin','cf') NOT NULL DEFAULT 'admin',
+  `role` enum('admin','cf','principal_cf','zonal_cf') NOT NULL DEFAULT 'admin',
   `password_hash` varchar(255) NOT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `last_login_at` datetime DEFAULT NULL,
@@ -58,9 +58,15 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
 -- what those dealers sell, and sell directly themselves. MX…… is their code,
 -- one letter pair away from a dealer's MD…… and a customer's MF……
 -- --------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `distributors` (
+-- --------------------------------------------------------------------------
+-- The two tiers above the distributor: Manifold (office) -> Principal C&F ->
+-- Zonal C&F -> Distributor -> Dealer. A principal is created by the office; a
+-- zonal C&F by a principal and approved by the office.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `principal_cf` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `distributor_code` varchar(20) NOT NULL,
+  `principal_code` varchar(20) DEFAULT NULL,
+  `approval_status` enum('pending','approved','rejected') NOT NULL DEFAULT 'approved',
   `full_name` varchar(160) NOT NULL,
   `company` varchar(160) DEFAULT NULL,
   `email` varchar(190) DEFAULT NULL,
@@ -77,6 +83,91 @@ CREATE TABLE IF NOT EXISTS `distributors` (
   `bank_ifsc` varchar(20) DEFAULT NULL,
   `upi_id` varchar(120) DEFAULT NULL,
   `note` text DEFAULT NULL,
+  `commission_rate` decimal(5,2) DEFAULT NULL,
+  -- most Zonal C&Fs it may hold; NULL = default_max_zonals, 0 = no limit
+  `max_children` int(10) unsigned DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `terms_accepted` tinyint(1) NOT NULL DEFAULT 0,
+  `terms_accepted_at` datetime DEFAULT NULL,
+  `decided_at` datetime DEFAULT NULL,
+  `decided_by_label` varchar(160) DEFAULT NULL,
+  `created_by` int(10) unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_principal_code` (`principal_code`),
+  KEY `ix_principal_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `zonal_cf` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `zonal_code` varchar(20) DEFAULT NULL,
+  `principal_cf_id` int(10) unsigned NOT NULL,
+  `approval_status` enum('pending','approved','rejected') NOT NULL DEFAULT 'approved',
+  `full_name` varchar(160) NOT NULL,
+  `company` varchar(160) DEFAULT NULL,
+  `email` varchar(190) DEFAULT NULL,
+  `mobile_number` varchar(30) DEFAULT NULL,
+  `alt_mobile_number` varchar(30) DEFAULT NULL,
+  `address` varchar(255) DEFAULT NULL,
+  `city` varchar(120) DEFAULT NULL,
+  `state` varchar(120) DEFAULT NULL,
+  `pin_code` varchar(20) DEFAULT NULL,
+  `pan_number` varchar(20) DEFAULT NULL,
+  `gst_number` varchar(30) DEFAULT NULL,
+  `bank_name` varchar(120) DEFAULT NULL,
+  `bank_account` varchar(60) DEFAULT NULL,
+  `bank_ifsc` varchar(20) DEFAULT NULL,
+  `upi_id` varchar(120) DEFAULT NULL,
+  `note` text DEFAULT NULL,
+  `commission_rate` decimal(5,2) DEFAULT NULL,
+  -- most distributors it may hold; NULL = default_max_distributors, 0 = no limit
+  `max_children` int(10) unsigned DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `terms_accepted` tinyint(1) NOT NULL DEFAULT 0,
+  `terms_accepted_at` datetime DEFAULT NULL,
+  `decided_at` datetime DEFAULT NULL,
+  `decided_by_label` varchar(160) DEFAULT NULL,
+  `created_by` int(10) unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_zonal_code` (`zonal_code`),
+  KEY `ix_zonal_principal` (`principal_cf_id`),
+  KEY `ix_zonal_active` (`is_active`),
+  CONSTRAINT `fk_zonal_principal` FOREIGN KEY (`principal_cf_id`) REFERENCES `principal_cf` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `distributors` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `distributor_code` varchar(20) NOT NULL,
+  -- the Zonal C&F this distributor answers to (NULL for the office's own)
+  `zonal_cf_id` int(10) unsigned DEFAULT NULL,
+  -- a distributor a zonal asked for waits on the office
+  `approval_status` enum('pending','approved','rejected') NOT NULL DEFAULT 'approved',
+  `decided_at` datetime DEFAULT NULL,
+  `decided_by_label` varchar(160) DEFAULT NULL,
+  `terms_accepted` tinyint(1) NOT NULL DEFAULT 0,
+  `terms_accepted_at` datetime DEFAULT NULL,
+  `full_name` varchar(160) NOT NULL,
+  `company` varchar(160) DEFAULT NULL,
+  `email` varchar(190) DEFAULT NULL,
+  `mobile_number` varchar(30) DEFAULT NULL,
+  `alt_mobile_number` varchar(30) DEFAULT NULL,
+  `address` varchar(255) DEFAULT NULL,
+  `city` varchar(120) DEFAULT NULL,
+  `state` varchar(120) DEFAULT NULL,
+  `pin_code` varchar(20) DEFAULT NULL,
+  `pan_number` varchar(20) DEFAULT NULL,
+  `gst_number` varchar(30) DEFAULT NULL,
+  `bank_name` varchar(120) DEFAULT NULL,
+  `bank_account` varchar(60) DEFAULT NULL,
+  `bank_ifsc` varchar(20) DEFAULT NULL,
+  `upi_id` varchar(120) DEFAULT NULL,
+  `note` text DEFAULT NULL,
+  `commission_rate` decimal(5,2) DEFAULT NULL,
+  -- most dealers it may hold; NULL = dealer_limit, 0 = no limit
+  `max_children` int(10) unsigned DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_by` int(10) unsigned DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
@@ -84,6 +175,7 @@ CREATE TABLE IF NOT EXISTS `distributors` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_distributor_code` (`distributor_code`),
   KEY `ix_distributor_active` (`is_active`),
+  KEY `ix_distributor_zonal` (`zonal_cf_id`),
   KEY `fk_distributor_admin` (`created_by`),
   CONSTRAINT `fk_distributor_admin` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -110,6 +202,10 @@ CREATE TABLE IF NOT EXISTS `dealers` (
   `requested_by` int(10) unsigned DEFAULT NULL,
   `decided_at` datetime DEFAULT NULL,
   `decided_by` int(10) unsigned DEFAULT NULL,
+  -- who decided when it was not the office: a distributor or a zonal C&F
+  `decided_by_label` varchar(160) DEFAULT NULL,
+  `terms_accepted` tinyint(1) NOT NULL DEFAULT 0,
+  `terms_accepted_at` datetime DEFAULT NULL,
   `full_name` varchar(160) NOT NULL,
   `company` varchar(160) DEFAULT NULL,
   `email` varchar(190) DEFAULT NULL,
@@ -126,6 +222,7 @@ CREATE TABLE IF NOT EXISTS `dealers` (
   `bank_ifsc` varchar(20) DEFAULT NULL,
   `upi_id` varchar(120) DEFAULT NULL,
   `note` text DEFAULT NULL,
+  `commission_rate` decimal(5,2) DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_by` int(10) unsigned DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
@@ -153,7 +250,7 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `product` enum('stove','tuktuk') NOT NULL,
   -- an application from the website waits on the office before it becomes a
   -- payment: 'submitted' is that wait, and approving it is what starts the rest
-  `status` enum('submitted','booking_pending','booking_review','docs_pending','confirm_pending','delivery_pending','delivery_review','complete','cancelled','refunded','rejected')
+  `status` enum('submitted','booking_pending','booking_review','docs_pending','confirm_pending','delivery_pending','delivery_review','complete','cancelled','refunded','rejected','expired')
       NOT NULL DEFAULT 'submitted',
   `reference_code` varchar(20) NOT NULL DEFAULT '',
   `referral_code` varchar(20) NOT NULL DEFAULT '',
@@ -228,6 +325,37 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `declaration_accepted` tinyint(1) NOT NULL DEFAULT 0,
   `testimonial_consent` tinyint(1) NOT NULL DEFAULT 0,
   `terms_accepted` tinyint(1) NOT NULL DEFAULT 0,
+  `terms_accepted_at` datetime DEFAULT NULL,
+  /* delivery: the address as one block (street/city/state/pin stay in their own
+     columns above), plus a landmark */
+  `delivery_address` text DEFAULT NULL,
+  `landmark` varchar(160) DEFAULT NULL,
+  /* KYC: Aadhaar and the electricity bill for everybody; registration number,
+     RC and driving licence for a TukTuk */
+  `aadhaar_number` varchar(20) DEFAULT NULL,
+  `aadhaar_doc_path` varchar(255) DEFAULT NULL,
+  `electricity_bill_path` varchar(255) DEFAULT NULL,
+  `rc_doc_path` varchar(255) DEFAULT NULL,
+  `dl_doc_path` varchar(255) DEFAULT NULL,
+  `registration_number` varchar(30) DEFAULT NULL,
+  /* the early paperwork check that opens the payment and locks cancellation */
+  `kyc_verified_at` datetime DEFAULT NULL,
+  `kyc_verified_by` varchar(160) DEFAULT NULL,
+  `kyc_reject_reason` varchar(255) DEFAULT NULL,
+  /* booking amount only, or the whole price in one go */
+  `payment_plan` enum('booking','full_payment') NOT NULL DEFAULT 'booking',
+  /* stamped when the application is approved: pay by then or it expires */
+  `payment_deadline_at` datetime DEFAULT NULL,
+  /* once the documents are verified or money is in, there is no cancelling */
+  `cancellation_locked` tinyint(1) NOT NULL DEFAULT 0,
+  /* a sale out of a shelf at or under the critical level waits for both */
+  `low_stock_hold` tinyint(1) NOT NULL DEFAULT 0,
+  `low_stock_approved_by_principal` tinyint(1) NOT NULL DEFAULT 0,
+  `low_stock_approved_by_office` tinyint(1) NOT NULL DEFAULT 0,
+  `zonal_cf_id` int(10) unsigned DEFAULT NULL,
+  `principal_cf_id` int(10) unsigned DEFAULT NULL,
+  `zonal_commission` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `principal_commission` decimal(10,2) NOT NULL DEFAULT 0.00,
   `payment_amount` decimal(10,2) NOT NULL DEFAULT 3500.00,
   `booking_amount` decimal(10,2) NOT NULL DEFAULT 3500.00,
   `delivery_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -275,6 +403,9 @@ CREATE TABLE IF NOT EXISTS `applications` (
   KEY `ix_app_referred_by` (`referred_by_id`),
   KEY `ix_app_dealer` (`dealer_id`),
   KEY `ix_app_distributor` (`distributor_id`),
+  KEY `ix_app_zonal` (`zonal_cf_id`),
+  KEY `ix_app_principal` (`principal_cf_id`),
+  KEY `ix_app_deadline` (`payment_deadline_at`),
   KEY `ix_app_sale_channel` (`sale_channel`),
   KEY `fk_app_entered_dealer` (`entered_by_dealer`),
   KEY `fk_app_entered_distributor` (`entered_by_distributor`),
@@ -296,7 +427,7 @@ CREATE TABLE IF NOT EXISTS `applications` (
 CREATE TABLE IF NOT EXISTS `payments` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `application_id` int(10) unsigned NOT NULL,
-  `stage` enum('booking','loan','delivery') NOT NULL DEFAULT 'booking',
+  `stage` enum('booking','loan','delivery','full') NOT NULL DEFAULT 'booking',
   `amount` decimal(10,2) NOT NULL,
   `reference` varchar(120) DEFAULT NULL,
   `proof_path` varchar(255) DEFAULT NULL,
@@ -323,7 +454,7 @@ CREATE TABLE IF NOT EXISTS `payments` (
 CREATE TABLE IF NOT EXISTS `pg_transactions` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `application_id` int(10) unsigned NOT NULL,
-  `stage` enum('booking','delivery') NOT NULL,
+  `stage` enum('booking','delivery','full') NOT NULL,
   `merchant_txn_no` varchar(80) NOT NULL,
   `amount` decimal(10,2) NOT NULL,
   `tran_ctx` varchar(120) DEFAULT NULL,
@@ -375,12 +506,35 @@ CREATE TABLE IF NOT EXISTS `client_edits` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
+-- Commission pass-down: one row per hop of released commission money.
+-- office -> Principal C&F -> Zonal C&F -> Distributor -> Dealer, a missing tier
+-- skipped. Each hop carries the sender's UTR and transfer receipt; the lines it
+-- moved point their holder at the recipient (commission_lines.holder_*).
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `commission_transfers` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `from_type` enum('office','principal_cf','zonal_cf','distributor') NOT NULL,
+  -- NULL for the office; otherwise an id in the table from_type names
+  `from_id` int(10) unsigned DEFAULT NULL,
+  `to_type` enum('principal_cf','zonal_cf','distributor','dealer') NOT NULL,
+  `to_id` int(10) unsigned NOT NULL,
+  `amount` decimal(12,2) NOT NULL,
+  `utr` varchar(120) NOT NULL,
+  `proof_path` varchar(255) NOT NULL,
+  `created_by` varchar(160) NOT NULL DEFAULT '',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `ix_ctransfer_from` (`from_type`,`from_id`,`created_at`),
+  KEY `ix_ctransfer_to` (`to_type`,`to_id`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
 -- Commission lines per tranche per party.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `commission_lines` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `application_id` int(10) unsigned NOT NULL,
-  `party_type` enum('dealer','distributor') NOT NULL,
+  `party_type` enum('dealer','distributor','zonal_cf','principal_cf') NOT NULL,
   `party_id` int(10) unsigned NOT NULL,
   `stage` enum('booking','loan','delivery') NOT NULL,
   `paid_amount` decimal(10,2) NOT NULL,
@@ -389,10 +543,29 @@ CREATE TABLE IF NOT EXISTS `commission_lines` (
   `rate` decimal(5,2) NOT NULL,
   `amount` decimal(10,2) NOT NULL,
   `earned_at` datetime NOT NULL DEFAULT current_timestamp(),
+  -- earned_at + commission_release_hours: nothing is claimable before this
+  `release_at` datetime DEFAULT NULL,
+  -- pending -> approved (released, travelling down the chain) -> disbursed
+  -- (reached its partner). proof_uploaded is the retired direct-office step,
+  -- kept in the enum only so old dumps still load; nothing writes it.
+  `payout_status` enum('pending','approved','proof_uploaded','disbursed') NOT NULL DEFAULT 'pending',
+  -- who is holding this line's money right now: NULL = the office, then each
+  -- tier it is passed down to (commission_transfers), ending with the party
+  `holder_type` enum('principal_cf','zonal_cf','distributor','dealer') DEFAULT NULL,
+  `holder_id` int(10) unsigned DEFAULT NULL,
+  -- the transfer that delivered it to its own party
+  `transfer_id` int(10) unsigned DEFAULT NULL,
+  `proof_path` varchar(255) DEFAULT NULL,
+  `payout_utr` varchar(120) DEFAULT NULL,
+  `proof_by` varchar(160) DEFAULT NULL,
+  `proof_at` datetime DEFAULT NULL,
+  `disbursed_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_line_app_party_stage` (`application_id`,`party_type`,`party_id`,`stage`),
   KEY `idx_commission_party` (`party_type`,`party_id`),
-  CONSTRAINT `fk_commission_application` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE
+  KEY `ix_commission_holder` (`payout_status`,`holder_type`,`holder_id`),
+  CONSTRAINT `fk_commission_application` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_commission_transfer` FOREIGN KEY (`transfer_id`) REFERENCES `commission_transfers` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
@@ -400,7 +573,7 @@ CREATE TABLE IF NOT EXISTS `commission_lines` (
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `commission_vouchers` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `party_type` enum('dealer','distributor') NOT NULL,
+  `party_type` enum('dealer','distributor','zonal_cf','principal_cf') NOT NULL,
   `party_id` int(10) unsigned NOT NULL,
   `parent_id` int(10) unsigned DEFAULT NULL,
   `is_bundle` tinyint(1) NOT NULL DEFAULT 0,
@@ -422,7 +595,7 @@ CREATE TABLE IF NOT EXISTS `commission_vouchers` (
 CREATE TABLE IF NOT EXISTS `commission_voucher_lines` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `voucher_id` int(10) unsigned NOT NULL,
-  `party_type` enum('dealer','distributor') NOT NULL DEFAULT 'dealer',
+  `party_type` enum('dealer','distributor','zonal_cf','principal_cf') NOT NULL DEFAULT 'dealer',
   `party_id` int(10) unsigned NOT NULL DEFAULT 0,
   `application_id` int(10) unsigned NOT NULL,
   `commission_line_id` int(10) unsigned DEFAULT NULL,
@@ -431,7 +604,9 @@ CREATE TABLE IF NOT EXISTS `commission_voucher_lines` (
   KEY `idx_line_voucher` (`voucher_id`),
   KEY `idx_line_application` (`application_id`),
   KEY `idx_line_commission_line` (`commission_line_id`),
-  UNIQUE KEY `uq_line_party_app` (`application_id`,`party_type`,`party_id`),
+  -- one voucher line per commission line: a party earns a line per verified
+  -- tranche, so keying this by party and application would refuse the second
+  UNIQUE KEY `uq_line_commission_line` (`commission_line_id`),
   CONSTRAINT `fk_line_voucher` FOREIGN KEY (`voucher_id`) REFERENCES `commission_vouchers` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_line_application` FOREIGN KEY (`application_id`) REFERENCES `applications` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_line_commission` FOREIGN KEY (`commission_line_id`) REFERENCES `commission_lines` (`id`) ON DELETE SET NULL
@@ -668,6 +843,46 @@ CREATE TABLE IF NOT EXISTS `distributor_payouts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------------
+-- Transfers made to a zonal C&F.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `zonal_cf_payouts` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `zonal_cf_id` int(10) unsigned NOT NULL,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `paid_by` int(10) unsigned DEFAULT NULL,
+  `paid_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `ix_zpayout_zonal` (`zonal_cf_id`),
+  KEY `idx_zpayout_voucher` (`voucher_id`),
+  KEY `fk_zpayout_admin` (`paid_by`),
+  CONSTRAINT `fk_zpayout_zonal` FOREIGN KEY (`zonal_cf_id`) REFERENCES `zonal_cf` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_zpayout_voucher` FOREIGN KEY (`voucher_id`) REFERENCES `commission_vouchers` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_zpayout_admin` FOREIGN KEY (`paid_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- Transfers made to a principal C&F.
+-- --------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `principal_cf_payouts` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `principal_cf_id` int(10) unsigned NOT NULL,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `paid_by` int(10) unsigned DEFAULT NULL,
+  `paid_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `ix_ppayout_principal` (`principal_cf_id`),
+  KEY `idx_ppayout_voucher` (`voucher_id`),
+  KEY `fk_ppayout_admin` (`paid_by`),
+  CONSTRAINT `fk_ppayout_principal` FOREIGN KEY (`principal_cf_id`) REFERENCES `principal_cf` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_ppayout_voucher` FOREIGN KEY (`voucher_id`) REFERENCES `commission_vouchers` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_ppayout_admin` FOREIGN KEY (`paid_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
 -- Values the admin can change from the dashboard without editing config.php.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `settings` (
@@ -689,10 +904,25 @@ INSERT IGNORE INTO `settings` (`name`, `value`) VALUES
   ('commission_direct_stove',    '3000.00'),
   ('commission_direct_tuktuk',   '4500.00'),
   ('dealer_limit',              '10'),
+  ('default_max_zonals',        '0'),
+  ('default_max_distributors',  '0'),
   ('stock_price_distributor_stove',  '17000.00'),
   ('stock_price_distributor_tuktuk', '25500.00'),
   ('stock_price_dealer_stove',       '18500.00'),
   ('stock_price_dealer_tuktuk',      '27000.00'),
+  ('stock_price_principal_cf_stove',  '15000.00'),
+  ('stock_price_principal_cf_tuktuk', '22500.00'),
+  ('stock_price_zonal_cf_stove',      '16000.00'),
+  ('stock_price_zonal_cf_tuktuk',     '24000.00'),
+  ('commission_rate_principal_cf', '20.00'),
+  ('commission_rate_zonal_cf',     '15.00'),
+  ('commission_rate_distributor',  '10.00'),
+  ('commission_rate_dealer',       '6.00'),
+  ('commission_gst_percent',       '0'),
+  ('commission_release_hours',     '48'),
+  ('payment_deadline_hours',       '48'),
+  ('stock_warn_units',             '200'),
+  ('stock_critical_units',         '100'),
   ('referral_reward',           '500'),
   ('raffle_enabled',            '1'),
   ('raffle_first_draw',         ''),
@@ -725,10 +955,12 @@ INSERT IGNORE INTO `admin_users` (`name`, `email`, `role`, `password_hash`) VALU
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `stock_orders` (
   `id`                    int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `buyer_type`            enum('distributor','dealer') NOT NULL,
+  `buyer_type`            enum('distributor','dealer','zonal_cf','principal_cf') NOT NULL,
   `buyer_id`              int(10) unsigned NOT NULL,
-  -- NULL means the office sold it: a distributor buys from nobody else
-  `seller_distributor_id` int(10) unsigned DEFAULT NULL,
+  -- who sells: the tier directly above the buyer, or the nearest one that
+  -- exists. seller_id is NULL exactly when the office sells (it has no row).
+  `seller_type`           enum('office','principal_cf','zonal_cf','distributor') NOT NULL DEFAULT 'office',
+  `seller_id`             int(10) unsigned DEFAULT NULL,
   `product`               enum('stove','tuktuk') DEFAULT NULL,
   `quantity`              int(10) unsigned DEFAULT NULL,
   -- frozen at the moment of ordering, so a price change never rewrites a past order
@@ -744,8 +976,7 @@ CREATE TABLE IF NOT EXISTS `stock_orders` (
   `decided_by_admin`      int(10) unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_stock_order_buyer` (`buyer_type`,`buyer_id`,`status`),
-  KEY `idx_stock_order_seller` (`seller_distributor_id`,`status`),
-  CONSTRAINT `fk_stock_order_seller` FOREIGN KEY (`seller_distributor_id`) REFERENCES `distributors` (`id`) ON DELETE SET NULL,
+  KEY `idx_stock_order_seller` (`seller_type`,`seller_id`,`status`),
   CONSTRAINT `fk_stock_order_admin` FOREIGN KEY (`decided_by_admin`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -763,7 +994,7 @@ CREATE TABLE IF NOT EXISTS `stock_order_items` (
 
 CREATE TABLE IF NOT EXISTS `stock_ledger` (
   `id`             int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `owner_type`     enum('distributor','dealer') NOT NULL,
+  `owner_type`     enum('distributor','dealer','zonal_cf','principal_cf') NOT NULL,
   `owner_id`       int(10) unsigned NOT NULL,
   `product`        enum('stove','tuktuk') NOT NULL,
   -- signed: stock in is positive, stock out negative, and the same for value

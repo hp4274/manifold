@@ -23,7 +23,8 @@ $srcWaiting = array_values(array_filter(
     static fn (array $d): bool => $d['approval_status'] === 'pending'
 ));
 $srcHeld    = distributor_dealer_count($srcDistId);
-$srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
+$srcCap     = child_cap('distributor', $srcDistId);
+$srcRoom    = $srcCap === 0 || $srcHeld < $srcCap;
 ?>
 <div class="drawer-source" id="detail-distributor-<?= $srcDistId ?>" hidden>
 
@@ -75,13 +76,12 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
           </div>
         </dl>
         <span class="field-hint">
-          Commission is paid against a voucher, not from here: they bundle their own claim with their
-          dealers' approved ones, C&amp;F presents it and pays it once the office funds it. What lands
-          that way is listed under Payouts.
+          Commission is not paid from here: once released, it comes down the chain to them (from
+          their zonal C&amp;F, or the office when they have none) and they pass their dealers' share on.
         </span>
 
         <div class="drawer-actions">
-          <a class="btn btn--ghost btn--sm" href="vouchers">Open the claims</a>
+          <a class="btn btn--ghost btn--sm" href="commissions?party=distributor">Commission payouts</a>
           <a class="btn btn--ghost btn--sm" href="distributors?edit=<?= $srcDistId ?>">Edit distributor</a>
         </div>
       </div>
@@ -236,13 +236,13 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
       <div class="detail-block">
         <p class="detail-block__title">
           Add a dealer under them
-          <span class="detail-block__note"><?= (int) $srcHeld ?> of <?= (int) ($dealerLimit ?? dealer_limit()) ?> used</span>
+          <span class="detail-block__note"><?= e(child_cap_usage('distributor', $srcDistId)) ?> used</span>
         </p>
 
         <?php if (!$srcRoom): ?>
           <p class="empty">
             <?= e($srcDist['full_name']) ?> already holds <?= (int) $srcHeld ?> dealers, which is the limit.
-            Raise it under <a href="settings">Settings</a>, or take one out first.
+            Raise their limit (Edit), or take one out first.
           </p>
         <?php else: ?>
           <?php /* the office adds a dealer outright — approving its own entry
@@ -250,9 +250,8 @@ $srcRoom    = $srcHeld < ($dealerLimit ?? dealer_limit());
                    opens in a dialog rather than living in this panel. */ ?>
           <span class="field-hint">
             A dealer added here is approved at once and gets their code with it, and every
-            sale they make earns <?= e($srcDist['full_name']) ?> the override —
-            <?= e(money_short(commission_value('override', 'stove'))) ?> a stove,
-            <?= e(money_short(commission_value('override', 'tuktuk'))) ?> a kit.
+            sale they make earns <?= e($srcDist['full_name']) ?>
+            <?= e(rate_short(commission_rate('distributor'))) ?> of it.
           </span>
 
           <div class="drawer-actions drawer-actions--end">

@@ -20,8 +20,8 @@ $allDealers = distributor_own_dealers($distId);
 
 /* how much of their allowance is used, counting the ones still waiting */
 $held  = distributor_dealer_count($distId);
-$limit = dealer_limit();
-$room  = $held < $limit;
+$limit = child_cap('distributor', $distId);
+$room  = $limit === 0 || $held < $limit;
 
 /* the table shows one page; State and "Earned you" are worked in the header */
 $paging  = paged(count($allDealers), $_GET['page'] ?? 1);
@@ -68,11 +68,10 @@ require __DIR__ . '/partials/layout-top.php';
     </span>
   </span>
   <span class="tile">
-    <span class="eyebrow">Your override</span>
-    <strong><?= e(money_short(commission_value('override', 'stove'))) ?></strong>
+    <span class="eyebrow">Your rate</span>
+    <strong><?= e(rate_short(commission_rate('distributor'))) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat">on every stove one of them sells,
-        <?= e(money_short(commission_value('override', 'tuktuk'))) ?> on a kit</span>
+      <span class="tile__stat">of every sale one of them makes</span>
     </span>
   </span>
 </div>
@@ -82,7 +81,7 @@ require __DIR__ . '/partials/layout-top.php';
     <div class="panel__head-text">
       <h2>Dealers</h2>
       <span class="eyebrow" data-table-count><?= (int) $paging['from'] ?>–<?= (int) $paging['to'] ?>
-        of <?= (int) $paging['total'] ?> · <?= (int) $held ?> of <?= (int) $limit ?> allowed</span>
+        of <?= (int) $paging['total'] ?> · <?= e(child_cap_usage('distributor', $distId)) ?> allowed</span>
     </div>
     <?php if ($room): ?>
       <a class="btn-add" href="add-dealer">

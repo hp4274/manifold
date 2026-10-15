@@ -73,29 +73,17 @@ switch ($action) {
     /* ---------- verify one transfer ---------- */
     case 'accept':
         $payment = load_payment($paymentId, $id);
-        $receipt = next_receipt_no($app);
 
-        db()->prepare(
-            'UPDATE payments
-                SET status = ?, receipt_no = ?, decided_at = NOW(), decided_by = ?, reject_reason = NULL
-              WHERE id = ?'
-        )->execute(['verified', $receipt, (int) $user['id'], $paymentId]);
+        /* the same decision a partner makes from their desk: status, receipt,
+           email and commission all follow from payment_decide() */
+        $done = payment_decide($paymentId, 'verify', ['type' => 'admin', 'id' => (int) $user['id']]);
 
-        sync_application_status($id);
+        if (isset($done['error'])) {
+            http_response_code((int) $done['code']);
+            exit($done['error']);
+        }
 
-        $payment['status']     = 'verified';
-        $payment['receipt_no'] = $receipt;
-        $payment['decided_at'] = date('Y-m-d H:i:s');
-
-        $totals = payment_totals($app);
-
-        /* the receipt carries a generated PDF and takes seconds to send; the
-           office should not stand there while it goes */
-        after_response(static function () use ($app, $payment, $totals): void {
-            send_receipt_email($app, $payment, $totals);
-        });
-
-        $did   = mb_strtolower(payment_stage_label((string) $payment['stage'])) . ' verified, receipt ' . $receipt;
+        $did   = mb_strtolower(payment_stage_label((string) $payment['stage'])) . ' verified, receipt ' . $done['receipt'];
         $flash = 'receipt';
         break;
 
@@ -106,33 +94,12 @@ switch ($action) {
         /* The applicant is emailed this, and it is the whole of what they are
            told. Refusing a payment without saying why leaves somebody looking at
            a rejected receipt for money they have already sent. */
-        if ($reason === '') {
-            http_response_code(422);
-            exit('Say why the payment is being turned down - the applicant is emailed the reason.');
+        $done = payment_decide($paymentId, 'reject', ['type' => 'admin', 'id' => (int) $user['id']], $reason);
+
+        if (isset($done['error'])) {
+            http_response_code((int) $done['code']);
+            exit($done['error']);
         }
-
-        db()->prepare(
-            'UPDATE payments
-                SET status = ?, reject_reason = ?, decided_at = NOW(), decided_by = ?
-              WHERE id = ?'
-        )->execute(['rejected', $reason !== '' ? mb_substr($reason, 0, 255) : null, (int) $user['id'], $paymentId]);
-
-        sync_application_status($id);
-
-        /* the proof is no longer evidence of anything — take it off disk */
-        if (!empty($payment['proof_path'])) {
-            $path = PAYMENT_PROOF_DIR . '/' . basename((string) $payment['proof_path']);
-
-            if (is_file($path)) {
-                unlink($path);
-            }
-        }
-
-        $rejectTotals = payment_totals($app);
-
-        after_response(static function () use ($app, $reason, $payment, $rejectTotals): void {
-            send_payment_rejected_email($app, $reason, $payment, $rejectTotals);
-        });
 
         $did   = mb_strtolower(payment_stage_label((string) $payment['stage'])) . ' turned down';
         $flash = 'rejected';

@@ -877,12 +877,12 @@ function import_commit(array $ready, array $context): array
         $columns['delivery_amount'] = (float) $plan['delivery'];
         $columns['payment_amount']  = (float) $plan['booking'];
 
-        $split = commission_split((string) $columns['product'], $dealer, $distributor);
-
-        $columns['dealer_id']              = $dealer ? (int) $dealer['id'] : null;
-        $columns['dealer_commission']      = $split['dealer'];
-        $columns['distributor_id']         = $distributor ? (int) $distributor['id'] : null;
-        $columns['distributor_commission'] = $split['distributor'];
+        /* who it belongs to and what every tier of the chain is owed on it */
+        $columns = array_merge(
+            $columns,
+            commission_chain_columns((string) $columns['product'], $dealer, $distributor,
+                $context['zonal_direct'] ?? null) /* import has no payment_plan: always booking, so $full stays false */
+        );
 
         /* The office still collects: an imported client goes through the portal
            and pays booking then delivery like any other. What the two columns

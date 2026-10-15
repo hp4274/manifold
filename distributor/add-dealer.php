@@ -23,8 +23,8 @@ $pageLead  = 'Ask the office to put a dealer under you.';
 $activeNav = 'dealers';
 
 $held  = distributor_dealer_count($distId);
-$limit = dealer_limit();
-$room  = $held < $limit;
+$limit = child_cap('distributor', $distId);
+$room  = $limit === 0 || $held < $limit;
 
 $error   = '';
 $editing = null;
@@ -35,8 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_d
     [$values, $error] = partner_values($_POST, 'dealer');
 
     if (!$room) {
-        $error = 'You already hold ' . $held . ' dealers, which is the limit. '
-            . 'Ask the office to raise it, or to take one out first.';
+        $error = 'You already have ' . $held . ' of ' . $limit . ' dealers allowed. '
+            . 'Ask whoever is above you to raise it, or to take one out first.';
     }
 
     if ($error === '') {
@@ -76,9 +76,8 @@ require __DIR__ . '/partials/layout-top.php';
     <div class="panel__head-text">
       <h2>A dealer under you</h2>
       <span class="eyebrow">
-        <?= (int) $held ?> of <?= (int) $limit ?> used · every completed sale of theirs earns you
-        <?= e(money_short(commission_value('override', 'stove'))) ?> on a stove,
-        <?= e(money_short(commission_value('override', 'tuktuk'))) ?> on a kit
+        <?= e(child_cap_usage('distributor', $distId)) ?> used · every sale of theirs earns you
+        <?= e(rate_short(commission_rate('distributor'))) ?> of it
       </span>
     </div>
     <a class="btn btn--ghost btn--sm" href="dealers">Back to dealers</a>

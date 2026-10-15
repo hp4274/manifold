@@ -2,9 +2,10 @@
 /**
  * The form a partner uses to order units from the tier above them.
  *
- * Shared by the dealer and the distributor portals, because it is the same
- * order from either side — only the price and who receives it differ, and both
- * come from $stockKind ('dealer' or 'distributor').
+ * Shared by every tier that buys — dealer, distributor and both C&F desks —
+ * because it is the same order from any of them: only the price and who
+ * receives it differ. The price comes from $stockKind (the buyer's tier), and
+ * $stockFrom, when set, names the seller in words ("your Zonal C&F").
  *
  * One order can be for both products. The partner pays once and uploads one
  * proof, so this is one document with a quantity against each product rather
@@ -60,7 +61,7 @@ foreach (['stove', 'tuktuk'] as $soProduct) {
     <strong data-stock-total><?= e(money($soTotal)) ?></strong>
     <span class="field-hint">
       Order either product or both — it is one payment and one proof either way. The units reach your
-      account once <?= $stockKind === 'dealer' ? 'your distributor' : 'the office' ?> has confirmed it.
+      account once <?= e($stockFrom ?? ($stockKind === 'dealer' ? 'your distributor' : 'the office')) ?> has confirmed it.
     </span>
   </div>
 

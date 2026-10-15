@@ -20,8 +20,24 @@ $recent  = array_slice($clients, 0, 5);
 
 $dashStock = stock_balance('dealer', $dealerId);
 
+/* customers who paid this dealer directly, waiting on their yes */
+$proofError = partner_proofs_handle(
+    'dealer', $dealerId, $dealer['full_name'] . ' (' . $dealer['dealer_code'] . ')', 'dealer_flash'
+);
+$proofs = partner_pending_proofs('dealer', $dealerId);
+$flash  = (string) ($_SESSION['dealer_flash'] ?? '');
+unset($_SESSION['dealer_flash']);
+
 require __DIR__ . '/partials/layout-top.php';
 ?>
+
+<?php if ($flash !== ''): ?>
+  <p class="alert alert--ok"><?= e($flash) ?></p>
+<?php endif; ?>
+
+<?php if ($proofError !== ''): ?>
+  <p class="alert alert--error"><?= e($proofError) ?></p>
+<?php endif; ?>
 
 <div class="tiles">
   <?php /* what is on the shelf right now, which is the figure that decides
@@ -105,6 +121,8 @@ require __DIR__ . '/partials/layout-top.php';
   </div>
 </div>
 
+<?php require __DIR__ . '/../admin/partials/partner-proofs.php'; ?>
+
 <div class="panel">
   <div class="panel__head">
     <div class="panel__head-text">
@@ -137,7 +155,7 @@ require __DIR__ . '/partials/layout-top.php';
         </thead>
         <tbody>
           <?php foreach ($recent as $client): ?>
-            <?php $progress = partner_progress($client['status']); ?>
+            <?php $progress = partner_progress($client['status'], (string) ($client['payment_plan'] ?? '')); ?>
             <tr>
               <td data-lead>
                 <div class="cell-stack">

@@ -60,6 +60,32 @@ if ($kind === 'distributor') {
     exit;
 }
 
+if ($kind === 'principal_cf') {
+    $principal = principal_cf_by_id($id);
+
+    if (!$principal) {
+        http_response_code(404);
+        exit('That Principal C&F no longer exists.');
+    }
+
+    $srcPrincipal = $principal;
+    require __DIR__ . '/partials/principal-source.php';
+    exit;
+}
+
+if ($kind === 'zonal_cf') {
+    $zonal = zonal_cf_by_id($id);
+
+    if (!$zonal) {
+        http_response_code(404);
+        exit('That Zonal C&F no longer exists.');
+    }
+
+    $srcZonal = $zonal;
+    require __DIR__ . '/partials/zonal-source.php';
+    exit;
+}
+
 /* an application, an enquiry or a signup — all three share one partial */
 /* type_config() answers 404 and exits on anything it does not know, which is
    the check — there is nothing to add to it here */

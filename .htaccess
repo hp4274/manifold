@@ -19,7 +19,7 @@ RewriteEngine On
 
 RewriteRule ^(blog|raffle|seeder)\.php$ - [L]
 
-RewriteRule ^admin/(submit|file|drawer|receipt|receipt-pdf|raffle-search)\.php$ - [L]
+RewriteRule ^admin/(submit|file|drawer|receipt|receipt-pdf|raffle-search|partner-lookup)\.php$ - [L]
 
 RewriteRule ^portal/(session|prefill|receipt)\.php$ - [L]
 
@@ -29,7 +29,8 @@ RewriteRule ^portal/(session|prefill|receipt)\.php$ - [L]
 # page. Same for the button that starts the payment.
 RewriteRule ^portal/pg-(initiate|return)\.php$ - [L]
 
-RewriteRule ^distributor/proof\.php$ - [L]
+RewriteRule ^(distributor|cfdesk)/proof\.php$ - [L]
+RewriteRule ^(dealer|distributor)/payment-proof\.php$ - [L]
 
 # The paying agent's desk was /rf/ before it was renamed C&F. Anything still
 # pointing at the old path is sent on to the new one rather than 404ing.

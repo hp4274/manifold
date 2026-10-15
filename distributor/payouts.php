@@ -1,9 +1,12 @@
 <?php
 /**
- * What the office has transferred to this distributor, and what is standing.
+ * This distributor's commission: what has come down to them, and their
+ * dealers' share to pass on.
  *
- * Reading only — the office records a transfer from the admin, and this is the
- * statement of it.
+ * Released money reaches a distributor from their zonal C&F (or from the office
+ * when the sale had none). Their own lines are paid by that arrival; the rest is
+ * their dealers', sent on from here with a UTR and receipt per dealer. The
+ * amount is never typed — commission_transfer() works it out from the lines.
  */
 
 declare(strict_types=1);
@@ -13,64 +16,30 @@ require_once __DIR__ . '/lib.php';
 $dist      = require_distributor();
 $distId    = (int) $dist['id'];
 $pageTitle = 'Payouts';
-$pageLead  = 'What has been transferred to you, and what has not.';
+$pageLead  = 'What has reached you, and what you owe each of your dealers.';
 $activeNav = 'payouts';
-
-$totals  = distributor_totals($distId);
-$payouts = distributor_payouts($distId);
 
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $action = (string) ($_POST['action'] ?? '');
-
-    if ($action === 'approve_dealer_voucher' || $action === 'reject_dealer_voucher') {
-        /* their dealers' claims: the first check, because they are the one who
-           knows whether those sales are real */
-        $voucherId = (int) ($_POST['voucher_id'] ?? 0);
-
-        $error = $action === 'approve_dealer_voucher'
-            ? voucher_approve_dealer($voucherId, $distId, $dist['full_name'])
-            : voucher_reject($voucherId, $dist['full_name'], (string) ($_POST['reason'] ?? ''));
+    if ((string) ($_POST['action'] ?? '') === 'passdown') {
+        [$done, $error] = commission_transfer_post('distributor', $distId, (string) $dist['full_name']);
 
         if ($error === '') {
-            $_SESSION['distributor_flash'] = $action === 'approve_dealer_voucher'
-                ? 'Approved. It goes to C&F in your next bundle.'
-                : 'Turned down. Those sales can be claimed again.';
-
-            header('Location: payouts');
-            exit;
-        }
-    } elseif ($action === 'bundle') {
-        [$bundleId, $error] = voucher_bundle($distId, $dist['full_name']);
-
-        if ($error === '') {
-            $_SESSION['distributor_flash'] = 'Bundle sent to C&F — your own claim and every dealer '
-                . 'voucher you had approved.';
-
+            $_SESSION['distributor_flash'] = $done;
             header('Location: payouts');
             exit;
         }
     }
 }
 
-$claimable   = voucher_claimable('distributor', $distId);
-$openVoucher = voucher_open_for('distributor', $distId);
-$myVouchers  = vouchers_for('distributor', $distId);
-$dealerAsks  = voucher_dealer_claims($distId, ['with_distributor']);
-$approvedAsks = voucher_dealer_claims($distId, ['bundled']);
-$approvedAsks = array_values(array_filter(
-    $approvedAsks,
-    static fn (array $v): bool => $v['parent_id'] === null
-));
+$totals  = distributor_totals($distId);
+$payouts = distributor_payouts($distId);   /* voucher-era transfers, before the pass-down */
 
-$claimTotal = 0.0;
-
-foreach ($claimable as $claimRow) {
-    $claimTotal += (float) $claimRow['amount'];
-}
+$payoutLines = commission_payout_lines(['distributor'], $distId);
+$receiptUrl  = 'receipt';
 
 $flash = (string) ($_SESSION['distributor_flash'] ?? '');
 unset($_SESSION['distributor_flash']);
@@ -83,7 +52,7 @@ require __DIR__ . '/partials/layout-top.php';
 <?php endif; ?>
 
 <?php if ($error !== ''): ?>
-  <p class="alert alert--error"><?= e($error) ?></p>
+  <p class="alert alert--error" role="alert"><?= e($error) ?></p>
 <?php endif; ?>
 
 <div class="tiles">
@@ -98,63 +67,52 @@ require __DIR__ . '/partials/layout-top.php';
   <span class="tile">
     <span class="eyebrow">Paid to you</span>
     <strong><?= e(money($totals['paid'])) ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat"><?= count($payouts) ?> transfer<?= count($payouts) === 1 ? '' : 's' ?></span>
-    </span>
   </span>
   <span class="tile">
-    <span class="eyebrow">Still owed to you</span>
+    <span class="eyebrow">Still to reach you</span>
     <strong><?= e(money($totals['remaining'])) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat">the office transfers this by hand</span>
+      <span class="tile__stat">released commission comes down the chain to you</span>
     </span>
   </span>
 </div>
 
-<?php $voucherKind = 'distributor'; require __DIR__ . '/../admin/partials/voucher-claim.php'; ?>
+<?php
+$pdType    = 'distributor';
+$pdId      = $distId;
+$pdAction  = 'payouts';
+$pdReceipt = static fn (array $t): string => 'receipt?transfer=' . (int) $t['id'];
+require __DIR__ . '/../admin/partials/commission-passdown.php';
+?>
 
+<?php require __DIR__ . '/../admin/partials/commission-lines.php'; ?>
+
+<?php if ($payouts): ?>
 <div class="panel">
   <div class="panel__head">
     <div class="panel__head-text">
-      <h2>Transfers</h2>
-      <span class="eyebrow">newest first</span>
+      <h2>Earlier transfers</h2>
+      <span class="eyebrow">paid against commission vouchers, before the pass-down</span>
     </div>
   </div>
 
-  <?php if (!$payouts): ?>
-    <p class="empty">
-      Nothing has been transferred yet.
-      <?= $totals['remaining'] > 0
-          ? 'You are owed ' . e(money($totals['remaining'])) . ' — the office pays it by hand.'
-          : 'Commission appears here once a sale under you is complete.' ?>
-    </p>
-  <?php else: ?>
-    <div class="table-wrap">
-      <table class="data-table data-table--dealer-payouts data-table--stack">
-        <colgroup>
-          <col style="width:26%">
-          <col style="width:22%">
-          <col style="width:52%">
-        </colgroup>
-        <thead>
+  <div class="table-wrap">
+    <table class="data-table data-table--dealer-payouts data-table--stack">
+      <thead>
+        <tr><th>Paid on</th><th>Amount</th><th>Reference</th></tr>
+      </thead>
+      <tbody>
+        <?php foreach ($payouts as $payout): ?>
           <tr>
-            <th>Paid on</th>
-            <th>Amount</th>
-            <th>Reference</th>
+            <td data-label="Paid on"><?= e(format_datetime($payout['paid_at'])) ?></td>
+            <td class="td-amount" data-label="Amount"><strong><?= e(money((float) $payout['amount'])) ?></strong></td>
+            <td data-label="Reference"><?= e($payout['note'] ?: '—') ?></td>
           </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($payouts as $payout): ?>
-            <tr>
-              <td data-label="Paid on"><?= e(format_datetime($payout['paid_at'])) ?></td>
-              <td class="td-amount" data-label="Amount"><strong><?= e(money((float) $payout['amount'])) ?></strong></td>
-              <td data-label="Reference"><?= e($payout['note'] ?: '—') ?></td>
-            </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
-    </div>
-  <?php endif; ?>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
 </div>
+<?php endif; ?>
 
 <?php require __DIR__ . '/partials/layout-bottom.php'; ?>

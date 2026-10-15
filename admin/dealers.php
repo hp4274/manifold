@@ -58,6 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Pick the distributor this dealer answers to.';
             } elseif ($error === '' && !distributor_by_id($values['distributor_id'])) {
                 $error = 'That distributor no longer exists.';
+            } elseif ($error === '') {
+                $error = child_cap_error('distributor', $values['distributor_id']);
             }
         }
 
@@ -350,8 +352,7 @@ require __DIR__ . '/partials/layout-top.php';
     <span class="eyebrow">Commission earned</span>
     <strong><?= e(money_short($totals['earned'])) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat"><?= e(money_short(commission_value('dealer', 'stove'))) ?> a stove,
-        <?= e(money_short(commission_value('dealer', 'tuktuk'))) ?> a kit</span>
+      <span class="tile__stat"><?= e(rate_short(commission_rate('dealer'))) ?> of every sale they make</span>
     </span>
   </span>
   <span class="tile">

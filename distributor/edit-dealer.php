@@ -37,10 +37,22 @@ $activeNav = 'dealers';
 $error   = '';
 $editing = $dealer;
 
+/* a dealer can be paid up to what the distributor earns themselves, never past it */
+$ceiling = commission_rate('distributor', $distId);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_dealer') {
     csrf_check();
 
     [$values, $error] = partner_values($_POST, 'dealer', $dealerId);
+
+    /* blank = the standard dealer rate, NULL in the column */
+    $rawRate = str_replace(['%', ','], '', trim((string) ($_POST['commission_rate'] ?? '')));
+
+    if ($rawRate !== '' && (!is_numeric($rawRate) || (float) $rawRate < 0 || (float) $rawRate > $ceiling)) {
+        $error = $error ?: 'The rate has to be between 0 and your own ' . rate_short($ceiling) . '.';
+    }
+
+    $values['commission_rate'] = $rawRate === '' ? null : number_format((float) $rawRate, 2, '.', '');
 
     if ($error === '') {
         $columns = array_keys($values);
@@ -90,6 +102,24 @@ require __DIR__ . '/partials/layout-top.php';
       <input type="hidden" name="action" value="save_dealer">
       <input type="hidden" name="id" value="<?= (int) $dealer['id'] ?>">
 
+      <section class="form-section">
+        <div class="form-section__head">
+          <h3 class="form-section__title">Commission</h3>
+          <span class="form-section__note">percent of the sale, excluding GST</span>
+        </div>
+        <div class="field">
+          <label for="commission_rate">Rate for this dealer</label>
+          <input id="commission_rate" name="commission_rate" type="number" step="0.01" min="0"
+                 max="<?= e(number_format($ceiling, 2, '.', '')) ?>"
+                 value="<?= isset($editing['commission_rate']) && $editing['commission_rate'] !== null ? e(rtrim(rtrim((string) $editing['commission_rate'], '0'), '.')) : '' ?>"
+                 placeholder="<?= e(rtrim(rtrim(number_format(commission_rate('dealer'), 2, '.', ''), '0'), '.')) ?>">
+          <span class="field-hint">
+            Leave blank for the standard <?= e(rate_short(commission_rate('dealer'))) ?>.
+            Most you can set is your own <?= e(rate_short($ceiling)) ?>. New sales use it; sales already made keep theirs.
+          </span>
+        </div>
+      </section>
+
       <?php
         $partnerKind   = 'dealer';
         $partnerEdit   = $editing;
@@ -101,7 +131,7 @@ require __DIR__ . '/partials/layout-top.php';
 
     <div class="modal-x__foot">
       <span class="field-hint">
-        The bank details here are the ones their commission voucher is paid into.
+        The bank details here are the ones you transfer their commission into.
       </span>
       <a class="btn btn--ghost" href="dealers">Cancel</a>
       <button type="submit" class="btn btn--primary">Save their details</button>

@@ -44,15 +44,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save') {
         [$values, $error] = partner_values($_POST, 'distributor', $id);
+        $zonalId = !empty($_POST['zonal_cf_id']) ? (int) $_POST['zonal_cf_id'] : null;
+
+        /* how many dealers this distributor may hold */
+        [$values['max_children'], $capError] = child_cap_parse($_POST['max_children'] ?? '');
+        $error = $error ?: $capError;
+
+        /* a new distributor, or one moved to another zonal, takes up a place there */
+        $before = $id > 0 ? distributor_by_id($id) : null;
+
+        if ($error === '' && $zonalId !== null
+            && (int) ($before['zonal_cf_id'] ?? 0) !== $zonalId) {
+            $error = zonal_cf_by_id($zonalId) ? child_cap_error('zonal_cf', $zonalId, $id)
+                                              : 'That Zonal C&F no longer exists.';
+        }
 
         if ($error === '' && $id > 0) {
-            $set = implode(' = ?, ', PARTNER_FIELDS) . ' = ?';
+            $set = implode(' = ?, ', [...PARTNER_FIELDS, 'max_children']) . ' = ?, zonal_cf_id = ?';
             db()->prepare('UPDATE distributors SET ' . $set . ' WHERE id = ?')
-                ->execute([...array_values($values), $id]);
+                ->execute([...array_values($values), $zonalId, $id]);
 
             distributors_done('Distributor updated.');
         } elseif ($error === '') {
             $values['distributor_code'] = make_distributor_code();
+            $values['zonal_cf_id']      = $zonalId;
             $values['created_by']       = (int) $user['id'];
 
             $names        = array_keys($values);
@@ -62,6 +77,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . $placeholders . ')')->execute(array_values($values));
 
             distributors_done($values['full_name'] . ' added, with code ' . $values['distributor_code'] . '.');
+        }
+    } elseif ($action === 'approve_distributor' || $action === 'reject_distributor') {
+        $done = distributor_decide($id, $action === 'approve_distributor' ? 'approved' : 'rejected', (int) $user['id']);
+
+        if (isset($done['error'])) {
+            $error = $done['error'];
+        } else {
+            distributors_done($done['message']);
         }
     } elseif ($action === 'toggle') {
         db()->prepare('UPDATE distributors SET is_active = 1 - is_active WHERE id = ?')->execute([$id]);
@@ -85,9 +108,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$dist) {
             $error = 'Pick the distributor this dealer answers to.';
-        } elseif ($error === '' && !distributor_has_room($id)) {
-            $error = $dist['full_name'] . ' already holds ' . distributor_dealer_count($id)
-                . ' dealers, which is the limit. Raise it under Settings, or take one out first.';
+        } elseif ($error === '' && ($full = child_cap_error('distributor', $id)) !== '') {
+            $error = $full . ' Raise their limit, or take one out first.';
         } elseif ($error === '') {
             $values['dealer_code']     = make_dealer_code();
             $values['distributor_id']  = $id;
@@ -193,14 +215,17 @@ $order = $sort === '' ? 'is_active DESC, full_name' : $sorts[$sort] . ', full_na
 $whereClause = '';
 if ($q !== '') {
     $qEscaped = db()->quote('%' . $q . '%');
-    $whereClause = ' WHERE full_name LIKE ' . $qEscaped . ' OR distributor_code LIKE ' . $qEscaped;
+    $whereClause = ' WHERE distributors.full_name LIKE ' . $qEscaped . ' OR distributors.distributor_code LIKE ' . $qEscaped;
 }
 
 $distCount = (int) db()->query('SELECT COUNT(*) FROM distributors' . $whereClause)->fetchColumn();
 $paging    = paged($distCount, $_GET['page'] ?? 1);
 
 $distributors = db()->query(
-    'SELECT * FROM distributors' . $whereClause . '
+    'SELECT distributors.*, z.full_name AS zonal_name, z.zonal_code
+       FROM distributors
+       LEFT JOIN zonal_cf z ON z.id = distributors.zonal_cf_id'
+      . $whereClause . '
       ORDER BY ' . $order . '
       LIMIT ' . LIST_PER_PAGE . ' OFFSET ' . $paging['offset']
 )->fetchAll();
@@ -294,8 +319,7 @@ require __DIR__ . '/partials/layout-top.php';
     <span class="eyebrow">Commission earned</span>
     <strong><?= e(money_short($totals['earned'])) ?></strong>
     <span class="tile__stats">
-      <span class="tile__stat"><?= e(money_short(commission_value('override', 'stove'))) ?> override,
-        <?= e(money_short(commission_value('direct', 'stove'))) ?> direct, on a stove</span>
+      <span class="tile__stat"><?= e(rate_short(commission_rate('distributor'))) ?> of every sale under them</span>
     </span>
   </span>
   <span class="tile">
@@ -397,46 +421,80 @@ require __DIR__ . '/partials/layout-top.php';
                   <?php if ($dist['company']): ?>
                     <span class="cell-sub"><?= e($dist['company']) ?></span>
                   <?php endif; ?>
+                  <?php if (!empty($dist['zonal_name'])): ?>
+                    <span class="cell-sub"><i class="bi bi-geo-alt"></i> Zonal: <?= e($dist['zonal_name']) ?> (<?= e($dist['zonal_code'] ?: 'MZ••••••') ?>)</span>
+                  <?php endif; ?>
                   <span class="cell-sub">
                     <?php if ($dist['mobile_number']): ?><?= e($dist['mobile_number']) ?> · <?php endif; ?><?= e($dist['email'] ?: 'no email') ?>
                   </span>
-                  <?php if (!$dist['is_active']): ?>
+                  <?php if (($dist['approval_status'] ?? '') === 'pending'): ?>
+                    <span class="pill pill--warning"><i class="bi bi-clock"></i> Pending approval</span>
+                  <?php elseif (($dist['approval_status'] ?? '') === 'rejected'): ?>
+                    <span class="pill pill--rejected">Turned down</span>
+                  <?php elseif (!$dist['is_active']): ?>
                     <span class="pill pill--rejected">Switched off</span>
                   <?php endif; ?>
                 </div>
               </td>
-              <td><span class="drawer__code"><?= e($dist['distributor_code']) ?></span></td>
+              <td><span class="drawer__code"><?= e($dist['distributor_code'] ?: 'MX••••••') ?></span></td>
               <td>
                 <div class="copy-links">
-                  <?php foreach (['stove' => 'Stove', 'tuktuk' => 'TukTuk'] as $product => $label): ?>
-                    <?php $link = referral_link((string) $dist['distributor_code'], $product); ?>
-                    <button type="button" class="btn btn--ghost btn--sm" data-copy="<?= e($link) ?>"
-                            title="Copy the <?= e($label) ?> apply link">
-                      <i class="bi bi-link-45deg" aria-hidden="true"></i> <?= e($label) ?>
-                      <span class="visually-hidden">apply link for <?= e($dist['full_name']) ?></span>
-                    </button>
-                  <?php endforeach; ?>
+                  <?php if (!empty($dist['distributor_code'])): ?>
+                    <?php foreach (['stove' => 'Stove', 'tuktuk' => 'TukTuk'] as $product => $label): ?>
+                      <?php $link = referral_link((string) $dist['distributor_code'], $product); ?>
+                      <button type="button" class="btn btn--ghost btn--sm" data-copy="<?= e($link) ?>"
+                              title="Copy the <?= e($label) ?> apply link">
+                        <i class="bi bi-link-45deg" aria-hidden="true"></i> <?= e($label) ?>
+                        <span class="visually-hidden">apply link for <?= e($dist['full_name']) ?></span>
+                      </button>
+                    <?php endforeach; ?>
+                  <?php else: ?>
+                    <span class="field-hint">Awaiting approval</span>
+                  <?php endif; ?>
                 </div>
               </td>
-              <td class="td-amount"><strong><?= count($dist['dealers']) ?></strong></td>
+              <td class="td-amount"><strong><?= e(child_cap_usage('distributor', $distId)) ?></strong></td>
               <td class="td-amount"><strong><?= e(money($dist['totals']['remaining'])) ?></strong></td>
               <td>
                 <div class="row-actions">
-                  <form method="post">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="id" value="<?= $distId ?>">
-                    <button type="submit" name="action" value="toggle"
-                            class="icon-btn <?= $dist['is_active'] ? 'is-reject' : 'is-accept' ?>"
-                            title="<?= $dist['is_active']
-                                ? 'Stop this distributor — their code stops booking commission'
-                                : 'Start this distributor again' ?>">
-                      <i class="bi <?= $dist['is_active'] ? 'bi-pause-circle' : 'bi-play-circle' ?>"
-                         aria-hidden="true"></i>
-                      <span class="visually-hidden">
-                        <?= $dist['is_active'] ? 'Stop' : 'Start' ?> <?= e($dist['full_name']) ?>
-                      </span>
-                    </button>
-                  </form>
+                  <?php if (($dist['approval_status'] ?? '') === 'pending'): ?>
+                    <form method="post">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="id" value="<?= $distId ?>">
+                      <button type="submit" name="action" value="approve_distributor"
+                              class="icon-btn is-accept" title="Approve <?= e($dist['full_name']) ?>">
+                        <i class="bi bi-check-lg" aria-hidden="true"></i>
+                        <span class="visually-hidden">Approve <?= e($dist['full_name']) ?></span>
+                      </button>
+                    </form>
+
+                    <form method="post"
+                          data-confirm="Turn down <?= e($dist['full_name']) ?>? Their code stays inactive.">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="id" value="<?= $distId ?>">
+                      <button type="submit" name="action" value="reject_distributor"
+                              class="icon-btn is-reject" title="Turn down <?= e($dist['full_name']) ?>">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        <span class="visually-hidden">Turn down <?= e($dist['full_name']) ?></span>
+                      </button>
+                    </form>
+                  <?php else: ?>
+                    <form method="post">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="id" value="<?= $distId ?>">
+                      <button type="submit" name="action" value="toggle"
+                              class="icon-btn <?= $dist['is_active'] ? 'is-reject' : 'is-accept' ?>"
+                              title="<?= $dist['is_active']
+                                  ? 'Stop this distributor — their code stops booking commission'
+                                  : 'Start this distributor again' ?>">
+                        <i class="bi <?= $dist['is_active'] ? 'bi-pause-circle' : 'bi-play-circle' ?>"
+                           aria-hidden="true"></i>
+                        <span class="visually-hidden">
+                          <?= $dist['is_active'] ? 'Stop' : 'Start' ?> <?= e($dist['full_name']) ?>
+                        </span>
+                      </button>
+                    </form>
+                  <?php endif; ?>
 
                   <form method="post"
                         data-confirm="Delete <?= e($dist['full_name']) ?>? Their sales are kept. Only possible once no dealers are under them.">
@@ -504,6 +562,7 @@ require __DIR__ . '/partials/layout-top.php';
 
         <?php
           $partnerKind   = 'distributor';
+          $partnerCapEdit = true;
           $partnerEdit   = $editing;
           $partnerIsEdit = $isEdit;
           $partnerCode   = $isEdit ? (string) $editing['distributor_code'] : '';

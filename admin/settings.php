@@ -36,10 +36,14 @@ $editingAdmin = null;
 $openAccountModal = false;
 
 /* What an account can be. The office runs everything; C&F sees the commission
-   claims and nothing else. */
+   claims and nothing else. The Principal C&F signs the half of a low-stock
+   approval the office cannot sign for itself, so it needs an account of its own
+   — it reads the dashboard like the office otherwise. */
 const ADMIN_ROLES = [
-    'admin' => 'Office',
-    'cf'    => 'C&F',
+    'admin'        => 'Office',
+    /* 'cf' (the voucher-paying desk) is retired: no new accounts of it. An
+       existing one still signs in, to a page that says so. */
+    'principal_cf' => 'Principal C&F',
 ];
 
 /**
@@ -73,19 +77,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             settings_done($done['message']);
         }
     } elseif ($action === 'dealer_limit') {
-        $limit = trim((string) ($_POST['dealer_limit'] ?? ''));
+        /* the defaults for anybody whose own limit is blank; 0 = no limit */
+        $limits = [];
 
-        if (!ctype_digit($limit) || (int) $limit < 1) {
-            $error = 'The dealer limit has to be a whole number, one or more.';
-        } else {
-            save_setting('dealer_limit', (string) (int) $limit);
-            settings_done('Saved. A distributor may hold ' . (int) $limit . ' dealers.');
+        foreach (['default_max_zonals', 'default_max_distributors', 'dealer_limit'] as $key) {
+            $limits[$key] = trim((string) ($_POST[$key] ?? ''));
+
+            if (!ctype_digit($limits[$key]) || (int) $limits[$key] > 100000) {
+                $error = 'Each default limit has to be a whole number, 0 for no limit.';
+            }
+        }
+
+        if ($error === '') {
+            foreach ($limits as $key => $value) {
+                save_setting($key, (string) (int) $value);
+            }
+
+            settings_done('Saved. The default limits apply to everybody without their own.');
         }
     } elseif ($action === 'stock_prices') {
         /* What a partner pays the tier above them for one unit. Frozen onto
            every order at the moment it is raised, so changing these never
            rewrites an order already placed. */
         $priceKeys = [
+            'stock_price_principal_cf_stove'  => 'the Principal C&F stove price',
+            'stock_price_principal_cf_tuktuk' => 'the Principal C&F TukTuk price',
+            'stock_price_zonal_cf_stove'      => 'the Zonal C&F stove price',
+            'stock_price_zonal_cf_tuktuk'     => 'the Zonal C&F TukTuk price',
             'stock_price_distributor_stove'  => 'the distributor stove price',
             'stock_price_distributor_tuktuk' => 'the distributor TukTuk price',
             'stock_price_dealer_stove'       => 'the dealer stove price',
@@ -322,8 +340,10 @@ require __DIR__ . '/partials/layout-top.php';
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="stock_prices">
 
-    <?php foreach (['distributor' => 'A distributor buys from the office',
-                    'dealer'      => 'A dealer buys from their distributor'] as $tier => $tierLabel): ?>
+    <?php foreach (['principal_cf' => 'A Principal C&F buys from the office',
+                    'zonal_cf'     => 'A Zonal C&F buys from their Principal C&F',
+                    'distributor'  => 'A distributor buys from their Zonal C&F',
+                    'dealer'       => 'A dealer buys from their distributor'] as $tier => $tierLabel): ?>
       <section class="form-section">
         <div class="form-section__head">
           <h3 class="form-section__title"><?= e($tierLabel) ?></h3>
@@ -332,16 +352,11 @@ require __DIR__ . '/partials/layout-top.php';
 
         <div class="form-grid">
           <?php foreach (['stove' => 'Stove', 'tuktuk' => 'TukTuk kit'] as $stockProduct => $productLabel): ?>
-            <?php
-              $priceKey  = 'stock_price_' . $tier . '_' . $stockProduct;
-              $retail    = payment_plan($stockProduct);
-              $retailSum = (float) $retail['booking'] + (float) $retail['delivery'];
-            ?>
+            <?php $priceKey = 'stock_price_' . $tier . '_' . $stockProduct; ?>
             <div class="field">
               <label for="<?= e($priceKey) ?>"><?= e($productLabel) ?></label>
               <input id="<?= e($priceKey) ?>" name="<?= e($priceKey) ?>" type="number" step="0.01" min="0"
                      value="<?= e(number_format(stock_price($tier, $stockProduct), 2, '.', '')) ?>" required>
-              <span class="field-hint">Sells to a customer for <?= e(money($retailSum)) ?>.</span>
             </div>
           <?php endforeach; ?>
         </div>
@@ -360,17 +375,30 @@ require __DIR__ . '/partials/layout-top.php';
 
 <div class="panel">
   <div class="panel__head">
-    <h2>Dealer limit</h2>
-    <span class="eyebrow">Applies the next time somebody adds one</span>
+    <h2>Default limits</h2>
+    <span class="eyebrow">For anybody without their own · 0 = no limit</span>
   </div>
 
   <form method="post" class="panel__body">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="dealer_limit">
 
+    <div class="form-grid">
+      <div class="field">
+        <label for="default_max_zonals">Zonal C&amp;Fs one Principal C&amp;F may hold</label>
+        <input id="default_max_zonals" name="default_max_zonals" type="number" step="1" min="0"
+               value="<?= (int) child_cap_default('principal_cf') ?>" required>
+      </div>
+      <div class="field">
+        <label for="default_max_distributors">Distributors one Zonal C&amp;F may hold</label>
+        <input id="default_max_distributors" name="default_max_distributors" type="number" step="1" min="0"
+               value="<?= (int) child_cap_default('zonal_cf') ?>" required>
+      </div>
+    </div>
+
     <div class="field">
       <label for="dealer_limit">Dealers one distributor may hold</label>
-      <input id="dealer_limit" name="dealer_limit" type="number" step="1" min="1"
+      <input id="dealer_limit" name="dealer_limit" type="number" step="1" min="0"
              value="<?= (int) $limit ?>" required>
       <span class="field-hint">
         Counts dealers waiting for approval as well as approved ones — otherwise a distributor could

@@ -15,7 +15,6 @@ declare(strict_types=1);
 $activeNav = $activeNav ?? '';
 $navItems  = [
     'dashboard' => ['label' => 'Dashboard', 'icon' => 'bi-grid',      'href' => './'],
-    'history'   => ['label' => 'History',   'icon' => 'bi-clock-history', 'href' => 'history'],
     'settings'  => ['label' => 'Settings',  'icon' => 'bi-sliders',   'href' => 'settings'],
 ];
 ?>

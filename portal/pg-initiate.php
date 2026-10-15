@@ -47,8 +47,21 @@ if ($due === null || $due['state'] !== 'due') {
     exit;
 }
 
-if ($app['status'] === 'rejected') {
-    header('Location: status#app-' . $id);
+if ($app['status'] === 'rejected' || $app['status'] === 'expired' || is_application_expired($app)) {
+    header('Location: status?pg_error=expired#app-' . $id);
+    exit;
+}
+
+/* a sale made with a partner's code is paid to that partner, never through
+   the company's gateway — the portal hides the button, this refuses it */
+if (application_payee($app) !== null) {
+    header('Location: status?pg_error=partner#app-' . $id);
+    exit;
+}
+
+/* the office and the principal have not both released this low-stock sale yet */
+if (low_stock_blocked($app)) {
+    header('Location: status?pg_error=low_stock#app-' . $id);
     exit;
 }
 

@@ -9,6 +9,8 @@ unset(
     $_SESSION['applicant_email'],
     $_SESSION['dealer_id'],
     $_SESSION['distributor_id'],
+    $_SESSION['principal_cf_id'],
+    $_SESSION['zonal_cf_id'],
     $_SESSION['portal_roles'],
     $_SESSION['otp_email'],
     /* so the next sign-in dates a fresh cookie instead of trusting this one's

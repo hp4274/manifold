@@ -84,7 +84,7 @@ require __DIR__ . '/partials/layout-top.php';
 
     <div class="modal-x__foot">
       <span class="field-hint">
-        The bank details here are the ones a commission voucher is paid into, so keep them right.
+        The bank details here are the ones your commission is transferred into, so keep them right.
       </span>
       <button type="submit" class="btn btn--primary">Save my details</button>
     </div>

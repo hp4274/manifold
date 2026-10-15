@@ -81,6 +81,12 @@ function distributor_client_view(array $client): array
         'distributor_commission' => (float) $client['distributor_commission'],
         /* one definition of earned, shared with the admin and the dealer portal */
         'earned'                 => commission_is_earned($client),
+        'kyc_verified_at'        => $client['kyc_verified_at'] ?? null,
+        'docs_verified_at'       => $client['docs_verified_at'] ?? null,
+        'payment_deadline_at'    => $client['payment_deadline_at'] ?? null,
+        'cancellation_locked'    => (int) ($client['cancellation_locked'] ?? 0),
+        'payment_plan'           => (string) ($client['payment_plan'] ?? ''),
+        'is_kyc_verified'        => !empty($client['kyc_verified_at']) || !empty($client['docs_verified_at']),
     ];
 }
 

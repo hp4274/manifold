@@ -14,15 +14,8 @@ require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/../dealer/lib.php';
 require_once __DIR__ . '/../distributor/lib.php';
 
-/* already signed in: straight to wherever they belong */
+/* no redirect when already signed in, so another account can sign in here too */
 $signedIn = portal_roles();
-
-if ($signedIn && ($_GET['stay'] ?? '') === '') {
-    if (count($signedIn) === 1) {
-        header('Location: ' . role_home($signedIn[0]));
-        exit;
-    }
-}
 
 $step  = 'email';
 $email = (string) ($_SESSION['otp_email'] ?? '');
@@ -134,7 +127,7 @@ require __DIR__ . '/partials/head.php';
       <p class="u-sub portal-card__lead">
         <?= $step === 'choose'
             ? 'That address is registered more than once. Pick what you came here for — you can come back and switch.'
-            : 'No password. Applicants, dealers and distributors all sign in here: enter your email address and we send a one-time code.' ?>
+            : 'No password. Applicants, dealers, distributors and C&amp;Fs all sign in here: enter your email address and we send a one-time code.' ?>
       </p>
 
       <?php if ($expired && $step === 'email'): ?>
@@ -165,16 +158,17 @@ require __DIR__ . '/partials/head.php';
           <?php foreach ($roles as $role): ?>
             <a class="role-card" href="<?= e(role_home($role)) ?>">
               <span class="role-card__icon">
-                <i class="bi bi-<?= $role === 'dealer' ? 'shop'
-                    : ($role === 'distributor' ? 'diagram-3' : 'clipboard-check') ?>" aria-hidden="true"></i>
+                <i class="bi bi-<?= ['dealer' => 'shop', 'distributor' => 'diagram-3',
+                    'zonal_cf' => 'geo-alt', 'principal_cf' => 'building'][$role] ?? 'clipboard-check' ?>" aria-hidden="true"></i>
               </span>
               <span class="role-card__text">
                 <strong><?= e(role_label($role)) ?></strong>
-                <span><?= $role === 'applicant'
-                    ? 'Your own order, its progress and receipts'
-                    : ($role === 'dealer'
-                        ? 'Your clients, your link and what you are owed'
-                        : 'Your dealers, your sales and what you are owed') ?></span>
+                <span><?= [
+                    'applicant'    => 'Your own order, its progress and receipts',
+                    'dealer'       => 'Your clients, your link and what you are owed',
+                    'zonal_cf'     => 'Your distributors and your commission',
+                    'principal_cf' => 'Your zonal C&amp;Fs and your commission',
+                ][$role] ?? 'Your dealers, your sales and what you are owed' ?></span>
               </span>
               <i class="bi bi-arrow-right" aria-hidden="true"></i>
             </a>

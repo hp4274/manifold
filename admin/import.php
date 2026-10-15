@@ -41,9 +41,16 @@ $distributor = $dealer
     ? distributor_for_dealer($dealer)
     : ($partnerCode === '' ? null : distributor_for_code($partnerCode));
 
+/* Neither a dealer's nor a distributor's code: it may be a zonal's, whose direct
+   sale pays them straight (same lookup as the website form). */
+$zonalDirect = !$dealer && !$distributor && $partnerCode !== '' && function_exists('zonal_cf_for_code')
+    ? zonal_cf_for_code($partnerCode)
+    : null;
+
 $context = [
     'dealer'                 => $dealer,
     'distributor'            => $dealer ? $distributor : ($distributor ?: null),
+    'zonal_direct'           => $zonalDirect,
     'entered_by_dealer'      => null,
     'entered_by_distributor' => null,
 ];
@@ -51,7 +58,7 @@ $context = [
 /* A code that matched nothing is refused rather than quietly ignored: an import
    of two hundred clients booked to nobody, because a code was mistyped, is not
    something anybody would notice until the commission did not appear. */
-if ($partnerCode !== '' && !$dealer && !$distributor) {
+if ($partnerCode !== '' && !$dealer && !$distributor && !$zonalDirect) {
     $state = [
         'stage'   => 'upload',
         'error'   => 'No active partner holds the code ' . $partnerCode . '. Check it against the '

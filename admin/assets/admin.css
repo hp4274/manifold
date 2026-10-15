@@ -424,6 +424,55 @@ ul{list-style:none;margin:0;padding:0}
 /* applications have six statuses — let the tile grid breathe */
 .tile__stats{grid-auto-rows:minmax(0,auto)}
 
+/* ---------- stock tiles ----------
+   Every stock page opens with the same row of cards, and each card says three
+   things in the same order: what it is (with its status pill at the right of
+   that label), the figure, and one line of what the figure means. The pill
+   used to share the bottom line with the sentence, which wrapped the sentence,
+   crowded the pill, and left the one card without a pill sitting at a
+   different height from the rest. */
+.tile__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:12px;
+  /* a card with no pill keeps the height of one that has one */
+  min-height:26px;
+}
+/* one line, always: a label that wrapped in one card and not its neighbour
+   was what put the figures at different heights. The full words are short,
+   and the card is rarely narrow enough to clip them. */
+.tile__head .eyebrow{
+  flex:1 1 auto;
+  min-width:0;
+  margin:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.tile__head .pill{flex:none;padding:4px 10px}
+/* Too narrow for the label and its pill side by side, the pill steps under
+   the label instead. Every card in a row is the same width, so they all step
+   together, and the fixed head height means a card without a pill still puts
+   its figure on the same line as its neighbours. */
+@container (max-width:300px){
+  .tile__head{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:6px;min-height:50px}
+  .tile__head .eyebrow{flex:none;max-width:100%}
+}
+.tiles--stock .tile strong{margin-bottom:10px}
+.tile__note{
+  display:block;
+  margin-top:auto;
+  font-size:var(--t-ui);
+  line-height:1.4;
+  color:var(--muted);
+  /* one line, always: the full sentence is in the title for whoever wants it */
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
 /* ---------- status pills ---------- */
 .pill{
   display:inline-flex;
@@ -455,6 +504,14 @@ ul{list-style:none;margin:0;padding:0}
 .pill--rejected{background:rgba(201,69,92,.12);color:var(--danger)}
 .pill--cancelled{background:rgba(201,69,92,.12);color:var(--danger)}
 .pill--refunded{background:rgba(132,153,172,.18);color:var(--muted)}
+.pill--warning{background:rgba(201,138,43,.18);color:#b45309}
+.pill--critical{background:rgba(239,68,68,.18);color:#b91c1c}
+.pill--good{background:rgba(75,180,83,.18);color:#26743a}
+
+.tile--stock-warn{border-color:#f59e0b !important;background:linear-gradient(180deg, #fffbeb 0%, #ffffff 100%) !important;box-shadow:0 4px 14px rgba(245,158,11,0.16) !important}
+.tile--stock-warn strong{color:#b45309 !important}
+.tile--stock-critical{border-color:#ef4444 !important;background:linear-gradient(180deg, #fef2f2 0%, #ffffff 100%) !important;box-shadow:0 4px 14px rgba(239,68,68,0.2) !important}
+.tile--stock-critical strong{color:#b91c1c !important}
 /* blog states */
 .pill--blog-published{background:rgba(75,180,83,.16);color:#26743a}
 .pill--blog-scheduled{background:rgba(59,163,220,.16);color:#2273a3}
@@ -1983,6 +2040,31 @@ body.has-modal{overflow:hidden}
 /* ---------- pager (under a list table) ----------
    Ten rows to a page. The count on the left says which ten; the links on the
    right move between them. Nothing is drawn at all when there is one page. */
+.table-tools{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  padding:12px 24px;
+  border-bottom:1px solid var(--line);
+}
+
+/* the pass-down transfer form: reference, receipt and button on one line so a
+   row is one row tall, not three stacked fields */
+.pd-form{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) auto;
+  align-items:end;
+  gap:10px;
+}
+.pd-form .field{margin:0;min-width:0}
+.pd-form .field label{display:block;margin-bottom:4px;font-size:var(--t-micro)}
+.pd-form .field input{height:38px;padding:0 12px;font-size:14px;width:100%}
+.pd-form .field input[type="file"]{padding:4px 6px;font-size:13px}
+.pd-form .field input[type="file"]::file-selector-button{
+  height:28px;margin-right:8px;padding:0 12px;font-size:13px;
+}
+.pd-form .btn{height:38px;white-space:nowrap}
+@media (max-width:1100px){.pd-form{grid-template-columns:1fr 1fr}.pd-form .btn{grid-column:1/-1}}
 .pager{
   display:flex;
   align-items:center;
@@ -2140,6 +2222,9 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
 }
 .code-preview__chip--pending{color:var(--muted)}
 .code-preview__text{font-size:12px;color:var(--body);line-height:1.5}
+/* the code box and the field after it (a Zonal C&F's principal) are two things */
+.code-preview + .field{margin-top:18px}
+.field > .code-preview{margin-top:6px}
 
 /* the button sits on its own shelf rather than trailing the last field */
 .modal-x__foot{
@@ -2226,8 +2311,9 @@ a.pager__step:hover{background:var(--tint);border-color:#c3d3df}
   line-height:1.6;
   color:var(--body);
 }
-.terms-scroll ul{margin:0;padding-left:18px}
-.terms-scroll li{margin-bottom:8px}
+.terms-scroll ul{margin:0;padding-left:0;list-style:none}
+.terms-scroll li{margin-bottom:8px;position:relative;padding-left:16px}
+.terms-scroll li::before{content:"*";position:absolute;left:2px;top:0;font-weight:700;color:var(--ink)}
 .terms-scroll li:last-child{margin-bottom:0}
 
 /* the one decision an application is waiting on, at the top of its drawer */
@@ -2584,6 +2670,15 @@ body.has-ask{overflow:hidden}
 /* Every stock figure is read against the one above it, so the digits have to
    sit in the same place. Proportional numerals make a column of counts look
    ragged and a changing total jump. */
+.stock-cell{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.stock-cell .stock-figure{
+  min-width:3.2ch;
+  font-size:1.05rem;
+}
 .stock-figure,
 .stock-order__amount,
 .data-table .td-amount{font-variant-numeric:tabular-nums}
@@ -2847,6 +2942,11 @@ body.has-ask{overflow:hidden}
 }
 .rate-rule{font-size:var(--t-ui);line-height:1.6;color:var(--body);margin:0}
 .rate-rule strong{color:var(--ink)}
+
+/* a "%" pinned inside the right edge of a percentage input */
+.pct-input{position:relative;display:block}
+.pct-input input{width:100%;padding-right:36px}
+.pct-input span{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-weight:600;color:var(--muted);pointer-events:none}
 
 /* the per-cent sign belongs to the field, not to the label */
 .rate-input{position:relative}
@@ -3388,17 +3488,22 @@ input[name*="email"]{text-transform:lowercase}
      The records are cards on a tinted strip, not rows divided by a rule. A
      hairline between two five-line records is not enough to say where one client
      ends and the next begins — an edge the whole way round is, and it costs the
-     same gutter the rule was already taking. */
-  .shell--partner .data-table--stack,
-  .shell--partner .data-table--stack tbody,
-  .shell--partner .data-table--stack tr,
-  .shell--partner .data-table--stack td{display:block;width:auto}
-  .shell--partner .data-table--stack{min-width:0;table-layout:auto;background:var(--tint)}
-  .shell--partner .data-table--stack colgroup{display:none}
-  .shell--partner .data-table--stack tbody{display:grid;gap:12px;padding:12px}
+     same gutter the rule was already taking.
+     Stacking is the one part of this section the office and the C&F desk share.
+     They keep the rail and the scaling above — their tables are the dense ones
+     that is for — but a table that has already declared data-label on every cell
+     is asking to become records, and squeezing ten columns into 375px instead
+     served nobody. */
+  .shell .data-table--stack,
+  .shell .data-table--stack tbody,
+  .shell .data-table--stack tr,
+  .shell .data-table--stack td{display:block;width:auto}
+  .shell .data-table--stack{min-width:0;table-layout:auto;background:var(--tint)}
+  .shell .data-table--stack colgroup{display:none}
+  .shell .data-table--stack tbody{display:grid;gap:12px;padding:12px}
   /* tbody, not tr: the header row is still a row, and the card styling drew it
      as an empty 30px card above every list */
-  .shell--partner .data-table--stack tbody tr{
+  .shell .data-table--stack tbody tr{
     padding:13px 14px 15px;
     border:1px solid var(--line);
     border-radius:var(--radius-sm);
@@ -3406,25 +3511,25 @@ input[name*="email"]{text-transform:lowercase}
     box-shadow:0 1px 2px rgba(10,45,80,.05);
   }
   /* the desk's row hover would knock the card's own surface out from under it */
-  .shell--partner .data-table--stack tbody tr:hover{background:var(--white)}
+  .shell .data-table--stack tbody tr:hover{background:var(--white)}
   /* display:block above outranks the browser's own [hidden] rule, and both the
      pager and the column filter hide rows by setting it — without this the
      filtered-out records stay on screen */
-  .shell--partner .data-table--stack tr[hidden]{display:none}
+  .shell .data-table--stack tr[hidden]{display:none}
 
   /* A column header is desk furniture, but on two of these tables it is also
      the filter. The row goes; the controls in it become chips above the cards,
      so filtering does not quietly disappear on a phone. */
-  .shell--partner .data-table--stack thead,
-  .shell--partner .data-table--stack thead tr{display:block}
-  .shell--partner .data-table--stack thead th{display:none}
-  .shell--partner .data-table--stack thead th.th-filter-cell{
+  .shell .data-table--stack thead,
+  .shell .data-table--stack thead tr{display:block}
+  .shell .data-table--stack thead th{display:none}
+  .shell .data-table--stack thead th.th-filter-cell{
     display:block;
     padding:12px 12px 0;
     border:0;
     background:none;
   }
-  .shell--partner .data-table--stack thead th.th-filter-cell .th-filter{
+  .shell .data-table--stack thead th.th-filter-cell .th-filter{
     justify-content:space-between;
     min-height:44px;
     padding:11px 14px;
@@ -3434,8 +3539,8 @@ input[name*="email"]{text-transform:lowercase}
   }
 
   /* every other cell states its label on the left and its value on the right */
-  .shell--partner .data-table--stack td{padding:0;border:0;white-space:normal}
-  .shell--partner .data-table--stack td[data-label]{
+  .shell .data-table--stack td{padding:0;border:0;white-space:normal}
+  .shell .data-table--stack td[data-label]{
     display:flex;
     flex-wrap:wrap;
     align-items:baseline;
@@ -3448,12 +3553,12 @@ input[name*="email"]{text-transform:lowercase}
      up as three words a line beside the money, so it takes its own line. Only
      after a <strong> — a cell whose whole value is a .cell-sub (a date, a
      reference) is the value itself and stays on the label's line. */
-  .shell--partner .data-table--stack td[data-label] > strong + .cell-sub{
+  .shell .data-table--stack td[data-label] > strong + .cell-sub{
     flex:1 0 100%;
     text-align:right;
   }
-  .shell--partner .data-table--stack td[data-label]::before,
-  .shell--partner .data-table--stack td[data-block]::before{
+  .shell .data-table--stack td[data-label]::before,
+  .shell .data-table--stack td[data-block]::before{
     content:attr(data-label);
     flex:0 0 auto;
     color:var(--muted);
@@ -3464,16 +3569,16 @@ input[name*="email"]{text-transform:lowercase}
   }
   /* the name is the record's heading, not one of its fields — and the rule under
      it separates who this is from what they have done */
-  .shell--partner .data-table--stack td[data-lead]{
+  .shell .data-table--stack td[data-lead]{
     padding-bottom:11px;
     margin-bottom:7px;
     border-bottom:1px solid var(--line);
   }
-  .shell--partner .data-table--stack td[data-lead]::before{content:none}
+  .shell .data-table--stack td[data-lead]::before{content:none}
 
   /* a cell holding controls rather than a value: its label sits above them and
      the control gets the full width, because a button is a target here */
-  .shell--partner .data-table--stack td[data-block]{
+  .shell .data-table--stack td[data-block]{
     margin-top:11px;
     padding-top:12px;
     border-top:1px solid var(--line);
@@ -3481,24 +3586,27 @@ input[name*="email"]{text-transform:lowercase}
        corner away from the control it names */
     text-align:left;
   }
-  .shell--partner .data-table--stack td[data-block]::before{
+  .shell .data-table--stack td[data-block]::before{
     content:attr(data-block);
     display:block;
     margin-bottom:9px;
   }
-  .shell--partner .data-table--stack td[data-block] .btn{
+  .shell .data-table--stack td[data-block] .btn{
     width:100%;
     min-height:44px;
     justify-content:center;
   }
-  .shell--partner .data-table--stack td[data-block] .decide__reason .btn{width:auto}
+  .shell .data-table--stack td[data-block] .decide__reason .btn{width:auto}
+  /* the desk right-aligns its icon buttons under their column; a record's
+     controls start at the label that names them */
+  .shell .data-table--stack td[data-block] .row-actions{justify-content:flex-start}
 
   /* nothing found is a sentence, not a record */
-  .shell--partner .data-table--stack .row-empty td{padding:24px 14px;text-align:center}
+  .shell .data-table--stack .row-empty td{padding:24px 14px;text-align:center}
 
   /* the value side is free to wrap now, and money keeps its own line */
-  .shell--partner .data-table--stack td.td-amount{align-items:center;text-align:left}
-  .shell--partner .data-table--stack td strong{
+  .shell .data-table--stack td.td-amount{align-items:center;text-align:left}
+  .shell .data-table--stack td strong{
     display:inline;
     max-width:none;
     overflow:visible;
@@ -3506,16 +3614,16 @@ input[name*="email"]{text-transform:lowercase}
   }
   /* the desk clamps a cell to two lines because the row below has to line up.
      A card has no row below it to line up with. */
-  .shell--partner .data-table--stack td .cell-stack span,
-  .shell--partner .data-table--stack td a:not([class]){
+  .shell .data-table--stack td .cell-stack span,
+  .shell .data-table--stack td a:not([class]){
     display:block;
     overflow:visible;
     -webkit-line-clamp:none;
   }
-  .shell--partner .data-table--stack td[data-label] .cell-stack{justify-items:end;text-align:right}
-  .shell--partner .data-table--stack td[data-lead] .cell-stack,
-  .shell--partner .data-table--stack td[data-block] .cell-stack{justify-items:start;text-align:left}
-  .shell--partner .data-table--stack .progress-bar{width:150px}
+  .shell .data-table--stack td[data-label] .cell-stack{justify-items:end;text-align:right}
+  .shell .data-table--stack td[data-lead] .cell-stack,
+  .shell .data-table--stack td[data-block] .cell-stack{justify-items:start;text-align:left}
+  .shell .data-table--stack .progress-bar{width:150px}
 
   /* Every control on these pages is worked with a thumb, but they were all
      sized for a mouse: Copy and Open came out 29px tall, the pager 34, the
@@ -3528,7 +3636,7 @@ input[name*="email"]{text-transform:lowercase}
   .shell--partner .pager__page{min-width:44px}
   .shell--partner .order-line__qty input{height:44px}
   /* the proof of payment is one tap inside a record, so it is sized like one */
-  .shell--partner .data-table--stack .link-arrow{
+  .shell .data-table--stack .link-arrow{
     display:inline-flex;
     align-items:center;
     min-height:44px;
@@ -3643,3 +3751,43 @@ input[name*="email"]{text-transform:lowercase}
 .client-edit__group .detail-block__title{margin-bottom:12px}
 /* the one way out of the read-only drawer */
 .drawer__edit{margin:0 0 14px}
+/* the enquiry Reply button: bottom right of the drawer, in reach however far it scrolls */
+.drawer__reply{
+  position:sticky;bottom:0;
+  display:flex;justify-content:flex-end;
+  margin-top:auto;padding:14px 0 6px;
+  background:linear-gradient(to top,var(--white) 65%,rgba(255,255,255,0));
+}
+/* a record with a Reply button fills the drawer, so the button sits at the foot of it */
+.drawer-source:has(.drawer__reply){display:flex;flex-direction:column;min-height:100%}
+
+.pill--expired {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #f87171;
+}
+.pay-panel--expired {
+  border-left: 4px solid #ef4444;
+}
+
+/* ---- C&F desk: per-partner commission rows, row actions ---- */
+.rate-list{list-style:none;margin:0;padding:0}
+.rate-row{display:grid;grid-template-columns:minmax(0,1.6fr) auto 90px minmax(190px,auto);align-items:center;gap:14px 18px;padding:14px 20px;border-top:1px solid var(--line)}
+.rate-row:first-child{border-top:0}
+.rate-row__who{display:flex;flex-direction:column;min-width:0}
+.rate-row__who strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rate-row__now{display:flex;flex-direction:column;text-align:right}
+.rate-row__form{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.rate-input{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:#fff;padding-right:12px}
+.rate-input:focus-within{border-color:var(--ink);box-shadow:0 0 0 3px rgba(15,44,77,.08)}
+.rate-input input{width:84px;border:0;background:transparent;padding:9px 6px 9px 12px;font:inherit;text-align:right;outline:0;-moz-appearance:textfield}
+.rate-input input::-webkit-outer-spin-button,.rate-input input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.rate-input span{color:var(--muted);font-size:14px}
+.td-actions{white-space:nowrap}
+.td-actions .btn+.inline-form,.td-actions .btn+.btn{margin-left:6px}
+.inline-form{display:inline}
+@media (max-width:760px){
+  .rate-row{grid-template-columns:1fr auto;padding:14px 16px}
+  .rate-row__now{text-align:left;grid-row:2}
+  .rate-row__form{grid-column:1 / -1;justify-content:flex-start}
+}

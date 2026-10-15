@@ -19,9 +19,10 @@ $pageLead   = 'What you hold, and what you have ordered.';
 $activeNav  = 'stock';
 
 /* every dealer answers to a distributor, so there is always somebody to
-   order from */
-$sellerId = (int) $dealer['distributor_id'];
-$seller   = distributor_by_id($sellerId);
+   order from; read through the same rule stock_order_create() applies, so the
+   name shown is the shelf the order will actually land on */
+[$sellerType, $sellerId] = stock_seller_for('dealer', $dealerId);
+$seller = $sellerId ? stock_party($sellerType, $sellerId) : ['full_name' => 'the office'];
 
 $error       = '';
 $stockValues = [];
@@ -53,7 +54,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'order
             'dealer',
             $dealerId,
             $stockValues['wanted'],
-            $sellerId,
             [
                 'reference'  => $stockValues['reference'] ?: null,
                 'note'       => $stockValues['note'] ?: null,
@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'order
 
 $stock     = stock_balance('dealer', $dealerId);
 $ownOrders = stock_orders_for('dealer', $dealerId);
-$history   = stock_history('dealer', $dealerId, 30);
+$history   = stock_history('dealer', $dealerId, 500);
 $stockKind = 'dealer';
 
 $flash = (string) ($_SESSION['dealer_flash'] ?? '');
@@ -90,29 +90,7 @@ require __DIR__ . '/partials/layout-top.php';
   <p class="alert alert--error"><?= e($error) ?></p>
 <?php endif; ?>
 
-<div class="tiles">
-  <span class="tile">
-    <span class="eyebrow">Stoves in hand</span>
-    <strong class="stock-figure"><?= (int) $stock['stove']['units'] ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat"><?= e(money((float) $stock['stove']['value'])) ?> at cost</span>
-    </span>
-  </span>
-  <span class="tile">
-    <span class="eyebrow">TukTuk kits in hand</span>
-    <strong class="stock-figure"><?= (int) $stock['tuktuk']['units'] ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat"><?= e(money((float) $stock['tuktuk']['value'])) ?> at cost</span>
-    </span>
-  </span>
-  <span class="tile">
-    <span class="eyebrow">Value on the shelf</span>
-    <strong class="stock-figure"><?= e(money((float) $stock['value'])) ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat">what these units cost you</span>
-    </span>
-  </span>
-</div>
+<?php require __DIR__ . '/../admin/partials/stock-tiles.php'; ?>
 
 <div class="panel">
   <div class="panel__head">

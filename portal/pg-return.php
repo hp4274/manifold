@@ -184,7 +184,7 @@ $amount = $expected;
    is lost — but a second verified payment would double the books. */
 $exists = db()->prepare(
     "SELECT COUNT(*) FROM payments
-      WHERE application_id = ? AND stage = ? AND status = 'verified'"
+      WHERE application_id = ? AND (stage = ? OR stage = 'full') AND status = 'verified'"
 );
 $exists->execute([$appId, $stage]);
 
@@ -211,6 +211,13 @@ db()->prepare(
     'verified',
     $receipt,
 ]);
+
+/* lock cancellation and update payment plan if full payment */
+if ($stage === 'full') {
+    /* freeze the whole price on the row, as submit does for a full payer */
+    db()->prepare("UPDATE applications SET payment_plan = 'full_payment', payment_amount = ?, loan_amount = 0, cancellation_locked = 1 WHERE id = ?")
+        ->execute([stage_amount($app, 'full'), $appId]);
+}
 
 /* advance the application status machine */
 sync_application_status($appId);

@@ -9,9 +9,9 @@
 declare(strict_types=1);
 
 const DB_HOST = '127.0.0.1';
-const DB_NAME = 'manifold';
-const DB_USER = 'root';
-const DB_PASS = '';
+const DB_NAME = 'u768511311_manifold';
+const DB_USER = 'u768511311_vsm3';
+const DB_PASS = 'Manifold@2210';
 const DB_PORT = 3306;
 
 /** Absolute path where uploaded application documents are stored. */
@@ -236,8 +236,9 @@ if (!defined('PG_COMMAND_URL'))   { define('PG_COMMAND_URL',   'https://pgpayuat
  * later price change never rewrites what an open application owes.
  */
 const PAYMENT_PLAN = [
-    'stove'  => ['booking' => 3500.0,  'delivery' => 16500.0],
-    'tuktuk' => ['booking' => 6000.0,  'delivery' => 24000.0],
+    /* 'full' is the whole price, loan portion included — what a full payer pays */
+    'stove'  => ['booking' => 3500.0,  'delivery' => 16500.0, 'full' => 35000.0],
+    'tuktuk' => ['booking' => 6000.0,  'delivery' => 24000.0, 'full' => 60000.0],
 ];
 
 /** Fallback booking amount for a row that predates the two-stage plan. */
@@ -271,6 +272,39 @@ const COMMISSION_DEFAULTS = [
     'dealer'   => ['stove' => 3000, 'tuktuk' => 4500],
     'override' => ['stove' => 1000, 'tuktuk' => 1500],
     'direct'   => ['stove' => 3000, 'tuktuk' => 4500],
+];
+
+/**
+ * Commission hierarchy percentages based on base amount (excluding GST):
+ *   Principal C&F: 20%
+ *   Zonal C&F:     15%
+ *   Distributor:   10%
+ *   Dealer:        6%
+ */
+const COMMISSION_RATES_DEFAULT = [
+    'principal_cf' => 20.00,
+    'zonal_cf'     => 15.00,
+    'distributor'  => 10.00,
+    'dealer'       => 6.00,
+];
+
+/** Commission auto-release delay after customer purchase (in hours). */
+const COMMISSION_RELEASE_HOURS_DEFAULT = 48;
+
+/** Customer payment deadline after booking / document verification (in hours). */
+const PAYMENT_DEADLINE_HOURS_DEFAULT = 48;
+
+/** Stock balance visual and operational thresholds (units). */
+const STOCK_WARN_UNITS_DEFAULT     = 200; // Yellow card warning
+const STOCK_CRITICAL_UNITS_DEFAULT = 100; // Red card alert & requires Principal C&F + Manifold Office approval
+
+/** Partner code prefixes across the full 5-tier structure */
+const PARTNER_PREFIXES = [
+    'principal_cf' => 'MP',
+    'zonal_cf'     => 'MZ',
+    'distributor'  => 'MX',
+    'dealer'       => 'MD',
+    'client'       => 'MF',
 ];
 
 /**
@@ -344,9 +378,31 @@ const INSTALL_FROM = '2027-01-01';
 
 const PAYMENT_CURRENCY = '₹';
 
+/**
+ * A number grouped the Indian way — 91,29,000 rather than 9,129,000 — because
+ * every figure here is in rupees and read by people who count in lakhs and
+ * crores. number_format() only knows groups of three; the browser's own
+ * toLocaleString('en-IN') on the stock form already did this, so a total typed
+ * on the page and the same total printed by the server used to disagree.
+ */
+function indian_number(float $amount, int $decimals): string
+{
+    $plain = number_format(abs($amount), $decimals, '.', '');
+    [$whole, $paise] = array_pad(explode('.', $plain), 2, '');
+
+    if (strlen($whole) > 3) {
+        $whole = preg_replace('/\B(?=(\d{2})+$)/', ',', substr($whole, 0, -3)) . ',' . substr($whole, -3);
+    }
+
+    /* no "-0.00": a minus sign only when something is left after rounding */
+    $sign = $amount < 0 && (float) $plain != 0.0 ? '-' : '';
+
+    return $sign . $whole . ($paise !== '' ? '.' . $paise : '');
+}
+
 function money(float $amount): string
 {
-    return PAYMENT_CURRENCY . number_format($amount, 2);
+    return PAYMENT_CURRENCY . indian_number($amount, 2);
 }
 
 /**
@@ -357,7 +413,7 @@ function money(float $amount): string
 function money_short(float $amount): string
 {
     if (abs($amount - round($amount)) < 0.005) {
-        return PAYMENT_CURRENCY . number_format($amount, 0);
+        return PAYMENT_CURRENCY . indian_number($amount, 0);
     }
 
     return money($amount);

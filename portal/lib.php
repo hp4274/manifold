@@ -51,6 +51,13 @@ function portal_roles(): array
         $roles[] = 'distributor';
     }
 
+    /* C&F tiers: the desk re-checks the row on every hit (cfdesk/lib.php) */
+    foreach (['principal_cf', 'zonal_cf'] as $tier) {
+        if (!empty($_SESSION[$tier . '_id'])) {
+            $roles[] = $tier;
+        }
+    }
+
     return $roles;
 }
 
@@ -124,7 +131,7 @@ function sold_by(array $app): ?array
  * address that stopped being a dealer between the code going out and the code
  * coming back does not get a dealer session.
  */
-const OTP_ROLES = ['applicant', 'dealer', 'distributor'];
+const OTP_ROLES = ['applicant', 'dealer', 'distributor', 'zonal_cf', 'principal_cf'];
 
 /** Human name for a role, for the chooser and the sign-in copy. */
 function role_label(string $role): string
@@ -133,6 +140,8 @@ function role_label(string $role): string
         'applicant'   => 'Track your application',
         'dealer'      => 'Dealer portal',
         'distributor' => 'Distributor portal',
+        'zonal_cf'    => 'Zonal C&F desk',
+        'principal_cf' => 'Principal C&F desk',
     ];
 
     return $labels[$role] ?? ucfirst($role);
@@ -145,6 +154,8 @@ function role_home(string $role): string
         'applicant'   => '../portal/status',
         'dealer'      => '../dealer/',
         'distributor' => '../distributor/',
+        'zonal_cf'    => '../cfdesk/?as=zonal_cf',
+        'principal_cf' => '../cfdesk/?as=principal_cf',
     ];
 
     return $homes[$role] ?? '../portal/status';
@@ -167,7 +178,16 @@ function otp_owner(string $email, string $role): ?array
               WHERE email = ? AND is_active = 1 AND approval_status = 'approved' LIMIT 1"
         );
     } elseif ($role === 'distributor') {
-        $stmt = db()->prepare('SELECT id, full_name FROM distributors WHERE email = ? AND is_active = 1 LIMIT 1');
+        $stmt = db()->prepare(
+            "SELECT id, full_name FROM distributors
+              WHERE email = ? AND is_active = 1 AND approval_status = 'approved' LIMIT 1"
+        );
+    } elseif ($role === 'zonal_cf' || $role === 'principal_cf') {
+        /* $role is one of two literals, so the table name is safe to splice */
+        $stmt = db()->prepare(
+            "SELECT id, full_name FROM $role
+              WHERE email = ? AND is_active = 1 AND approval_status = 'approved' LIMIT 1"
+        );
     } else {
         /* An application the office has not approved yet opens nothing: the
            portal is where a payment is made, and nothing is owed until we have
@@ -371,9 +391,9 @@ function verify_otp(string $email, string $code, string $audience = 'any'): stri
 
     session_regenerate_id(true);
 
-    /* signing into a portal ends any office session sharing this browser, so an
-       admin who handed the machine over does not leave the dashboard reachable */
-    unset($_SESSION['admin']);
+    /* Roles the browser already carries are kept, so one device can hold several
+       accounts at once. One slot per kind: a second dealer replaces the first.
+       Shared devices must sign out between people. */
 
     /* every role the address holds is opened at once — the person is the same
        either way, and asking them to sign in twice to see both would be theatre */
@@ -388,12 +408,15 @@ function verify_otp(string $email, string $code, string $audience = 'any'): stri
             $_SESSION['dealer_id'] = (int) $owner['id'];
         } elseif ($role === 'distributor') {
             $_SESSION['distributor_id'] = (int) $owner['id'];
+        } elseif ($role === 'zonal_cf' || $role === 'principal_cf') {
+            $_SESSION[$role . '_id'] = (int) $owner['id'];
         } else {
             $_SESSION['applicant_email'] = $email;
         }
     }
 
-    $_SESSION['portal_roles'] = $roles;
+    $_SESSION['portal_roles'] = array_values(array_unique(
+        array_merge($_SESSION['portal_roles'] ?? [], $roles)));
 
     /* session_regenerate_id() above re-sent the cookie under the params the
        session was started with, which for a visitor who was not signed in yet

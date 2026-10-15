@@ -117,7 +117,7 @@ require __DIR__ . '/partials/layout-top.php';
             <td><strong title="<?= e($title) ?>"><?= e($title) ?></strong></td>
             <td>
               <?php if ($type !== 'newsletter'): ?>
-                <a href="mailto:<?= e($row['email']) ?>"><?= e($row['email']) ?></a>
+                <a href="<?= e(email_mailto($type, $row)) ?>"><?= e($row['email']) ?></a>
                 <?php if ($phone !== ''): ?>
                   <a href="tel:<?= e(preg_replace('/\s+/', '', $phone)) ?>"><?= e($phone) ?></a>
                 <?php endif; ?>

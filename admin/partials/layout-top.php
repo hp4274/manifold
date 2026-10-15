@@ -71,6 +71,12 @@ $pageLead   = $pageLead ?? '';
         <a href="referrals" class="<?= $activeType === 'referrals' ? 'is-active' : '' ?>">
           <i class="bi bi-people" aria-hidden="true"></i> Referrals
         </a>
+        <a href="principal-cf" class="<?= $activeType === 'principal_cf' ? 'is-active' : '' ?>">
+          <i class="bi bi-building" aria-hidden="true"></i> Principal C&F
+        </a>
+        <a href="zonal-cf" class="<?= $activeType === 'zonal_cf' ? 'is-active' : '' ?>">
+          <i class="bi bi-geo-alt" aria-hidden="true"></i> Zonal C&F
+        </a>
         <a href="distributors" class="<?= $activeType === 'distributors' ? 'is-active' : '' ?>">
           <i class="bi bi-diagram-3" aria-hidden="true"></i> Distributors
         </a>
@@ -80,8 +86,8 @@ $pageLead   = $pageLead ?? '';
         <a href="stock" class="<?= $activeType === 'stock' ? 'is-active' : '' ?>">
           <i class="bi bi-box-seam" aria-hidden="true"></i> Stock
         </a>
-        <a href="vouchers" class="<?= $activeType === 'vouchers' ? 'is-active' : '' ?>">
-          <i class="bi bi-receipt-cutoff" aria-hidden="true"></i> Commission
+        <a href="commissions" class="<?= $activeType === 'commissions' ? 'is-active' : '' ?>">
+          <i class="bi bi-cash-coin" aria-hidden="true"></i> Payouts
         </a>
         <a href="raffle" class="<?= $activeType === 'raffle' ? 'is-active' : '' ?>">
           <i class="bi bi-ticket-perforated" aria-hidden="true"></i> Raffle

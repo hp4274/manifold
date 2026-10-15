@@ -253,7 +253,7 @@ require __DIR__ . '/partials/layout-top.php';
               <td><strong title="<?= e($rowTitle) ?>"><?= e($rowTitle) ?></strong></td>
               <?php if ($type !== 'newsletter'): ?>
                 <td>
-                  <a href="mailto:<?= e($row['email']) ?>"><?= e($row['email']) ?></a>
+                  <a href="<?= e(email_mailto($type, $row)) ?>"><?= e($row['email']) ?></a>
                   <?php $phone = $row['mobile_number'] ?? $row['phone'] ?? ''; ?>
                   <?php if ($phone !== ''): ?>
                     <a href="tel:<?= e(preg_replace('/\s+/', '', $phone)) ?>"><?= e($phone) ?></a>

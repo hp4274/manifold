@@ -184,6 +184,7 @@ try {
             'residence_proof_path'         => store_upload('residence_proof_file'),
             'house_number'                 => field('house_number', 120),
             'street'                       => field('street', 160),
+            'landmark'                     => field('landmark', 160),
             'city'                         => field('city', 120),
             'state'                        => field('state', 120),
             'country'                      => field('country', 120),
@@ -194,7 +195,7 @@ try {
             'household_members'            => int_or_null('household_members'),
             'existing_fuel'                => field('existing_fuel', 80),
             'existing_fuel_other'          => field('existing_fuel_other', 160),
-            'units_required'               => int_or_null('units_required'),
+            'units_required'               => int_or_null('units_required') ?: 1,
             'intended_usage'               => field('intended_usage', 60),
             'expected_daily_usage'         => field('expected_daily_usage', 120),
             'preferred_install_date'       => date_or_null('preferred_install_date'),
@@ -217,8 +218,40 @@ try {
             'declaration_accepted'         => checkbox('declaration_accepted'),
             'testimonial_consent'          => checkbox('testimonial_consent'),
             'terms_accepted'               => checkbox('terms_accepted'),
+            'terms_accepted_at'            => date('Y-m-d H:i:s'),
+            'delivery_address'             => field('delivery_address', 1000),
+            'aadhaar_number'               => field('aadhaar_number', 20),
+            'aadhaar_doc_path'             => store_upload('aadhaar_doc_file'),
+            'electricity_bill_path'         => store_upload('electricity_bill_file'),
+            'registration_number'          => field('registration_number', 30),
+            'rc_doc_path'                  => store_upload('rc_doc_file'),
+            'dl_doc_path'                  => store_upload('dl_doc_file'),
+            'payment_plan'                 => field('payment_plan', 20) === 'full_payment' ? 'full_payment' : 'booking',
             'ip_address'                   => $ip,
         ];
+
+        /* Delivery address: the residential one (ticked "same", or left blank),
+           otherwise what was typed — with its landmark, unless already in it. */
+        $near = $columns['landmark']
+            ? (preg_match('/^near\s+/i', $columns['landmark']) ? $columns['landmark'] : 'Near ' . $columns['landmark'])
+            : null;
+
+        if (!checkbox('delivery_same') && !empty($columns['delivery_address'])) {
+            if ($columns['landmark'] && stripos($columns['delivery_address'], $columns['landmark']) === false) {
+                $columns['delivery_address'] .= ', ' . $near;
+            }
+        } else {
+            $addrParts = array_filter([
+                $columns['house_number'],
+                $columns['street'],
+                $near,
+                $columns['city'],
+                $columns['state'],
+                $columns['country'],
+                $columns['pin_code'] ? 'PIN: ' . $columns['pin_code'] : null,
+            ]);
+            $columns['delivery_address'] = implode(', ', $addrParts);
+        }
 
         /* ---------- what an application cannot arrive without ----------
            The browser marks these required too, but a request that did not come
@@ -321,6 +354,36 @@ try {
             respond(false, 'The ID number should be the number as printed — letters and digits, four to twenty.');
         }
 
+        if ($columns['aadhaar_number'] !== null && $columns['aadhaar_number'] !== '') {
+            $columns['aadhaar_number'] = $digits($columns['aadhaar_number']);
+            if (strlen($columns['aadhaar_number']) !== 12) {
+                respond(false, 'The Aadhaar number has to be twelve digits.');
+            }
+        }
+
+        /* The KYC files are for the financier. A full payer has no loan, so
+           nobody checks them and they are not asked for — the Aadhaar format
+           above is still checked whenever one is sent. */
+        $needsKyc = $columns['payment_plan'] !== 'full_payment';
+
+        if ($needsKyc && !$columns['aadhaar_doc_path']) {
+            respond(false, 'Upload the Aadhaar document before submitting.');
+        }
+
+        if ($needsKyc && !$columns['electricity_bill_path']) {
+            respond(false, 'Upload the electricity bill before submitting.');
+        }
+
+        if ($form === 'tuktuk') {
+            if ($columns['registration_number'] === null) {
+                respond(false, 'The Tuk Tuk registration number is required.');
+            }
+
+            if ($needsKyc && (!$columns['rc_doc_path'] || !$columns['dl_doc_path'])) {
+                respond(false, 'Upload both the RC and driving licence documents for the Tuk Tuk application.');
+            }
+        }
+
         /* ---------- dates ----------
            Nobody is born tomorrow, and the first installations are built for
            2027. The picker greys both out; this is the copy of the rule that a
@@ -398,7 +461,11 @@ try {
         /* frozen with the prices, so a rate change never rewrites this sale */
         $columns['booking_amount']  = (float) $plan['booking'];
         $columns['delivery_amount'] = (float) $plan['delivery'];
-        $columns['payment_amount']  = (float) $plan['booking'];
+        /* a full payer pays the whole price, loan portion included, and so has no loan */
+        $columns['payment_amount']  = $columns['payment_plan'] === 'full_payment'
+            ? (float) $plan['full']
+            : (float) $plan['booking'];
+        $columns['loan_amount']     = 0.0;
 
         /* The same box takes a partner's code, and the prefix decides which kind
            it is — MF a customer, MD a dealer, MX a distributor. A code is only
@@ -465,21 +532,31 @@ try {
             $distributor = null;
         }
 
-        $split = commission_split($form, $dealer, $distributor);
+        $zonalDirect = null;
+        if (!$dealer && !$distributor && $quotedPartner !== '' && function_exists('zonal_cf_for_code')) {
+            $zonalDirect = zonal_cf_for_code($quotedPartner);
+        }
 
         /* A partner code that matched nothing is worth saying out loud: without
            it the office sees a sale attributed to nobody and has to guess
            whether somebody mistyped a code or never had one. No column of its
            own — the note is where a human reads it. */
-        if ($quotedPartner !== '' && !$dealer && !$distributor) {
+        if ($quotedPartner !== '' && !$dealer && !$distributor && !$zonalDirect) {
             $columns['admin_note'] = trim(($columns['admin_note'] ?? '')
                 . ' Partner code ' . $quotedPartner . ' was quoted and matched no active partner.');
         }
 
-        $columns['dealer_id']              = $dealer ? (int) $dealer['id'] : null;
-        $columns['dealer_commission']      = $split['dealer'];
-        $columns['distributor_id']         = $distributor ? (int) $distributor['id'] : null;
-        $columns['distributor_commission'] = $split['distributor'];
+        $columns = array_merge($columns, commission_chain_columns($form, $dealer, $distributor, $zonalDirect,
+            $columns['payment_plan'] === 'full_payment'));
+
+        /* Enforce low-stock safeguard: if seller unit balance <= 100, flag for dual approval */
+        $sellerType = $dealer ? 'dealer' : ($distributor ? 'distributor' : '');
+        $sellerId   = $dealer ? (int) $dealer['id'] : ($distributor ? (int) $distributor['id'] : 0);
+        if ($sellerType !== '' && $sellerId > 0 && is_stock_critical($sellerType, $sellerId, (string) ($columns['product'] ?? ''))) {
+            $columns['low_stock_hold'] = 1;
+            $columns['admin_note']     = trim(($columns['admin_note'] ?? '')
+                . ' [STOCK RESTRICTION: Seller unit balance <= 100. Dual approval from Principal C&F and Office required before fulfillment.]');
+        }
 
         /* their own code, theirs for good */
         $columns['referral_code'] = make_referral_code();
@@ -559,6 +636,11 @@ try {
             'INSERT INTO contact_messages (name, company, email, phone, interest, city, message, consent, ip_address)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         )->execute(array_merge(array_values($enquiry), [$ip]));
+        $contactId = (int) db()->lastInsertId();
+
+        after_response(static function () use ($enquiry, $contactId): void {
+            send_new_contact_admin($enquiry, $contactId);
+        });
 
         /* a thank you goes back straight away, so nobody is left wondering
            whether the form worked; a bad address only costs a line in email_log */
@@ -590,7 +672,10 @@ try {
            updated instead, so only somebody genuinely new gets welcomed —
            signing up twice does not send the same email twice */
         if ($stmt->rowCount() === 1) {
-            after_response(static function () use ($email): void {
+            $sourcePage = field('source_page', 120);
+
+            after_response(static function () use ($email, $sourcePage): void {
+                send_new_newsletter_admin($email, $sourcePage);
                 send_newsletter_welcome_email($email);
             });
         }

@@ -24,6 +24,98 @@
   /* the server refuses anything past this, so say so before the upload starts */
   var MAX_FILE_BYTES = 10 * 1024 * 1024;
 
+  /* ---------- partner lookup ---------- */
+  var partnerInput = form.querySelector('[name="partner_code"]');
+  var partnerResult = form.querySelector('[data-partner-lookup]');
+  var partnerLookupTimer;
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
+
+  function renderPartnerBadges(data) {
+    if (!data.ok) {
+      return '<div class="partner-lookup-status partner-lookup-status--err"><i class="bi bi-exclamation-circle"></i> ' +
+        escapeHtml(data.message || 'No partner found.') + '</div>';
+    }
+
+    var cards = [];
+
+    if (data.partner) {
+      var isDealer = data.partner.type === 'dealer';
+      var isZonal = data.partner.type === 'zonal_cf';
+      var tierLabel = isDealer ? 'Dealer' : (isZonal ? 'Zonal C&F' : 'Distributor');
+      var badgeClass = isDealer ? 'dealer' : (isZonal ? 'zonal' : 'distributor');
+      cards.push(
+        '<span class="partner-badge partner-badge--' + badgeClass + '">' +
+          '<span class="partner-badge__tier">' + tierLabel + '</span>' +
+          '<strong class="partner-badge__name">' + escapeHtml(data.partner.name) + '</strong> ' +
+          '<code class="partner-badge__code">' + escapeHtml(data.partner.code) + '</code>' +
+        '</span>'
+      );
+    }
+
+    if (data.distributor && (!data.partner || data.partner.type !== 'distributor')) {
+      cards.push(
+        '<span class="partner-badge partner-badge--distributor">' +
+          '<span class="partner-badge__tier">Mapped Distributor</span>' +
+          '<strong class="partner-badge__name">' + escapeHtml(data.distributor.name) + '</strong> ' +
+          '<code class="partner-badge__code">' + escapeHtml(data.distributor.code) + '</code>' +
+        '</span>'
+      );
+    }
+
+    if (data.zonal_cf && (!data.partner || data.partner.type !== 'zonal_cf')) {
+      cards.push(
+        '<span class="partner-badge partner-badge--zonal">' +
+          '<span class="partner-badge__tier">Mapped Zonal C&F</span>' +
+          '<strong class="partner-badge__name">' + escapeHtml(data.zonal_cf.name) + '</strong> ' +
+          '<code class="partner-badge__code">' + escapeHtml(data.zonal_cf.code) + '</code>' +
+        '</span>'
+      );
+    }
+
+    if (data.principal_cf) {
+      cards.push(
+        '<span class="partner-badge partner-badge--principal">' +
+          '<span class="partner-badge__tier">Principal C&F</span>' +
+          '<strong class="partner-badge__name">' + escapeHtml(data.principal_cf.name) + '</strong> ' +
+          '<code class="partner-badge__code">' + escapeHtml(data.principal_cf.code) + '</code>' +
+        '</span>'
+      );
+    }
+
+    return '<div class="partner-badges-wrap">' +
+      '<div class="partner-badges-title"><i class="bi bi-shield-check"></i> Verified Partner Hierarchy:</div>' +
+      '<div class="partner-badges-list">' + cards.join('') + '</div>' +
+      '</div>';
+  }
+
+  if (partnerInput && partnerResult) {
+    partnerInput.addEventListener('input', function () {
+      window.clearTimeout(partnerLookupTimer);
+      var code = partnerInput.value.trim();
+      partnerResult.innerHTML = '';
+
+      if (code.length < 4) return;
+
+      partnerLookupTimer = window.setTimeout(function () {
+        fetch('admin/partner-lookup.php?code=' + encodeURIComponent(code), {
+          headers: { 'Accept': 'application/json' }
+        })
+          .then(function (response) { return response.json(); })
+          .then(function (data) {
+            partnerResult.innerHTML = renderPartnerBadges(data);
+          })
+          .catch(function () {
+            partnerResult.innerHTML = '';
+          });
+      }, 250);
+    });
+  }
+
   /* ---------- show the chosen file name inside the upload box ---------- */
   Array.prototype.forEach.call(form.querySelectorAll('input[type="file"]'), function (input) {
     input.addEventListener('change', function () {
@@ -617,6 +709,71 @@
   }
 
   var stepped = buildWizard();
+
+  /* ---------- delivery address: the same as home, or somewhere else ----------
+     Ticked, the box for another address steps out of the way and stops being
+     required. Without JavaScript it simply stays open and optional, and the
+     server builds the address from the residential fields when it is blank. */
+  var deliverySame = form.querySelector('#delivery_same');
+  var deliveryText = form.querySelector('#delivery_address');
+
+  if (deliverySame && deliveryText) {
+    var deliveryBox  = deliveryText.closest('.field');
+    var deliveryStar = deliveryBox && deliveryBox.querySelector('.req');
+
+    var syncDelivery = function () {
+      var same = deliverySame.checked;
+
+      deliveryText.required = !same;
+      /* `hidden` loses to .field's display:grid, so the style does the hiding */
+      if (deliveryBox) deliveryBox.style.display = same ? 'none' : '';
+      if (deliveryStar) deliveryStar.hidden = same;
+      if (same) settle(deliveryText);
+    };
+
+    /* `input` as well as `change`: a restored draft fires only the first */
+    deliverySame.addEventListener('change', syncDelivery);
+    deliverySame.addEventListener('input', syncDelivery);
+    syncDelivery();
+  }
+
+  /* ---------- documents: only the Loan plan needs them ----------
+     Full payment has no verification step, so the whole KYC block steps out of
+     the way and its fields stop being required; the Loan plan brings it back
+     with exactly the fields that were required in the markup. Without
+     JavaScript the block stays open and required. */
+  var planSelect = form.querySelector('#payment_plan');
+  var kycBlock   = form.querySelector('[data-kyc-block]');
+
+  if (planSelect && kycBlock) {
+    var kycFields = Array.prototype.slice.call(kycBlock.querySelectorAll('input, select, textarea'));
+
+    kycFields.forEach(function (el) {
+      if (el.required) el.setAttribute('data-was-required', '');
+    });
+
+    var syncKyc = function () {
+      var skip = planSelect.value === 'full_payment';
+
+      kycBlock.style.display = skip ? 'none' : '';
+
+      kycFields.forEach(function (el) {
+        el.required = !skip && el.hasAttribute('data-was-required');
+        if (!skip) return;
+        settle(el);
+        /* an oversized file would block Next and Submit from a box nobody can see */
+        if (el.type === 'file' && el.validity.customError) {
+          el.value = '';
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    };
+
+    /* `input` as well as `change`: a restored draft fires only the first */
+    planSelect.addEventListener('change', syncKyc);
+    planSelect.addEventListener('input', syncKyc);
+    syncKyc();
+  }
 
   /* ---------- keep what has been typed ----------
      Sixty fields is more than anyone wants to lose to a closed tab. Everything

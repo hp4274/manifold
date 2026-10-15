@@ -1008,6 +1008,7 @@ p{margin:0}
   mix-blend-mode:multiply;
 }
 .product-card:hover .product-card__media img{transform:scale(1.04)}
+#stove .product-card__media img{mix-blend-mode:normal}
 
 /* Between 992 and 1199 the two cards sit side by side but each is too narrow for
    the image and the text to share a row, so the card stacks — image over text,
@@ -3194,6 +3195,33 @@ body.has-consent-bar .to-top{bottom:calc(26px + var(--consent-h,86px))}
   color:var(--accent-on-dark);
   margin:0 0 18px;
 }
+.price-band__mrp{
+  margin-left:10px;
+  font-size:1.5em;
+  font-weight:700;
+  letter-spacing:0;
+  color:rgba(255,255,255,.6);
+  text-decoration-thickness:2px;
+}
+.price-step__mrp{
+  font-size:.62em;
+  font-weight:600;
+  opacity:.6;
+  margin-right:.35em;
+}
+.price-band__promo{margin:0 0 12px}
+.price-band__promo span{
+  display:inline-block;
+  padding:6px 14px;
+  border-radius:999px;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--navy-700);
+  background:var(--accent-on-dark);
+  box-shadow:0 6px 16px rgba(0,0,0,.22);
+}
 .price-band__figure{
   font-size:var(--t-figure);
   font-weight:800;
@@ -3931,7 +3959,10 @@ fieldset.field legend{margin-bottom:2px}
   border-radius:var(--radius-sm);
   background:var(--tint);
 }
-.terms-box ul{display:grid;gap:12px;list-style:disc;padding-left:20px}
+.terms-box ul{display:grid;gap:12px;list-style:none;padding-left:0}
+.terms-box li{position:relative;padding-left:18px}
+.terms-box li::before{content:"*";position:absolute;left:2px;top:0;font-weight:700;color:var(--accent-ink)}
+.terms-download{margin-top:12px}
 .terms-box li,
 .terms-box p{
   font-size:var(--t-sub);
@@ -4611,6 +4642,74 @@ fieldset.field legend{margin-bottom:2px}
 @media (max-width:991px){
   .portal-pay__fallback-body{grid-template-columns:1fr}
 }
+
+/* --- a sale made with a partner's code: the partner is who gets paid --- */
+.portal-pay__fallback--payee{grid-column:1/-1;margin-top:0;padding-top:0;border-top:0}
+.portal-pay__fallback-body--payee{grid-template-columns:1fr;gap:22px;margin-top:0}
+.portal-payee{
+  padding:20px 22px;
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+  background:#fff;
+}
+.portal-payee__who{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+.portal-payee__kind{
+  width:100%;
+  font-size:var(--t-micro);
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--accent-ink-2);
+}
+.portal-payee__name{font-size:var(--t-sub);line-height:1.3;color:var(--ink)}
+.portal-payee__amount{margin:10px 0 14px;font-size:var(--t-ui);line-height:1.55;color:var(--body)}
+.portal-payee__amount strong{color:var(--ink)}
+.portal-payee__rows{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  gap:0 28px;
+  margin:0;
+}
+.portal-payee__rows > div{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:10px 0;
+  border-top:1px solid var(--line);
+}
+.portal-payee__rows dt{
+  font-size:var(--t-micro);
+  font-weight:600;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.portal-payee__rows dd{margin:0;font-size:var(--t-ui);font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.portal-payee__steps{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 20px;
+  margin:14px 0 0;
+  padding:12px 0 0;
+  border-top:1px solid var(--line);
+  list-style:none;
+  counter-reset:payee-step;
+  font-size:var(--t-ui);
+  color:var(--body);
+}
+.portal-payee__steps li{display:flex;align-items:center;gap:8px}
+.portal-payee__steps li::before{
+  counter-increment:payee-step;
+  content:counter(payee-step);
+  display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;
+  border-radius:50%;
+  background:var(--accent-ink-2);
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
+}
+.portal-pay__fallback--payee .portal-pay__form .field{margin-bottom:16px}
 
 
 @media (max-width:991px){
@@ -6572,3 +6671,145 @@ button{cursor:pointer}
 @media (max-width:767px){
   .reveal{transform:none}
 }
+
+/* ---------- 34. partner lookup badges on booking forms ---------- */
+.partner-badges-wrap {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: var(--radius-md, 8px);
+}
+.partner-badges-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #065f46;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.partner-badges-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.partner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #1f2937;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.partner-badge__tier {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+.partner-badge--dealer .partner-badge__tier { background: #e0e7ff; color: #3730a3; }
+.partner-badge--distributor .partner-badge__tier { background: #dbeafe; color: #1e40af; }
+.partner-badge--zonal .partner-badge__tier { background: #fef3c7; color: #92400e; }
+.partner-badge--principal .partner-badge__tier { background: #fae8ff; color: #86198f; }
+
+.partner-badge__name { font-weight: 600; }
+.partner-badge__code { font-family: monospace; font-size: 0.75rem; color: #4b5563; background: #f3f4f6; padding: 1px 4px; border-radius: 3px; }
+.partner-lookup-status--err {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: #dc2626;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ---------- Phase 4: Payment Deadline & Cancellation Lock Styles ---------- */
+.portal-deadline-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  margin: 1rem 0 1.5rem 0;
+  border: 1px solid transparent;
+}
+.portal-deadline-banner--active {
+  background: #fefce8;
+  border-color: #fde047;
+  color: #713f12;
+}
+.portal-deadline-banner--expired {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+.portal-deadline-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+.portal-deadline-text {
+  flex: 1 1 auto;
+}
+.portal-deadline-text strong {
+  display: block;
+  font-size: 0.9375rem;
+  margin-bottom: 0.2rem;
+}
+.portal-deadline-text p {
+  margin: 0;
+  font-size: 0.8125rem;
+  opacity: 0.9;
+}
+.portal-deadline-clock {
+  flex-shrink: 0;
+}
+.portal-timer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #ffffff;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  border: 1px solid #eab308;
+  color: #854d0e;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.portal-deadline-banner--expired .portal-timer-badge {
+  border-color: #ef4444;
+  color: #b91c1c;
+}
+.portal-lock-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+}
+.portal-pay__action-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 1rem 0;
+}
+.pill--expired {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #f87171;
+}
+

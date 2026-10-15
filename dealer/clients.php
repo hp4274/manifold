@@ -46,6 +46,10 @@ require __DIR__ . '/partials/layout-top.php';
   <p class="alert alert--ok"><?= e($flash) ?></p>
 <?php endif; ?>
 
+<?php if (isset($_GET['collected'])): ?>
+  <p class="alert alert--ok"><i class="bi bi-check-circle-fill"></i> Payment collected and verified successfully! Receipt has been issued.</p>
+<?php endif; ?>
+
 <div class="tiles">
   <span class="tile">
     <span class="eyebrow">Clients</span>
@@ -99,26 +103,28 @@ require __DIR__ . '/partials/layout-top.php';
     <div class="table-wrap">
       <table class="data-table data-table--dealer-clients data-table--stack">
         <colgroup>
-          <col style="width:24%">
+          <col style="width:22%">
+          <col style="width:13%">
+          <col style="width:8%">
+          <col style="width:13%">
+          <col style="width:18%">
           <col style="width:14%">
-          <col style="width:9%">
-          <col style="width:25%">
-          <col style="width:19%">
-          <col style="width:9%">
+          <col style="width:12%">
         </colgroup>
         <thead>
           <tr>
             <th>Client</th>
             <th>Booking number</th>
             <th>Product</th>
+            <th>KYC Documents</th>
             <th>Progress</th>
             <th>Your commission</th>
-            <th><span class="visually-hidden">Edit</span></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           <?php foreach ($clients as $client): ?>
-            <?php $progress = partner_progress($client['status']); ?>
+            <?php $progress = partner_progress($client['status'], (string) ($client['payment_plan'] ?? '')); ?>
             <tr>
               <td data-lead>
                 <div class="cell-stack">
@@ -136,6 +142,18 @@ require __DIR__ . '/partials/layout-top.php';
                 </div>
               </td>
               <td data-label="Product"><?= e(product_label($client['product'])) ?></td>
+              <td data-label="KYC Documents">
+                <div class="cell-stack">
+                  <?php if ($client['is_kyc_verified']): ?>
+                    <span class="pill pill--complete" style="font-size:11px;"><i class="bi bi-patch-check-fill"></i> Verified</span>
+                  <?php else: ?>
+                    <span class="pill pill--pending" style="font-size:11px;"><i class="bi bi-hourglass-split"></i> Doc Pending</span>
+                  <?php endif; ?>
+                  <?php if (!empty($client['cancellation_locked'])): ?>
+                    <span class="cell-sub" style="font-size:11px;"><i class="bi bi-shield-lock"></i> Locked</span>
+                  <?php endif; ?>
+                </div>
+              </td>
               <td data-label="Progress">
                 <div class="cell-stack">
                   <span class="pill pill--<?= e($client['status']) ?>"><?= e($progress['label']) ?></span>
@@ -157,10 +175,21 @@ require __DIR__ . '/partials/layout-top.php';
                   <?= $client['earned'] ? 'earned' : 'once the sale completes' ?>
                 </span>
               </td>
-              <td data-label="">
-                <a class="btn btn--ghost btn--sm" href="client-edit?id=<?= (int) $client['id'] ?>">
-                  <i class="bi bi-pencil" aria-hidden="true"></i> Edit
-                </a>
+              <td data-label="Actions">
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                  <?php if ($client['is_kyc_verified'] && !in_array($client['status'], ['complete', 'rejected', 'cancelled', 'refunded', 'expired'], true)): ?>
+                    <a class="btn btn--primary btn--sm" href="collect-payment?id=<?= (int) $client['id'] ?>" title="Collect customer payment">
+                      <i class="bi bi-cash-coin"></i> Collect
+                    </a>
+                  <?php elseif (!$client['is_kyc_verified'] && !in_array($client['status'], ['complete', 'rejected', 'cancelled', 'refunded', 'expired'], true)): ?>
+                    <span class="btn btn--ghost btn--sm" style="opacity:0.5;cursor:not-allowed;" title="Documents must be verified first">
+                      <i class="bi bi-lock-fill"></i> Unverified
+                    </span>
+                  <?php endif; ?>
+                  <a class="btn btn--ghost btn--sm" href="client-edit?id=<?= (int) $client['id'] ?>">
+                    <i class="bi bi-pencil" aria-hidden="true"></i> Edit
+                  </a>
+                </div>
               </td>
             </tr>
           <?php endforeach; ?>

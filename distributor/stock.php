@@ -1,7 +1,8 @@
 <?php
 /**
- * A distributor's stock: what they hold, what they have ordered from the
- * office, and what their dealers have asked them for.
+ * A distributor's stock: what they hold, what they have ordered from their
+ * Zonal C&F (or the office, when no Zonal C&F stands above them), and what
+ * their dealers have asked them for.
  *
  * Both directions live on one page because they are one question — how many
  * units are on the shelf and where they are going. Releasing stock to a dealer
@@ -21,6 +22,12 @@ $activeNav = 'stock';
 
 $error       = '';
 $stockValues = [];
+
+/* who this distributor buys from: their Zonal C&F, or the office when there
+   is none — the same rule stock_order_create() applies, read here for the words */
+[$aboveType, $aboveId] = stock_seller_for('distributor', $distId);
+$aboveRow  = $aboveId ? stock_party($aboveType, $aboveId) : null;
+$stockFrom = $aboveType === 'office' ? 'the office' : 'your ' . stock_tier_label($aboveType);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
@@ -43,8 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'note'      => trim((string) ($_POST['note'] ?? '')),
         ];
 
-        /* the proof is the whole point of the order — without it the office has
-           nothing to check, so it is taken before anything is written */
+        /* the proof is the whole point of the order — without it the seller
+           has nothing to check, so it is taken before anything is written */
         $proof = store_upload('payment_proof', PAYMENT_PROOF_DIR);
 
         if ($proof === null) {
@@ -54,7 +61,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'distributor',
                 $distId,
                 $stockValues['wanted'],
-                null,
                 [
                     'reference'  => $stockValues['reference'] ?: null,
                     'note'       => $stockValues['note'] ?: null,
@@ -63,19 +69,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
 
             if ($error === '') {
-                $_SESSION['distributor_flash'] = 'Order sent. The office releases the units once they '
-                    . 'have confirmed the payment.';
+                $_SESSION['distributor_flash'] = 'Order sent to '
+                    . ($aboveRow['full_name'] ?? $stockFrom)
+                    . '. The units are released once the payment has been confirmed.';
 
                 header('Location: stock');
                 exit;
             }
+        }
+    } elseif ($action === 'adjust_stock') {
+        [$msg, $error] = stock_adjust_post('distributor', $distId);
+
+        if ($error === '') {
+            $_SESSION['distributor_flash'] = $msg;
+
+            header('Location: stock');
+            exit;
         }
     } elseif ($action === 'approve' || $action === 'reject') {
         /* a dealer's order: only ever one of this distributor's own */
         $orderId = (int) ($_POST['order_id'] ?? 0);
         $order   = stock_order($orderId);
 
-        if (!$order || (int) $order['seller_distributor_id'] !== $distId) {
+        if (!stock_order_sold_by($order, 'distributor', $distId)) {
             $error = 'That order is not yours to decide.';
         } elseif ($action === 'approve') {
             $error = stock_order_approve($orderId);
@@ -101,9 +117,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $stock       = stock_balance('distributor', $distId);
 $ownOrders   = stock_orders_for('distributor', $distId);
-$dealerAsks  = stock_orders_to_decide($distId);
+$dealerAsks  = stock_orders_to_decide('distributor', $distId);
 $waiting     = array_values(array_filter($dealerAsks, static fn (array $o): bool => $o['status'] === 'pending'));
-$history     = stock_history('distributor', $distId, 30);
+$history     = stock_history('distributor', $distId, 500);
 $stockKind   = 'distributor';
 
 $flash = (string) ($_SESSION['distributor_flash'] ?? '');
@@ -120,36 +136,11 @@ require __DIR__ . '/partials/layout-top.php';
   <p class="alert alert--error"><?= e($error) ?></p>
 <?php endif; ?>
 
-<div class="tiles">
-  <span class="tile">
-    <span class="eyebrow">Stoves in hand</span>
-    <strong class="stock-figure"><?= (int) $stock['stove']['units'] ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat"><?= e(money((float) $stock['stove']['value'])) ?> at cost</span>
-    </span>
-  </span>
-  <span class="tile">
-    <span class="eyebrow">TukTuk kits in hand</span>
-    <strong class="stock-figure"><?= (int) $stock['tuktuk']['units'] ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat"><?= e(money((float) $stock['tuktuk']['value'])) ?> at cost</span>
-    </span>
-  </span>
-  <span class="tile">
-    <span class="eyebrow">Value on the shelf</span>
-    <strong class="stock-figure"><?= e(money((float) $stock['value'])) ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat">what these units cost you</span>
-    </span>
-  </span>
-  <span class="tile">
-    <span class="eyebrow">Dealers waiting on you</span>
-    <strong><?= count($waiting) ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat">orders paid for and not yet released</span>
-    </span>
-  </span>
-</div>
+<?php
+  $stockQueue      = count($waiting);
+  $stockQueueLabel = 'Dealers waiting on you';
+  require __DIR__ . '/../admin/partials/stock-tiles.php';
+?>
 
 <div class="panel">
   <div class="panel__head">
@@ -159,127 +150,36 @@ require __DIR__ . '/partials/layout-top.php';
     </div>
   </div>
 
-  <div class="table-wrap">
-    <table class="data-table data-table--stack">
-      <colgroup>
-        <col style="width:18%">
-        <col style="width:18%">
-        <col style="width:8%">
-        <col style="width:14%">
-        <col style="width:14%">
-        <col style="width:28%">
-      </colgroup>
-      <thead>
-        <tr>
-          <th>Dealer</th>
-          <th>Ordered</th>
-          <th>Units</th>
-          <th>They paid</th>
-          <th>Proof</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php if (!$dealerAsks): ?>
-          <tr class="row-empty">
-            <td colspan="6">No entry found — none of your dealers has ordered stock yet.</td>
-          </tr>
-        <?php endif; ?>
-
-        <?php foreach ($dealerAsks as $ask): ?>
-          <tr>
-            <td data-lead>
-              <div class="cell-stack">
-                <strong><?= e($ask['buyer_name']) ?></strong>
-                <span class="cell-sub"><?= e($ask['buyer_code']) ?></span>
-              </div>
-            </td>
-            <td data-label="Ordered">
-              <div class="cell-stack">
-                <?php foreach (stock_order_items((int) $ask['id']) as $askItem): ?>
-                  <span>
-                    <b><?= (int) $askItem['quantity'] ?></b> ×
-                    <?= e(product_label((string) $askItem['product'])) ?>
-                  </span>
-                <?php endforeach; ?>
-                <span class="cell-sub"><?= e(format_datetime($ask['requested_at'])) ?></span>
-              </div>
-            </td>
-            <td class="td-amount stock-figure" data-label="Units">
-              <strong><?= stock_order_units((int) $ask['id']) ?></strong>
-            </td>
-            <td class="td-amount" data-label="They paid"><strong><?= e(money((float) $ask['total_amount'])) ?></strong></td>
-            <td data-label="Proof">
-              <?php /* the proof is theirs to show and yours to check — it opens
-                       over the page rather than in a tab of its own */ ?>
-              <?php if (!empty($ask['proof_path'])): ?>
-                <div class="cell-stack">
-                  <a class="link-arrow" data-viewer="Proof of payment"
-                     href="proof.php?order=<?= (int) $ask['id'] ?>">
-                    <i class="bi bi-paperclip" aria-hidden="true"></i> Proof
-                  </a>
-                  <?php if (!empty($ask['reference'])): ?>
-                    <span class="cell-sub">ref <?= e($ask['reference']) ?></span>
-                  <?php endif; ?>
-                </div>
-              <?php else: ?>
-                <span class="cell-sub">none uploaded</span>
-              <?php endif; ?>
-            </td>
-            <td data-block="Decide">
-              <?php if ($ask['status'] === 'pending'): ?>
-                <div class="decide">
-                  <form method="post">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="approve">
-                    <input type="hidden" name="order_id" value="<?= (int) $ask['id'] ?>">
-                    <button type="submit" class="btn btn--primary btn--sm">
-                      <i class="bi bi-check-lg" aria-hidden="true"></i> Payment received
-                    </button>
-                  </form>
-
-                  <form method="post" data-confirm="Turn this order down? Nothing leaves your shelf.">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="reject">
-                    <input type="hidden" name="order_id" value="<?= (int) $ask['id'] ?>">
-                    <div class="decide__reason">
-                      <label class="visually-hidden" for="reason-<?= (int) $ask['id'] ?>">
-                        Why this order is being turned down
-                      </label>
-                      <input id="reason-<?= (int) $ask['id'] ?>" name="reason" type="text" maxlength="255"
-                             placeholder="Why? They see this">
-                      <button type="submit" class="btn btn--ghost btn--sm">Turn down</button>
-                    </div>
-                  </form>
-                </div>
-              <?php else: ?>
-                <div class="decide__settled">
-                  <span class="pill pill--<?= $ask['status'] === 'approved' ? 'accepted' : 'rejected' ?>">
-                    <?= e(stock_status_label((string) $ask['status'])) ?>
-                  </span>
-                  <?php if (!empty($ask['reject_reason'])): ?>
-                    <span class="cell-sub"><?= e($ask['reject_reason']) ?></span>
-                  <?php endif; ?>
-                </div>
-              <?php endif; ?>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
+  <?php
+    $queueRows  = $dealerAsks;
+    $queueWho   = 'Dealer';
+    $queueEmpty = 'none of your dealers has ordered stock yet.';
+    require __DIR__ . '/../admin/partials/stock-queue-table.php';
+  ?>
 </div>
 
 <div class="panel">
   <div class="panel__head">
     <div class="panel__head-text">
-      <h2>Order more from the office</h2>
+      <h2>Order more from <?= e($stockFrom) ?></h2>
       <span class="eyebrow">Pay first, then upload the proof</span>
     </div>
   </div>
 
   <div class="panel__body">
     <?php require __DIR__ . '/../admin/partials/stock-order-form.php'; ?>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel__head">
+    <div class="panel__head-text">
+      <h2>Correct a dealer's shelf</h2>
+      <span class="eyebrow">Recount or fix stock held by your dealers</span>
+    </div>
+  </div>
+  <div class="panel__body">
+    <?php $adjustTargets = stock_adjust_targets('distributor', $distId); require __DIR__ . '/../admin/partials/stock-adjust.php'; ?>
   </div>
 </div>
 

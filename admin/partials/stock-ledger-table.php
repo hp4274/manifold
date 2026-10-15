@@ -9,7 +9,7 @@
 declare(strict_types=1);
 ?>
 <div class="table-wrap">
-  <table class="data-table data-table--stack" data-paged="10">
+  <table class="data-table data-table--stack" data-paged="10" data-export="stock-movements">
     <colgroup>
       <col style="width:22%">
       <col style="width:30%">

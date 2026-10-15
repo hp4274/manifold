@@ -22,8 +22,23 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 csrf_check();
 
-$type   = (string) ($_POST['type'] ?? '');
 $id     = (int) ($_POST['id'] ?? 0);
+$action = (string) ($_POST['action'] ?? '');
+
+if ($action === 'approve_low_stock') {
+    /* whichever desk is signing: a C&F session records the Principal C&F half,
+       the office records its own. Passing a literal here made both halves land
+       on the office and left the hold impossible to clear. */
+    approve_low_stock_sale($id, (string) ($user['role'] ?? 'admin'), (int) $user['id']);
+    $return = (string) ($_POST['return'] ?? './');
+    if (!preg_match('#^(\./|list)(\?[a-z0-9=&_%-]*)?$#i', $return)) {
+        $return = './';
+    }
+    header('Location: ' . $return);
+    exit;
+}
+
+$type   = (string) ($_POST['type'] ?? '');
 $status = (string) ($_POST['status'] ?? '');
 $config = type_config($type);
 
@@ -54,8 +69,9 @@ if ($config['table'] === 'applications') {
         exit('Use the payment actions in the Details drawer for applications.');
     }
 
+    $confirmedAt = $status === 'booking_pending' ? date('Y-m-d H:i:s') : null;
     db()->prepare('UPDATE applications SET status = ?, confirmed_at = ? WHERE id = ?')
-        ->execute([$status, $status === 'booking_pending' ? date('Y-m-d H:i:s') : null, $id]);
+        ->execute([$status, $confirmedAt, $id]);
 
     log_status_change('application', $id, $oldStatus, $status, (int) $user['id']);
 

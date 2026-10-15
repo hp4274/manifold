@@ -103,13 +103,12 @@ $srcAskedBy = $srcWaiting
           </div>
         </dl>
         <span class="field-hint">
-          Commission is paid against a voucher, not from here: the dealer claims it, their
-          distributor approves it, C&amp;F presents it and pays it once the office funds it.
-          What lands that way is listed under Payouts.
+          Commission is not paid from here: once released, the office sends it down the chain
+          and their distributor passes the dealer's share on, with a receipt at every hop.
         </span>
 
         <div class="drawer-actions">
-          <a class="btn btn--ghost btn--sm" href="vouchers">Open the claims</a>
+          <a class="btn btn--ghost btn--sm" href="commissions?party=dealer">Commission payouts</a>
           <a class="btn btn--ghost btn--sm" href="dealers?edit=<?= $srcDealerId ?>">Edit dealer</a>
         </div>
       </div>
@@ -239,8 +238,8 @@ $srcAskedBy = $srcWaiting
         </p>
 
         <?php if (!$srcPayouts): ?>
-          <p class="empty">Nothing has been paid to this dealer yet. A payout appears here when C&amp;F
-            settles a voucher they are on.</p>
+          <p class="empty">No voucher payouts on record. Commission now reaches this dealer through
+            their distributor — see Commission payouts.</p>
         <?php else: ?>
           <div class="table-wrap">
             <table class="data-table" data-paged="10">

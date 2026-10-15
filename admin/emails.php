@@ -73,7 +73,7 @@ function email_wrap(string $heading, string $inner, string $preheader = ''): str
         . '<tr><td class="mf-card" style="padding:32px 30px 8px;"><h1 class="mf-title" style="margin:0 0 16px;font-size:24px;line-height:1.35;color:#0f2c4d;">' . $heading . '</h1></td></tr>'
         . '<tr><td class="mf-card mf-body" style="padding:0 30px 30px;font-size:16px;line-height:1.7;color:#5b7186;">' . $inner . '</td></tr>'
         . '<tr><td class="mf-foot" style="padding:20px 30px;background:#f6f9fc;border-top:1px solid #e3ebf2;font-size:13px;line-height:1.6;color:#8499ac;">'
-        . 'Manifold Clean Energy Pvt. Ltd. · 711, SAFAL Prelude, Corporate Road, Prahlad Nagar, Ahmedabad 380015<br>'
+        . 'Manifold Clean Energy Pvt. Ltd. · 711 Safal Prelude, Corporate Rd, Prahlad Nagar, Ahmedabad 380015<br>'
         . '+91 97251 54186 · info@manifoldcleanenergy.co.in<br>&copy; ' . $year . ' Manifold Clean Energy Pvt. Ltd.'
         . '</td></tr></table></td></tr></table></body></html>';
 }
@@ -186,6 +186,48 @@ function send_new_application_admin(array $app): bool
     $link    = base_url() . '/admin/list?type=' . rawurlencode((string) $app['product'])
         . '&status=submitted#row-' . (int) $app['id'];
 
+    /* the whole dossier, so the office can act without opening the admin first */
+    $partners = [];
+
+    foreach ([
+        'Dealer'        => ['dealer_id', 'dealers', 'dealer_code', 'full_name'],
+        'Distributor'   => ['distributor_id', 'distributors', 'distributor_code', 'full_name'],
+        'Zonal C&F'     => ['zonal_cf_id', 'zonal_cf', 'zonal_code', 'full_name'],
+        'Principal C&F' => ['principal_cf_id', 'principal_cf', 'principal_code', 'full_name'],
+    ] as $label => [$idCol, $table, $codeCol, $nameCol]) {
+        if (empty($app[$idCol])) {
+            continue;
+        }
+
+        try {
+            $stmt = db()->prepare("SELECT `$codeCol`, `$nameCol` FROM `$table` WHERE id = ?");
+            $stmt->execute([(int) $app[$idCol]]);
+            $p = $stmt->fetch(PDO::FETCH_NUM);
+
+            if ($p) {
+                $partners[$label] = $p[0] . ' - ' . $p[1];
+            }
+        } catch (Throwable $e) {
+            /* a column named differently in some tier must not lose the notice */
+        }
+    }
+
+    $docs = '';
+
+    foreach ([
+        'aadhaar_doc_path'      => 'Aadhaar',
+        'electricity_bill_path' => 'Electricity bill',
+        'rc_doc_path'           => 'RC',
+        'dl_doc_path'           => 'Driving licence',
+    ] as $col => $label) {
+        if (!empty($app[$col])) {
+            $docs .= '<a href="' . e(base_url() . '/admin/file?path=' . rawurlencode((string) $app[$col]))
+                . '" style="color:#0e8f96;">' . e($label) . '</a> &nbsp; ';
+        }
+    }
+
+    $plan = ($app['payment_plan'] ?? '') === 'full_payment' ? 'Full payment' : 'Booking amount';
+
     $inner = '<p style="margin:0 0 16px;">A new application is waiting for a decision.</p>'
         . email_rows([
             'Booking number' => (string) $app['reference_code'],
@@ -193,8 +235,23 @@ function send_new_application_admin(array $app): bool
             'Applicant'      => (string) $app['full_name'],
             'Email'          => (string) $app['email'],
             'Phone'          => (string) ($app['mobile_number'] ?? ''),
+            'Date of birth'  => (string) ($app['date_of_birth'] ?? ''),
+            'Residential address' => implode(', ', array_filter(array_map(
+                static fn (string $k): string => trim((string) ($app[$k] ?? '')),
+                ['house_number', 'street', 'city', 'state', 'country', 'pin_code']
+            ))),
+            'Delivery address' => (string) ($app['delivery_address'] ?? ''),
+            'Registration no.' => (string) ($app['registration_number'] ?? ''),
+            'Payment option' => $plan,
+            'Amount due'     => isset($app['payment_amount']) ? money((float) $app['payment_amount']) : '',
             'Quoted code'    => (string) ($app['referred_by_code'] ?? ''),
+        ] + $partners + [
+            'Terms accepted' => !empty($app['terms_accepted'])
+                ? format_datetime((string) ($app['terms_accepted_at'] ?? $app['created_at'] ?? ''))
+                : 'No',
         ])
+        . ($docs !== '' ? '<p style="margin:0 0 8px;font-size:15px;color:#8499ac;">Documents (admin sign-in required)</p>'
+            . '<p style="margin:0 0 16px;font-size:15px;">' . $docs . '</p>' : '')
         . email_button($link, 'Open it in the admin')
         . '<p style="margin:0;font-size:14px;color:#8499ac;">Approving it emails the applicant their '
         . 'payment details and opens their portal.</p>';
@@ -413,15 +470,14 @@ function send_docs_verified_email(array $app): bool
             ? ', and that is the last step. Everything on your '
                 . e(product_label((string) $app['product'])) . ' is done - we will call you to arrange '
                 . 'the handover.</p>'
-            : '. One question before anything more is owed: tell us in your portal whether to build and '
-                . 'deliver your unit, or to cancel the order - if you cancel, everything you have paid is '
-                . 'refunded in full.</p>')
+            : '. Your booking is now final, so it can no longer be cancelled, and the delivery payment is '
+                . 'open in your portal - pay it and upload the receipt, and we will arrange the handover.</p>')
         . email_rows([
             'Booking number' => (string) $app['reference_code'],
             'Product'        => product_label((string) $app['product']),
             'Verified on'    => format_datetime((string) ($app['docs_verified_at'] ?? date('Y-m-d H:i:s'))),
         ])
-        . email_button($portal, $settled ? 'See your application' : 'Answer in your portal');
+        . email_button($portal, $settled ? 'See your application' : 'Pay the delivery amount');
 
     return send_mail(
         (string) $app['email'],
@@ -468,29 +524,6 @@ function send_docs_rejected_email(array $app, string $reason): bool
         'We need your documents again (' . $app['reference_code'] . ')',
         email_wrap('Documents not accepted', $inner),
         'docs_rejected'
-    );
-}
-
-/**
- * Sent when the client says to go ahead: the delivery payment is open.
- */
-function send_delivery_open_email(array $app): bool
-{
-    $inner = '<p style="margin:0 0 14px;">Hello ' . e((string) $app['full_name']) . ',</p>'
-        . '<p style="margin:0 0 16px;">Thank you - we are going ahead with your '
-        . e(product_label((string) $app['product'])) . '. The delivery payment is open in your portal '
-        . 'now; pay it and upload the receipt, and we will arrange the handover.</p>'
-        . email_rows([
-            'Booking number'   => (string) $app['reference_code'],
-            'Delivery payment' => money(stage_amount($app, 'delivery')),
-        ])
-        . email_button(base_url() . '/portal/', 'Pay the delivery amount');
-
-    return send_mail(
-        (string) $app['email'],
-        'Delivery payment open (' . $app['reference_code'] . ')',
-        email_wrap('Going ahead with your order', $inner),
-        'delivery_open'
     );
 }
 
@@ -584,7 +617,15 @@ function send_stock_released_email(array $order, array $buyer, string $summary):
         return false;
     }
 
-    $isDealer = ($order['buyer_type'] ?? '') === 'dealer';
+    /* each tier reads its stock on its own desk; the C&F desk serves both C&F
+       tiers and needs telling which one, for an address that holds both */
+    $buyerType = (string) ($order['buyer_type'] ?? '');
+    $stockPath = [
+        'dealer'       => '/dealer/stock',
+        'distributor'  => '/distributor/stock',
+        'zonal_cf'     => '/cfdesk/stock?as=zonal_cf',
+        'principal_cf' => '/cfdesk/stock?as=principal_cf',
+    ][$buyerType] ?? '/portal/';
 
     $inner = '<p style="margin:0 0 16px;">Your stock order has been released - the units are on your '
         . 'balance now.</p>'
@@ -596,7 +637,7 @@ function send_stock_released_email(array $order, array $buyer, string $summary):
         ])
         . '<p style="margin:16px 0 0;">Recording a sale takes a unit off this balance, so what is left '
         . 'is always what you can still sell.</p>'
-        . email_button(base_url() . ($isDealer ? '/dealer/stock' : '/distributor/stock'), 'See your stock');
+        . email_button(base_url() . $stockPath, 'See your stock');
 
     return send_mail(
         (string) $buyer['email'],
@@ -604,6 +645,28 @@ function send_stock_released_email(array $order, array $buyer, string $summary):
         email_wrap('Your stock is released', $inner),
         'stock_released'
     );
+}
+
+/**
+ * "You have been paid": one pass-down hop of commission has been sent to this
+ * partner. The money may be theirs or theirs to pass on, so the letter only
+ * says it arrived and points at the payouts page that splits it.
+ */
+function send_commission_transfer_email(
+    string $to,
+    string $name,
+    float $amount,
+    string $utr,
+    string $fromName,
+    string $link
+): bool {
+    $heading = 'Commission transferred to you';
+    $inner   = '<p style="margin:0 0 16px;">Hello ' . e($name) . ', ' . e($fromName) . ' has sent you '
+        . e(money($amount)) . ' of commission.</p>'
+        . email_rows(['Amount' => money($amount), 'UTR / reference' => $utr, 'From' => $fromName])
+        . email_button($link, 'See your payouts');
+
+    return send_mail($to, $heading . ' - ' . money($amount), email_wrap($heading, $inner), 'commission_transfer');
 }
 
 /**
@@ -1165,4 +1228,39 @@ function send_newsletter_welcome_email(string $to): bool
         email_wrap('Thank you for subscribing', $inner),
         'newsletter_welcome'
     );
+}
+
+/** The office hears about an enquiry with everything the sender wrote. */
+function send_new_contact_admin(array $enquiry, int $id): bool
+{
+    $inner = '<p style="margin:0 0 16px;">A new enquiry came in through the contact form.</p>'
+        . email_rows([
+            'Name'    => (string) $enquiry['name'],
+            'Company' => (string) ($enquiry['company'] ?? ''),
+            'Email'   => (string) $enquiry['email'],
+            'Phone'   => (string) $enquiry['phone'],
+            'About'   => contact_interest_label($enquiry['interest'] ?? null),
+            'City'    => (string) ($enquiry['city'] ?? ''),
+            'Contact consent' => !empty($enquiry['consent']) ? 'Yes' : 'No',
+            'Received' => format_datetime(date('Y-m-d H:i:s')),
+        ])
+        . '<p style="margin:16px 0 6px;font-weight:700;color:#0f2c4d;">Message</p>'
+        . '<p style="margin:0 0 20px;padding:14px 18px;border-radius:12px;background:#f6f9fc;'
+        . 'border:1px solid #e3ebf2;font-size:15px;color:#0f2c4d;">' . nl2br(e((string) $enquiry['message'])) . '</p>'
+        . email_button(base_url() . '/admin/list?type=contact#row-' . $id, 'Reply from the admin');
+
+    return send_to_office('New enquiry - ' . $enquiry['name'], 'New enquiry', $inner, 'contact_new');
+}
+
+/** And somebody joining the mailing list. */
+function send_new_newsletter_admin(string $email, ?string $source): bool
+{
+    $inner = '<p style="margin:0 0 16px;">Somebody joined the newsletter.</p>'
+        . email_rows([
+            'Email'      => $email,
+            'Signed up'  => format_datetime(date('Y-m-d H:i:s')),
+            'From page'  => (string) $source,
+        ]);
+
+    return send_to_office('New newsletter signup - ' . $email, 'Newsletter signup', $inner, 'newsletter_new');
 }

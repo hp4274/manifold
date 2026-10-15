@@ -11,7 +11,7 @@
 declare(strict_types=1);
 ?>
 <div class="table-wrap">
-  <table class="data-table data-table--stack">
+  <table class="data-table data-table--stack" data-paged="10" data-export="my-stock-orders">
     <colgroup>
       <col style="width:20%">
       <col style="width:28%">

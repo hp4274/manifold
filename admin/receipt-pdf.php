@@ -120,6 +120,23 @@ final class SimplePdf
         $this->text($centreX - $this->widthOf($text, $size, $bold) / 2, $fromTop, $text, $size, $bold, $rgb);
     }
 
+    /** Text turned about its start point, for a watermark run corner to corner. */
+    public function textRotated(float $x, float $fromTop, string $text, float $size, float $degrees, array $rgb, float $tracking = 0.0): void
+    {
+        $a = deg2rad($degrees);
+
+        $this->content .= sprintf(
+            "BT /F2 %.2f Tf %.2f Tc %.3f %.3f %.3f rg %.4f %.4f %.4f %.4f %.2f %.2f Tm (%s) Tj ET\n",
+            $size,
+            $tracking,
+            $rgb[0], $rgb[1], $rgb[2],
+            cos($a), sin($a), -sin($a), cos($a),
+            $x,
+            $this->y($fromTop),
+            $this->escape($text)
+        );
+    }
+
     public function rect(float $x, float $fromTop, float $w, float $h, array $rgb): void
     {
         $this->content .= sprintf(
@@ -464,7 +481,7 @@ function build_receipt_pdf(array $app, array $payment, array $totals = []): stri
     $foot = 742.0;
     $pdf->line($left, $foot - 18, $right, $line);
     $pdf->text($left, $foot, 'Manifold Clean Energy Pvt. Ltd.', 9, true, $body);
-    $pdf->text($left, $foot + 14, '711, SAFAL Prelude, Corporate Road, Prahlad Nagar, Ahmedabad 380015, Gujarat, India', 8, false, $muted);
+    $pdf->text($left, $foot + 14, '711 Safal Prelude, Corporate Rd, Prahlad Nagar, Ahmedabad 380015, Gujarat, India', 8, false, $muted);
     $pdf->text($left, $foot + 27, '+91 97251 54186   ·   info@manifoldcleanenergy.co.in', 8, false, $muted);
 
     return $pdf->output();

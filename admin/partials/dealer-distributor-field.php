@@ -50,10 +50,8 @@ $fieldHolder  = $fieldCurrent > 0 ? distributor_by_id($fieldCurrent) : null;
       <?php endforeach; ?>
     </select>
     <span class="field-hint">
-      Whoever this dealer answers to takes the override —
-      <?= e(money_short(commission_value('override', 'stove'))) ?> a stove,
-      <?= e(money_short(commission_value('override', 'tuktuk'))) ?> a kit — on every sale they make.
-      This is picked once and cannot be changed later.
+      Whoever this dealer answers to takes <?= e(rate_short(commission_rate('distributor'))) ?> of
+      every sale they make. This is picked once and cannot be changed later.
     </span>
   </div>
 <?php endif; ?>
