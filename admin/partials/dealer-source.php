@@ -127,7 +127,7 @@ $srcAskedBy = $srcWaiting
           <?php endforeach; ?>
           <span class="field-hint">
             Anybody opening one of these finds <?= e((string) $srcDealer['dealer_code']) ?> already in the
-            referral box and cannot change it, so the sale is attributed to
+            partner code box and cannot change it, so the sale is attributed to
             <?= e($srcDealer['full_name']) ?>.
           </span>
         </div>

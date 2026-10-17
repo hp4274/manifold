@@ -114,7 +114,7 @@ require __DIR__ . '/partials/layout-top.php';
         </div>
       <?php endforeach; ?>
       <span class="field-hint">
-        Anybody who opens one of these finds <?= e($dealer['dealer_code']) ?> already in the referral box
+        Anybody who opens one of these finds <?= e($dealer['dealer_code']) ?> already in the partner code box
         and cannot change it. A customer who fills the form in any other way will not be counted as yours.
       </span>
     </div>

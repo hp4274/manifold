@@ -244,7 +244,6 @@ function send_new_application_admin(array $app): bool
             'Registration no.' => (string) ($app['registration_number'] ?? ''),
             'Payment option' => $plan,
             'Amount due'     => isset($app['payment_amount']) ? money((float) $app['payment_amount']) : '',
-            'Quoted code'    => (string) ($app['referred_by_code'] ?? ''),
         ] + $partners + [
             'Terms accepted' => !empty($app['terms_accepted'])
                 ? format_datetime((string) ($app['terms_accepted_at'] ?? $app['created_at'] ?? ''))
@@ -704,22 +703,7 @@ function send_payment_email(array $app): bool
         . e($product) . '</strong> has been approved. Your booking number is '
         . '<strong style="color:#0f2c4d;">' . e((string) $app['reference_code']) . '</strong>.</p>';
 
-    $referred = ($app['referral_reward_status'] ?? 'none') === 'pending';
-
-    if ($referred) {
-        $inner .= '<p style="margin:0 0 20px;padding:12px 18px;border-radius:12px;background:#eefaf4;'
-            . 'border:1px solid #cdeee0;font-size:15px;color:#0f2c4d;">'
-            . 'Referral code <strong>' . e((string) $app['referred_by_code']) . '</strong> recorded. '
-            . 'What you pay is unchanged - the reward goes to whoever gave you the code, '
-            . 'once your booking payment is verified.</p>';
-    } elseif (!empty($app['referred_by_code'])) {
-        $inner .= '<p style="margin:0 0 20px;padding:12px 18px;border-radius:12px;background:#fff6ed;'
-            . 'border:1px solid #f4ddc4;font-size:15px;color:#0f2c4d;">'
-            . 'We could not match the referral code <strong>' . e((string) $app['referred_by_code'])
-            . '</strong>. Reply to this email with the correct one and we will credit the right person.</p>';
-    }
-
-    $inner .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:#f6f9fc;border:1px solid #e3ebf2;border-radius:14px;padding:20px;">'
+    $inner .='<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:#f6f9fc;border:1px solid #e3ebf2;border-radius:14px;padding:20px;">'
         . '<tr><td>'
         . '<p style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8499ac;">Payment Breakdown</p>'
         . email_rows([
@@ -838,36 +822,9 @@ function send_receipt_email(array $app, array $payment, array $totals): bool
         ? '<p style="margin:0 0 14px;">Our team will call you to agree an installation date.</p>'
         : '';
 
-    /* the verified booking payment is when the referral code becomes worth
-       something, so that is where it is handed over */
-    $handOver = $stageKey === 'booking' || $settled;
-    $referral = '';
-
-    if ($handOver && !empty($app['referral_code'])) {
-        $code   = (string) $app['referral_code'];
-        $earns  = money(referral_reward());
-
-        $referral = '<div style="margin:0 0 22px;padding:18px;border-radius:14px;background:#f6f9fc;'
-            . 'border:1px solid #e3ebf2;">'
-            . '<p style="margin:0 0 8px;font-weight:700;color:#0f2c4d;">Your referral code</p>'
-            . '<p style="margin:0 0 12px;font-size:22px;font-weight:700;letter-spacing:.12em;color:#0e8f96;">'
-            . e($code) . '</p>'
-            . '<p style="margin:0 0 12px;font-size:15px;color:#5b7186;">Every person who applies with this code '
-            . 'and has their booking payment verified earns you <strong style="color:#0f2c4d;">' . e($earns)
-            . '</strong>, which we transfer to you once we have checked it. Send them a link with the code '
-            . 'already filled in:</p>'
-            /* the same pair the website shows: the one to press, and the other */
-            . '<p style="margin:0;font-size:15px;">'
-            . email_pill(client_referral_link($app, 'stove'), 'Apply for a stove')
-            . email_pill(client_referral_link($app, 'tuktuk'), 'Apply for a TukTuk kit', false)
-            . '</p>'
-            . '</div>';
-    }
-
     $inner = '<p style="margin:0 0 14px;">Hello ' . e($app['full_name']) . ',</p>'
         . $lead
         . $table
-        . $referral
         . $closing
         . email_button(
             base_url() . '/portal/index.php',
@@ -922,45 +879,6 @@ function send_application_waiting_email(string $to): bool
         'Your Manifold application is still with our team',
         email_wrap('Nothing to sign in to yet', $inner),
         'otp'
-    );
-}
-
-/**
- * Told to the referrer when the office has transferred their reward.
- * $referral is the application that quoted their code.
- */
-function send_referral_paid_email(array $referrer, array $referral): bool
-{
-    $reward = (float) $referral['referral_reward'];
-
-    /* "Your referral reward of ₹0.00 is on its way" is worse than silence.
-       Nothing was transferred, so there is nothing to announce. */
-    if ($reward <= 0) {
-        return false;
-    }
-
-    $amount = money($reward);
-    $code   = (string) $referrer['referral_code'];
-
-    $inner = '<p style="margin:0 0 14px;">Hello ' . e($referrer['full_name']) . ',</p>'
-        . '<p style="margin:0 0 20px;">Somebody applied with your referral code '
-        . '<strong style="color:#0f2c4d;">' . e($code) . '</strong> and has paid their fee, so we have sent you '
-        . '<strong style="color:#0f2c4d;">' . e($amount) . '</strong>'
-        . (!empty($referral['referral_reward_note'])
-            ? ' - ' . e((string) $referral['referral_reward_note'])
-            : '')
-        . '.</p>'
-        . '<p style="margin:0 0 20px;">Thank you for the introduction. Your code keeps working, so anyone else '
-        . 'you send our way earns you the same again.</p>'
-        . email_button(base_url() . '/portal/index.php', 'See my referrals')
-        . '<p style="margin:0;font-size:14px;color:#8499ac;">Not received it after a working day? '
-        . 'Call +91 97251 54186 and we will chase it.</p>';
-
-    return send_mail(
-        $referrer['email'],
-        'Your referral reward of ' . $amount . ' is on its way',
-        email_wrap('Referral reward sent', $inner),
-        'referral'
     );
 }
 
@@ -1083,39 +1001,6 @@ function send_documents_resent_admin(array $app, string $lastReason = ''): bool
         'Corrected documents sent',
         $inner,
         'docs_resent'
-    );
-}
-
-/**
- * A client has asked, from their portal, to be paid the referral reward they
- * have earned and not yet been sent. Nothing about the money changes — this
- * only puts the request in front of the office so nobody has to keep checking
- * the Referrals page for who is waiting.
- */
-function send_referral_claim_admin(array $referrer, float $amount, int $count): bool
-{
-    $link = base_url() . '/admin/referrals.php?payout=payable';
-
-    $rows = [
-        'Referrer'      => (string) $referrer['full_name'],
-        'Their code'    => (string) $referrer['referral_code'],
-        'Email'         => (string) $referrer['email'],
-        'Phone'         => (string) ($referrer['mobile_number'] ?? ''),
-        'Owed to them'  => money($amount),
-        'Referrals due' => (string) $count,
-    ];
-
-    $inner = '<p style="margin:0 0 16px;">A referrer has asked to be paid the reward they have earned. '
-        . 'Their referred clients have had their booking payments verified, so the money is theirs to send.</p>'
-        . email_rows($rows)
-        . email_button($link, 'Open the pending referrals')
-        . '<p style="margin:0;font-size:14px;color:#8499ac;">Pay them the usual way, then mark each referral as sent on the Referrals page.</p>';
-
-    return send_to_office(
-        'Referral payout requested - ' . $referrer['referral_code'] . ' (' . money($amount) . ')',
-        'Referral payout requested',
-        $inner,
-        'referral_claim'
     );
 }
 

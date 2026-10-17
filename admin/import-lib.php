@@ -896,7 +896,6 @@ function import_commit(array $ready, array $context): array
         $columns['declaration_accepted'] = 1;
         $columns['terms_accepted']       = 1;
 
-        $columns['referral_code']  = make_referral_code();
         $columns['reference_code'] = 'tmp-' . bin2hex(random_bytes(6));
         $columns['ip_address']     = $_SERVER['REMOTE_ADDR'] ?? null;
 

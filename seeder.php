@@ -5,8 +5,8 @@
  * Open http://localhost/manifold/seeder.php and it builds a network — two
  * principal C&F, four zonal C&F, five distributors, ten dealers under each,
  * and clients arranged so that every route into a sale, every tier of the
- * commission chain, every payout state, every booking shape and every referral
- * outcome is represented at least once. It prints what it made and stops.
+ * commission chain, every payout state and every booking shape is represented
+ * at least once. It prints what it made and stops.
  *
  *   ?wipe=1   removes everything a previous run made, then seeds again
  *   ?only=... 'wipe' removes and does not re-seed
@@ -60,7 +60,7 @@ if (!$local && PHP_SAPI !== 'cli') {
 
 const SEED_TAG = '[seed]';
 
-/* Seeding walks the voucher, referral and status flows through the live code,
+/* Seeding walks the voucher and status flows through the live code,
    which would fire real email at every step. This flag, checked in send_mail(),
    holds all of it back — the seeder is after the rows, not the notifications. */
 define('MANIFOLD_SEEDING', true);
@@ -377,11 +377,11 @@ $sample = [];
 /**
  * One application, attributed exactly the way admin/submit.php attributes one.
  *
- * $quoted is whatever went in the single code box — a customer's MF code, a
- * dealer's MD code, a distributor's MX code, something unknown, or nothing.
+ * $partner is whatever went in the partner code box — a dealer's MD code, a
+ * distributor's MX code, a zonal C&F's MZ code, something unknown, or nothing.
  * Returns the finished row.
  */
-function seed_application(string $quoted, string $product, array $opts = []): array
+function seed_application(string $partner, string $product, array $opts = []): array
 {
     global $made;
 
@@ -390,38 +390,11 @@ function seed_application(string $quoted, string $product, array $opts = []): ar
     [$city, $state, $pin] = seed_city();
 
     /* ---- who this sale belongs to, and who is paid out of it ----
-       The form has two boxes: $quoted is the referral code and $partner the
-       dealer or distributor selling it. The partner box wins where it is
-       answered, which is what lets a customer of one dealer send somebody to
-       another. Same order as admin/submit.php. */
-    $partner  = $opts['partner'] ?? '';
-    $referrer = $quoted === '' ? null : referrer_for_code($quoted);
-
+       Same order as admin/submit.php. */
     $dealer = $partner === '' ? null : dealer_for_code($partner);
     $distributor = $dealer
         ? distributor_for_dealer($dealer)
         : ($partner === '' ? null : distributor_for_code($partner));
-
-    if (!$dealer && !$distributor && $referrer) {
-        /* a customer's code and no partner named: the partner behind their own
-           sale keeps this one — re-checked, never copied blind */
-        $dealer = dealer_by_id((int) ($referrer['dealer_id'] ?? 0));
-
-        if ($dealer && ((int) $dealer['is_active'] !== 1 || $dealer['approval_status'] !== 'approved')) {
-            $dealer = null;
-        }
-
-        if ($dealer) {
-            $distributor = distributor_for_dealer($dealer);
-        } elseif (empty($referrer['dealer_id'])) {
-            $distributor = distributor_by_id((int) ($referrer['distributor_id'] ?? 0));
-        }
-    } elseif (!$dealer && !$distributor && !$referrer) {
-        $dealer = $quoted === '' ? null : dealer_for_code($quoted);
-        $distributor = $dealer
-            ? distributor_for_dealer($dealer)
-            : ($quoted === '' ? null : distributor_for_code($quoted));
-    }
 
     if ($distributor && (int) $distributor['is_active'] !== 1) {
         $distributor = null;
@@ -430,9 +403,6 @@ function seed_application(string $quoted, string $product, array $opts = []): ar
     /* an MZ code straight on the form: no distributor, no dealer, the zonal and
        their principal take the sale between them */
     $zonalDirect = !$dealer && !$distributor && $partner !== '' ? zonal_cf_for_code($partner) : null;
-
-    /* nobody refers themselves */
-    $self = $referrer && strcasecmp((string) ($referrer['email'] ?? ''), $email) === 0;
 
     /* the whole chain above the seller, frozen by the same function the public
        form and the spreadsheet import both call */
@@ -447,7 +417,6 @@ function seed_application(string $quoted, string $product, array $opts = []): ar
         'product'                => $product,
         'status'                 => 'submitted',
         'reference_code'         => 'seed-' . bin2hex(random_bytes(5)),
-        'referral_code'          => make_referral_code(),
         'full_name'              => $name,
         'email'                  => $email,
         'mobile_number'          => seed_mobile(),
@@ -470,10 +439,6 @@ function seed_application(string $quoted, string $product, array $opts = []): ar
             ? stage_amount(['product' => $product], 'full')
             : (float) $plan['booking'],
         'payment_plan'           => $full ? 'full_payment' : 'booking',
-        'referred_by_code'       => $quoted === '' ? null : $quoted,
-        'referred_by_id'         => $referrer && !$self ? (int) $referrer['id'] : null,
-        'referral_reward'        => $referrer && !$self ? referral_reward() : 0.0,
-        'referral_reward_status' => $referrer && !$self ? 'pending' : 'none',
         'sale_channel'           => 'online',
         'declaration_accepted'   => 1,
         'terms_accepted'         => 1,
@@ -516,10 +481,6 @@ function seed_application(string $quoted, string $product, array $opts = []): ar
         $columns['admin_note']     = trim($columns['admin_note']
             . ' [STOCK RESTRICTION: Seller unit balance <= ' . stock_critical_units()
             . '. Dual approval from Principal C&F and Office required before fulfillment.]');
-    }
-
-    if ($self) {
-        $columns['referral_reward_note'] = 'Own code — a customer cannot refer themselves.';
     }
 
     $names = array_keys($columns);
@@ -625,9 +586,6 @@ function seed_advance(array $app, string $to): array
            column of its own for the moment it happened */
         db()->prepare("UPDATE applications SET status = 'rejected' WHERE id = ?")->execute([$id]);
         log_status_change('application', $id, 'submitted', 'rejected', null);
-        db()->prepare("UPDATE applications SET referral_reward_status = 'cancelled',
-                       referral_reward_note = 'Application turned down.'
-                       WHERE id = ? AND referral_reward_status = 'pending'")->execute([$id]);
 
         return db()->query('SELECT * FROM applications WHERE id = ' . $id)->fetch();
     }
@@ -904,8 +862,6 @@ if (!$onlyWipe) {
                  'delivery_pending', 'delivery_review', 'complete',
                  'complete', 'complete', 'cancelled', 'rejected'];
 
-    $completed = [];   /* rows whose code can go on to refer somebody */
-
     /* --- 1. two to four clients for every live dealer, spread across the
              statuses so that every screen has something to show --- */
     $i = 0;
@@ -942,11 +898,7 @@ if (!$onlyWipe) {
                     $status = 'booking_pending';
                 }
 
-                $app = seed_advance($app, $status);
-
-                if ($status === 'complete') {
-                    $completed[] = $app;
-                }
+                seed_advance($app, $status);
 
                 $i++;
             }
@@ -958,107 +910,17 @@ if (!$onlyWipe) {
 
     /* --- 2. a distributor's own client: the direct rate, no dealer --- */
     foreach ([1, 2, 3, 4, 5] as $d) {
-        $app = seed_advance(
+        seed_advance(
             seed_application((string) $distributors[$d]['distributor_code'], $products[$d % 2],
                 ['note' => 'Distributor link']),
             'complete'
         );
-        $completed[] = $app;
     }
 
     $scenarios[] = ['Distributor code on the website', 'the direct rate, no dealer involved'];
 
-    /* --- 3. a client refers somebody: same dealer keeps the sale --- */
-    shuffle($completed);
-    $chainRoots = array_slice($completed, 0, 12);
-
-    foreach ($chainRoots as $root) {
-        $second = seed_advance(
-            seed_application((string) $root['referral_code'], $products[mt_rand(0, 1)],
-                ['note' => 'Referred by a client']),
-            'complete'
-        );
-        $completed[] = $second;
-
-        /* --- 4. and their referral refers on: only the direct one is paid --- */
-        $third = seed_advance(
-            seed_application((string) $second['referral_code'], $products[mt_rand(0, 1)],
-                ['note' => 'Second link in the chain']),
-            mt_rand(0, 1) ? 'complete' : 'delivery_pending'
-        );
-
-        if ($third['status'] === 'complete') {
-            $completed[] = $third;
-        }
-    }
-
-    /* --- 3b. cross-network: one dealer's customer sends somebody to another,
-             which is what the second box on the form is for --- */
-    $crossFrom = $completed[0];
-    $crossTo   = null;
-
-    foreach ($dealers as $d => $group) {
-        foreach ($group as $dealer) {
-            if ($dealer['approval_status'] === 'approved' && $dealer['is_active']
-                && (int) $dealer['distributor_id'] !== (int) $crossFrom['distributor_id']) {
-                $crossTo = $dealer;
-                break 2;
-            }
-        }
-    }
-
-    if ($crossTo) {
-        seed_advance(
-            seed_application((string) $crossFrom['referral_code'], 'stove', [
-                'partner' => (string) $crossTo['dealer_code'],
-                'note'    => 'Referred across networks',
-            ]),
-            'complete'
-        );
-
-        /* and the same again, still owing the delivery payment */
-        seed_advance(
-            seed_application((string) $crossFrom['referral_code'], 'tuktuk', [
-                'partner' => (string) $crossTo['dealer_code'],
-                'note'    => 'Referred across networks, mid-flow',
-            ]),
-            'delivery_pending'
-        );
-
-        $scenarios[] = ['Referred across networks',
-            'the closing dealer takes the commission, the referrer keeps the reward, '
-            . 'the referrer\'s own dealer earns nothing'];
-    }
-
-    /* --- 3c. a dealer's link with a referral code alongside it --- */
-    $withBoth = seed_advance(
-        seed_application((string) $completed[1]['referral_code'], 'stove', [
-            'partner' => (string) $dealers[1][1]['dealer_code'],
-            'note'    => 'Both codes quoted',
-        ]),
-        'complete'
-    );
-    $completed[] = $withBoth;
-
-    $scenarios[] = ['Both codes on one form', 'the partner box decides the sale, the referral box the reward'];
-
-    $scenarios[] = ['Client refers a client', 'the referrer is paid ₹' . (int) referral_reward()
-        . ', the sale stays with their own dealer'];
-    $scenarios[] = ['Three deep', 'C1 → C2 → C3: only the direct referrer is paid on each'];
-
-    /* --- 5. somebody quotes their own code --- */
-    $selfer = $completed[0];
-    seed_advance(
-        seed_application((string) $selfer['referral_code'], 'stove',
-            ['name' => (string) $selfer['full_name'], 'email' => (string) $selfer['email'],
-             'note' => 'Same customer, second product']),
-        'docs_pending'
-    );
-
-    $scenarios[] = ['Own code quoted', 'no reward — but the dealer keeps the repeat sale'];
-
     /* --- 6. a code that matches nothing, and no code at all --- */
-    seed_advance(seed_application('MFZZZZZZ', 'stove', ['note' => 'Unknown code']), 'booking_pending');
+    seed_advance(seed_application('MDZZZZZZ', 'stove', ['note' => 'Unknown code']), 'booking_pending');
     seed_advance(seed_application('', 'tuktuk', ['note' => 'No code']), 'complete');
     seed_advance(seed_application('', 'stove', ['note' => 'No code, still waiting']), 'submitted');
 
@@ -1076,31 +938,10 @@ if (!$onlyWipe) {
 
     $scenarios[] = ['Code of a partner who is switched off', 'the sale is accepted and books nothing'];
 
-    /* --- 8. a referral whose reward has been paid, and one cancelled --- */
-    $paidRef = $completed[1] ?? $completed[0];
-    $rewarded = seed_advance(
-        seed_application((string) $paidRef['referral_code'], 'stove', ['note' => 'Reward already sent']),
-        'complete'
-    );
-    db()->prepare("UPDATE applications SET referral_reward_status = 'sent', referral_reward_sent_at = ?,
-                   referral_reward_note = 'Transferred by UPI.' WHERE id = ?")
-        ->execute([seed_when(20), (int) $rewarded['id']]);
-
-    $refused = seed_advance(
-        seed_application((string) $paidRef['referral_code'], 'tuktuk', ['note' => 'Reward cancelled']),
-        'complete'
-    );
-    db()->prepare("UPDATE applications SET referral_reward_status = 'cancelled',
-                   referral_reward_note = 'Duplicate of an earlier application.' WHERE id = ?")
-        ->execute([(int) $refused['id']]);
-
-    $scenarios[] = ['Referral reward states', 'pending, sent and cancelled all present'];
-
     /* --- 8a1. a zonal C&F's own code on the form: no distributor, no dealer,
              so only the top two tiers are on the sale --- */
     seed_advance(
-        seed_application('', 'stove', [
-            'partner'    => (string) $zonals[1]['zonal_code'],
+        seed_application((string) $zonals[1]['zonal_code'], 'stove', [
             'created_at' => seed_recent(),
             'note'       => 'Zonal C&F code quoted directly',
         ]),
@@ -1108,8 +949,7 @@ if (!$onlyWipe) {
     );
 
     seed_advance(
-        seed_application('', 'tuktuk', [
-            'partner'    => (string) $zonals[3]['zonal_code'],
+        seed_application((string) $zonals[3]['zonal_code'], 'tuktuk', [
             'created_at' => seed_recent(),
             'note'       => 'Switched-off zonal code',
         ]),
@@ -1425,13 +1265,12 @@ if (!$onlyWipe) {
     $sample['A distributor'] = $distributors[1]['email'] . ' — code ' . $distributors[1]['distributor_code'];
     $sample['A dealer'] = $dealers[1][1]['email'] . ' — code ' . $dealers[1][1]['dealer_code'];
 
-    $client = db()->query("SELECT full_name, email, reference_code, referral_code FROM applications
+    $client = db()->query("SELECT full_name, email, reference_code FROM applications
                             WHERE admin_note LIKE '%" . SEED_TAG . "%' AND status = 'complete'
                             ORDER BY id LIMIT 1")->fetch();
 
     if ($client) {
-        $sample['A client'] = $client['email'] . ' — ' . $client['reference_code']
-            . ', own code ' . $client['referral_code'];
+        $sample['A client'] = $client['email'] . ' — ' . $client['reference_code'];
     }
 }
 
@@ -1468,9 +1307,7 @@ $money = db()->query(
          WHERE a.admin_note LIKE '%" . SEED_TAG . "%' AND cl.party_type = 'dealer') AS dealer_earned,
         (SELECT COALESCE(SUM(amount),0) FROM commission_lines cl
           JOIN applications a ON a.id = cl.application_id
-         WHERE a.admin_note LIKE '%" . SEED_TAG . "%' AND cl.party_type = 'distributor') AS dist_earned,
-        (SELECT COALESCE(SUM(referral_reward),0) FROM applications
-         WHERE admin_note LIKE '%" . SEED_TAG . "%' AND referral_reward_status IN ('pending','sent')) AS rewards"
+         WHERE a.admin_note LIKE '%" . SEED_TAG . "%' AND cl.party_type = 'distributor') AS dist_earned"
 )->fetch();
 
 ?>
@@ -1576,9 +1413,7 @@ $money = db()->query(
       <h2>Money now on the books</h2>
       <table>
         <tr><td>Dealer commission earned</td><td class="n"><?= e(money((float) $money['dealer_earned'])) ?></td></tr>
-        <tr><td>Distributor commission earned</td><td class="n"><?= e(money((float) $money['dist_earned'])) ?></td></tr>
-        <tr><td>Referral rewards booked</td><td class="n"><?= e(money((float) $money['rewards'])) ?></td></tr>
-      </table>
+        <tr><td>Distributor commission earned</td><td class="n"><?= e(money((float) $money['dist_earned'])) ?></td></tr>      </table>
     </div>
 
     <div class="card">
@@ -1615,7 +1450,6 @@ $money = db()->query(
       <a href="admin/dealers">Dealers</a>
       <a href="admin/distributors">Distributors</a>
       <a href="admin/commissions">Commission payouts</a>
-      <a href="admin/referrals">Referrals</a>
       <a href="admin/blog">Blog</a>
       <a href="portal/">Client &amp; partner portal</a>
     </p>

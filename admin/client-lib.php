@@ -11,8 +11,8 @@
  * What is NOT editable here, and why
  * ---------------------------------------------------------------------------
  * A client's details are one thing; their order is another. Status, the two
- * amounts, commission, which dealer the sale belongs to, the booking number, the
- * referral code, every verified-on and paid-on stamp, and the uploaded documents
+ * amounts, commission, which dealer the sale belongs to, the booking number,
+ * every verified-on and paid-on stamp, and the uploaded documents
  * are all left alone — each has a workflow of its own, with its own emails and
  * its own audit trail, and a free-text form over the top of them would be a way
  * to walk round all of it. `product` is out for the same reason: it sets the

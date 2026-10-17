@@ -42,7 +42,7 @@ if ($q !== '') {
        send the browser off on a full reload. */
     $searchable = [
         'applications'           => ['full_name', 'email', 'mobile_number',
-                                     'reference_code', 'referral_code', 'referred_by_code'],
+                                     'reference_code'],
         'contact_messages'       => ['name', 'email', 'phone', 'company', 'city'],
         'newsletter_subscribers' => ['email'],
     ][$config['table']] ?? ['email'];

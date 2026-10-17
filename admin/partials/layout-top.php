@@ -68,9 +68,6 @@ $pageLead   = $pageLead ?? '';
         <a href="blog" class="<?= $activeType === 'blog' ? 'is-active' : '' ?>">
           <i class="bi bi-journal-text" aria-hidden="true"></i> Blog
         </a>
-        <a href="referrals" class="<?= $activeType === 'referrals' ? 'is-active' : '' ?>">
-          <i class="bi bi-people" aria-hidden="true"></i> Referrals
-        </a>
         <a href="principal-cf" class="<?= $activeType === 'principal_cf' ? 'is-active' : '' ?>">
           <i class="bi bi-building" aria-hidden="true"></i> Principal C&F
         </a>

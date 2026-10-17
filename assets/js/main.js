@@ -236,14 +236,9 @@
     }
   }
 
-  /* ---------- Referral code from the link ----------
-     A shared link looks like apply-stove.html?ref=MFAB3K7P. Drop the code into
-     the box so the applicant does not have to type it, and highlight it so the
-     discount is visible before they submit. */
-  /* Two boxes, two parameters: ?ref= is the customer who referred this one and
-     ?code= is the dealer or distributor selling it. A customer's own share link
-     carries both, which is how a sale stays with their dealer while the reward
-     goes to them. */
+  /* ---------- Partner code from the link ----------
+     A dealer or distributor share link looks like apply-stove?code=MD7K2QP4.
+     Drop the code into the box so the applicant does not have to type it. */
   function fillCode(id, param) {
     var field = document.getElementById(id);
     if (!field) return;
@@ -253,10 +248,10 @@
     if (code) {
       field.value = code.slice(0, 20);
       field.classList.add('is-prefilled');
-      /* the code came from somebody's own link — the sale or the reward belongs
-         to them, so it is shown but not editable. Typing a different one means
-         opening the plain apply page. readOnly, not disabled: a disabled field
-         is never submitted. */
+      /* the code came from a partner's own link — the sale belongs to them, so
+         it is shown but not editable. Typing a different one means opening the
+         plain apply page. readOnly, not disabled: a disabled field is never
+         submitted. */
       field.readOnly = true;
     }
 
@@ -265,23 +260,17 @@
     });
   }
 
-  fillCode('referral_code', 'ref');
   fillCode('partner_code', 'code');
 
-  /* an older link put a partner's code in ?ref=; it still works, and it lands
-     in the box that code belongs to */
-  var strayPartner = (params.get('ref') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  /* an older partner link put the code in ?ref= (MD… dealer, MX… distributor);
+     it still works. Any other ?ref= value is ignored. */
+  var oldPartnerLink = (params.get('ref') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   var partnerField = document.getElementById('partner_code');
-  var referralField = document.getElementById('referral_code');
 
-  if (partnerField && referralField && !partnerField.value
-      && /^(MD|MX)/.test(strayPartner)) {
-    partnerField.value = strayPartner.slice(0, 20);
+  if (partnerField && !partnerField.value && /^(MD|MX)/.test(oldPartnerLink)) {
+    partnerField.value = oldPartnerLink.slice(0, 20);
     partnerField.classList.add('is-prefilled');
     partnerField.readOnly = true;
-    referralField.value = '';
-    referralField.classList.remove('is-prefilled');
-    referralField.readOnly = false;
   }
 
   /* ---------- Signed-in account menu ----------
@@ -345,9 +334,6 @@
               (page === 'status'
                 ? ''
                 : '<a href="' + siteRoot + 'portal/status"><i class="bi bi-clipboard-check" aria-hidden="true"></i> View status</a>') +
-              (session.canRefer
-                ? '<a href="' + siteRoot + 'portal/status#referral"><i class="bi bi-people" aria-hidden="true"></i> Refer someone</a>'
-                : '') +
               '<a class="nav-account__out" href="' + siteRoot + 'portal/logout"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out</a>' +
             '</div>';
 
@@ -382,42 +368,6 @@
         });
       });
   }
-
-  /* ---------- Copy to clipboard ----------
-     Referral code and share links in the portal. Falls back to selecting a
-     throwaway input where the async clipboard API is not allowed. */
-  document.addEventListener('click', function (e) {
-    var trigger = e.target.closest('[data-copy]');
-    if (!trigger) return;
-
-    var value = trigger.getAttribute('data-copy');
-    var done = function () {
-      var original = trigger.innerHTML;
-      trigger.classList.add('is-copied');
-      trigger.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i> Copied';
-      setTimeout(function () {
-        trigger.classList.remove('is-copied');
-        trigger.innerHTML = original;
-      }, 1800);
-    };
-
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(value).then(done, function () { copyFallback(value); });
-      return;
-    }
-
-    var scratch = document.createElement('input');
-    scratch.value = value;
-    scratch.setAttribute('readonly', '');
-    scratch.style.position = 'fixed';
-    scratch.style.opacity = '0';
-    document.body.appendChild(scratch);
-    scratch.select();
-
-    try { document.execCommand('copy'); done(); } catch (err) { copyFallback(value); }
-
-    scratch.remove();
-  });
 
   /* ---------- Cookie gate ----------
      The top bar's twin along the bottom edge, over a scrim that holds the page
@@ -576,7 +526,7 @@
      Somebody applying for a second product has told us their name, address and
      ID once already. The form is static HTML, so portal/prefill.php hands over
      their own details and they are dropped into the empty fields — never over
-     anything already typed, and never the referral code. */
+     anything already typed, and never the partner code. */
   var applyForm = document.getElementById('applyForm');
 
   if (applyForm && page.indexOf('apply-') === 0) {
@@ -1387,7 +1337,7 @@
     toast.appendChild(close);
     stack.appendChild(toast);
 
-    if (kind === 'ok') setTimeout(go, 5000);
+    setTimeout(go, 5000);
   }
 
   window.manifoldToast = raiseToast;

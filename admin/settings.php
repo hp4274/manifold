@@ -1,6 +1,6 @@
 <?php
 /**
- * Settings: the referral reward, and the accounts that can sign in.
+ * Settings: commission, stock prices, default limits, and the accounts that can sign in.
  *
  * The rules that keep anyone from locking the office out live here — nobody
  * can switch off or delete themselves, and the last active account cannot go
@@ -13,7 +13,7 @@ require_once __DIR__ . '/lib.php';
 
 $user       = require_login();
 $pageTitle  = 'Settings';
-$pageLead   = 'What the office can change without a developer: the referral reward, and who can sign in.';
+$pageLead   = 'What the office can change without a developer: commission, stock prices, default limits, and who can sign in.';
 $activeType = 'settings';
 
 $error = '';
@@ -65,7 +65,7 @@ function other_active_admins(int $exceptId): int
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $action = (string) ($_POST['action'] ?? 'reward');
+    $action = (string) ($_POST['action'] ?? '');
     $id     = (int) ($_POST['id'] ?? 0);
 
     if ($action === 'commission') {
@@ -129,16 +129,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             settings_done('Saved. Stock ordered from now on is priced at these figures.');
-        }
-    } elseif ($action === 'reward') {
-        $reward = str_replace(',', '', trim((string) ($_POST['referral_reward'] ?? '')));
-
-        if (!is_numeric($reward) || (float) $reward < 0) {
-            $error = 'The referral reward has to be a number, zero or more.';
-        } else {
-            save_setting('referral_reward', number_format((float) $reward, 2, '.', ''));
-            settings_done('Saved. A code used from now on earns its owner '
-                . money(referral_reward()) . '.');
         }
     } elseif ($action === 'admin_save') {
         $name     = trim((string) ($_POST['name'] ?? ''));
@@ -222,8 +212,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$reward = referral_reward();
-
 $limit = dealer_limit();
 
 /* the distributor closest to the ceiling, so the figure is not abstract */
@@ -246,17 +234,6 @@ $admins = db()->query(
        FROM admin_users ORDER BY is_active DESC, name'
 )->fetchAll();
 
-/* how the programme is doing, for context next to the field */
-$stats = db()->query(
-    "SELECT COUNT(*) AS referred,
-            COALESCE(SUM(CASE WHEN referral_reward_status = 'sent'
-                              THEN referral_reward ELSE 0 END), 0) AS paid,
-            COALESCE(SUM(CASE WHEN referral_reward_status = 'pending'
-                              THEN referral_reward ELSE 0 END), 0) AS pending
-       FROM applications
-      WHERE referred_by_id IS NOT NULL"
-)->fetch() ?: ['referred' => 0, 'paid' => 0, 'pending' => 0];
-
 require __DIR__ . '/partials/layout-top.php';
 ?>
 
@@ -267,56 +244,6 @@ require __DIR__ . '/partials/layout-top.php';
 <?php if ($error !== ''): ?>
   <p class="alert alert--error"><?= e($error) ?></p>
 <?php endif; ?>
-
-<div class="tiles">
-  <a class="tile" href="referrals">
-    <span class="eyebrow">Referred applications</span>
-    <strong><?= (int) $stats['referred'] ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat">open the payout list</span>
-    </span>
-  </a>
-  <span class="tile">
-    <span class="eyebrow">Pending payouts</span>
-    <strong><?= e(money_short((float) $stats['pending'])) ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat">owed but not yet transferred</span>
-    </span>
-  </span>
-  <span class="tile">
-    <span class="eyebrow">Paid out so far</span>
-    <strong><?= e(money_short((float) $stats['paid'])) ?></strong>
-    <span class="tile__stats">
-      <span class="tile__stat">marked sent by the office</span>
-    </span>
-  </span>
-</div>
-
-<div class="panel">
-  <div class="panel__head">
-    <h2>Referral programme</h2>
-    <span class="eyebrow">Applies to new applications only</span>
-  </div>
-
-  <form method="post" class="panel__body">
-    <?= csrf_field() ?>
-
-    <div class="field">
-      <label for="referral_reward">Reward paid to the referrer</label>
-      <input id="referral_reward" name="referral_reward" type="number" step="0.01" min="0"
-             value="<?= e(number_format($reward, 2, '.', '')) ?>" required>
-      <span class="field-hint">
-        Earned once somebody who applied with an existing customer's code has their booking payment
-        verified. The new applicant pays the published price in full — nothing is discounted. Nothing is
-        transferred automatically either: the office pays it and marks the row sent under
-        <a href="referrals">Referrals</a>. Each referral keeps the figure that applied on the day it came
-        in, so changing this never rewrites a payout already owed.
-      </span>
-    </div>
-
-    <button type="submit" class="btn btn--primary">Save</button>
-  </form>
-</div>
 
 <div class="panel">
   <div class="panel__head">

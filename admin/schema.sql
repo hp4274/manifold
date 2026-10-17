@@ -182,9 +182,8 @@ CREATE TABLE IF NOT EXISTS `distributors` (
 
 -- --------------------------------------------------------------------------
 -- Dealers sell on our behalf and earn a share of every sale. They are not
--- applicants, so they live in their own table. Their code rides the same
--- `?ref=` link as the customer referral programme — the prefix keeps them
--- apart: MF…… is a customer's code, MD…… is a dealer's.
+-- applicants, so they live in their own table. Their MD…… code rides a share
+-- link into the apply form's partner box.
 -- --------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `dealers` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
@@ -253,9 +252,6 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `status` enum('submitted','booking_pending','booking_review','docs_pending','confirm_pending','delivery_pending','delivery_review','complete','cancelled','refunded','rejected','expired')
       NOT NULL DEFAULT 'submitted',
   `reference_code` varchar(20) NOT NULL DEFAULT '',
-  `referral_code` varchar(20) NOT NULL DEFAULT '',
-  `referred_by_code` varchar(20) DEFAULT NULL,
-  `referred_by_id` int(10) unsigned DEFAULT NULL,
   `dealer_id` int(10) unsigned DEFAULT NULL,
   `dealer_commission` decimal(10,2) NOT NULL DEFAULT 0.00,
   `distributor_id` int(10) unsigned DEFAULT NULL,
@@ -265,15 +261,6 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `sale_channel` enum('online','direct') NOT NULL DEFAULT 'online',
   `entered_by_dealer` int(10) unsigned DEFAULT NULL,
   `entered_by_distributor` int(10) unsigned DEFAULT NULL,
-  `referral_reward` decimal(10,2) NOT NULL DEFAULT 0.00,
-  `referral_reward_status` enum('none','pending','sent','cancelled') NOT NULL DEFAULT 'none',
-  `referral_reward_sent_at` datetime DEFAULT NULL,
-  `referral_reward_note` varchar(255) DEFAULT NULL,
-  `referral_reward_by` int(10) unsigned DEFAULT NULL,
-  -- when this referrer last asked the office to pay their pending referral
-  -- reward; the portal button then rests for REFERRAL_CLAIM_COOLDOWN_HOURS so
-  -- one person cannot pester the office with the same claim
-  `referral_payout_requested_at` datetime DEFAULT NULL,
   `full_name` varchar(160) NOT NULL,
   `date_of_birth` date DEFAULT NULL,
   `nationality` varchar(80) DEFAULT NULL,
@@ -396,11 +383,9 @@ CREATE TABLE IF NOT EXISTS `applications` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_app_reference` (`reference_code`),
-  UNIQUE KEY `uq_app_referral` (`referral_code`),
   KEY `ix_app_product_status` (`product`,`status`),
   KEY `ix_app_created` (`created_at`),
   KEY `ix_app_email` (`email`),
-  KEY `ix_app_referred_by` (`referred_by_id`),
   KEY `ix_app_dealer` (`dealer_id`),
   KEY `ix_app_distributor` (`distributor_id`),
   KEY `ix_app_zonal` (`zonal_cf_id`),
@@ -409,13 +394,9 @@ CREATE TABLE IF NOT EXISTS `applications` (
   KEY `ix_app_sale_channel` (`sale_channel`),
   KEY `fk_app_entered_dealer` (`entered_by_dealer`),
   KEY `fk_app_entered_distributor` (`entered_by_distributor`),
-  KEY `ix_app_reward_status` (`referral_reward_status`),
   KEY `ix_app_booking_paid` (`booking_paid_at`),
-  KEY `fk_app_reward_admin` (`referral_reward_by`),
-  CONSTRAINT `fk_app_referrer` FOREIGN KEY (`referred_by_id`) REFERENCES `applications` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_dealer` FOREIGN KEY (`dealer_id`) REFERENCES `dealers` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_distributor` FOREIGN KEY (`distributor_id`) REFERENCES `distributors` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_app_reward_admin` FOREIGN KEY (`referral_reward_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_entered_dealer` FOREIGN KEY (`entered_by_dealer`) REFERENCES `dealers` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_app_entered_distributor` FOREIGN KEY (`entered_by_distributor`) REFERENCES `distributors` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -923,7 +904,6 @@ INSERT IGNORE INTO `settings` (`name`, `value`) VALUES
   ('payment_deadline_hours',       '48'),
   ('stock_warn_units',             '200'),
   ('stock_critical_units',         '100'),
-  ('referral_reward',           '500'),
   ('raffle_enabled',            '1'),
   ('raffle_first_draw',         ''),
   ('raffle_cycle_days',         '90'),

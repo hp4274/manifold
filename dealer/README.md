@@ -53,7 +53,7 @@ customer's booking payment has been verified and the application is not rejected
 
 Both dropdowns are the same two links: **Copy link** puts one on the clipboard,
 **Add a client** opens the apply form in a new tab. Either way the dealer's code
-arrives in the referral box already filled in and locked, which is the only way a
+arrives in the partner code box already filled in and locked, which is the only way a
 sale gets attributed to them.
 
 ## Files

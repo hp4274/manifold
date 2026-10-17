@@ -846,24 +846,6 @@ ul {
   vertical-align: top;
 }
 
-/* referral payouts */
-.pill--reward-pending {
-  background: rgba(201, 138, 43, 0.16);
-  color: #8a5f1c;
-}
-.pill--reward-sent {
-  background: rgba(75, 180, 83, 0.16);
-  color: #26743a;
-}
-.pill--reward-cancelled {
-  background: rgba(132, 153, 172, 0.18);
-  color: var(--muted);
-}
-.pill--reward-none {
-  background: rgba(132, 153, 172, 0.14);
-  color: var(--muted);
-}
-
 .cell-sub {
   display: block;
   font-size: 12px;
@@ -914,57 +896,6 @@ ul {
   white-space: nowrap;
 }
 
-/* Details is not one of the three actions — it opens a panel rather than
-   changing anything, so it sits apart from them behind a hairline */
-.data-table--referrals {
-  min-width: min(1180px, 100%);
-}
-.data-table--referrals td {
-  vertical-align: top;
-}
-.data-table--referrals td strong {
-  line-height: 1.35;
-}
-.data-table--referrals .td-amount {
-  white-space: nowrap;
-}
-.data-table--referrals .pill {
-  max-width: 100%;
-}
-
-.reward-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-/* buttons stay the width of their own label, not the column */
-.reward-form .btn {
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-/* a payout that cannot be sent yet should not look like a live green button */
-.reward-form .btn--primary[disabled] {
-  background: var(--tint);
-  border: 1px solid var(--line);
-  color: var(--muted);
-  opacity: 1;
-}
-.reward-form input[type="text"] {
-  flex: 1 1 100%;
-  width: auto;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm, 10px);
-  font-family: inherit;
-  font-size: 13px;
-  color: var(--ink);
-  background: #fff;
-}
-.reward-form input[type="text"]:disabled {
-  background: var(--tint);
-  color: var(--muted);
-}
 .btn--sm {
   padding: 8px 14px;
   font-size: 13px;
@@ -4898,20 +4829,6 @@ input[name*="email"] {
   .row-toggle {
     padding: 9px 12px;
     gap: 6px;
-  }
-
-  /* the referral payout buttons stack rather than hold the column open: side by
-     side they are the widest thing in the row, and the column was carrying 12px
-     of them outside the panel */
-  .reward-form {
-    gap: 6px;
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .reward-form .btn {
-    padding: 7px 10px;
-    width: 100%;
-    justify-content: center;
   }
 
   /* The last column holds one control and its own padding. On a scaled screen

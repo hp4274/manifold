@@ -5666,141 +5666,6 @@ body{overflow-x:hidden}
   .timeline-scroll{-webkit-mask-image:none;mask-image:none}
 }
 
-/* ---------- 13f-c. Portal referral card ----------
-   Only shown once the fee is settled — that is when the code starts working. */
-.portal-referral{
-  margin:26px 0 0;
-  padding:24px;
-  border:1px solid rgba(23,176,166,.28);
-  border-radius:var(--radius);
-  background:linear-gradient(180deg,rgba(23,176,166,.06) 0%,rgba(75,180,83,.05) 100%);
-}
-.portal-referral__head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:18px;
-  flex-wrap:wrap;
-}
-.portal-referral__label{
-  margin:0 0 4px;
-  font-size:var(--t-micro);
-  font-weight:700;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  color:var(--accent-deep);
-}
-.portal-referral__code{
-  margin:0;
-  font-size:calc(26px * var(--fs));
-  font-weight:700;
-  letter-spacing:.16em;
-  color:var(--ink);
-}
-.portal-referral__copyline{
-  margin:16px 0 0;
-  font-size:var(--t-sub);
-  line-height:1.6;
-  color:var(--body);
-}
-.portal-referral__copyline strong{color:var(--ink)}
-
-.portal-referral__links{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
-.portal-referral__copy,
-.portal-referral__link{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:10px 18px;
-  border-radius:999px;
-  border:1px solid var(--line);
-  background:#fff;
-  font-family:inherit;
-  font-size:var(--t-ui);
-  font-weight:600;
-  color:var(--ink);
-  cursor:pointer;
-  transition:border-color .25s ease,color .25s ease,transform .25s ease,background .25s ease;
-}
-.portal-referral__copy i,
-.portal-referral__link i{color:var(--accent-deep);font-size:16px;line-height:1}
-.portal-referral__copy:hover,
-.portal-referral__link:hover{
-  transform:translateY(-1px);
-  border-color:rgba(23,176,166,.45);
-  color:var(--accent-deep);
-}
-.portal-referral__copy.is-copied,
-.portal-referral__link.is-copied{
-  background:var(--accent-deep);
-  border-color:var(--accent-deep);
-  color:#fff;
-}
-.portal-referral__copy.is-copied i,
-.portal-referral__link.is-copied i{color:#fff}
-
-.portal-referral__list{
-  list-style:none;
-  margin:14px 0 0;
-  padding:0;
-  border-top:1px solid rgba(23,176,166,.22);
-}
-.portal-referral__row{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  gap:6px 16px;
-  padding:12px 0;
-  border-bottom:1px solid rgba(23,176,166,.16);
-  font-size:var(--t-ui);
-}
-.portal-referral__who{font-weight:700;color:var(--ink);flex:1 1 40%}
-.portal-referral__when{color:var(--muted)}
-.portal-referral__amount{font-weight:700;color:var(--ink)}
-.portal-referral__state{
-  display:inline-flex;
-  align-items:center;
-  gap:7px;
-  margin-left:auto;
-  font-weight:600;
-  color:var(--body);
-}
-.portal-referral__state i{font-size:15px;line-height:1}
-.portal-referral__state--sent{color:#26743a}
-.portal-referral__state--cancelled{color:var(--muted)}
-
-.portal-referral__stat{
-  margin:18px 0 0;
-  font-size:var(--t-ui);
-  color:var(--body);
-}
-.portal-referral__stat strong{color:var(--ink)}
-.portal-referral__stat--muted{margin-top:8px;color:var(--muted)}
-
-/* --- request the reward payout, like a dealer raising a voucher --- */
-.portal-referral__claim{
-  margin-top:18px;
-  padding-top:18px;
-  border-top:1px solid var(--line);
-}
-.portal-referral__claim-note{
-  margin:0 0 12px;
-  font-size:var(--t-ui);
-  line-height:1.6;
-  color:var(--body);
-}
-.portal-referral__claim-note strong{color:var(--ink)}
-/* the resting state, after a request has gone in */
-.portal-referral__claim-note--sent{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  margin:0;
-  color:var(--accent-ink-2);
-  font-weight:600;
-}
-.portal-referral__claim-note--sent i{font-size:16px;line-height:1}
-
 /* --- what we already knew about a returning applicant --- */
 .form-prefill{
   display:flex;
@@ -5837,11 +5702,6 @@ body{overflow-x:hidden}
 .field input.is-prefilled{
   border-color:rgba(23,176,166,.5);
   background:rgba(23,176,166,.05);
-}
-#referral_code.is-prefilled{
-  font-weight:700;
-  letter-spacing:.1em;
-  text-transform:uppercase;
 }
 
 /* ---------- 13f-b. Portal payment ledger ---------- */
@@ -6640,7 +6500,6 @@ button{cursor:pointer}
   .form-nav [data-step-prev]:disabled:hover,
   .soon-link:hover,
   .safety-card:hover,
-  .portal-referral__copy:hover, .portal-referral__link:hover,
   .role-card:hover
   {transform:none}
   /* this one centres itself with the same property — put the base back */

@@ -70,8 +70,7 @@ forms and does not page. It is a glance at what has just come in.
 | `receipt-pdf.php` | The PDF writer and the receipt layout, no dependencies |
 | `submit.php` | Public endpoint the website forms post to |
 | `blog.php` | Blog posts — write, schedule, publish, unpublish, delete |
-| `referrals.php` | Referral payouts — who owes whom, mark a reward sent |
-| `settings.php` | The referral reward, the accounts that can sign in, and the sample data |
+| `settings.php` | Commission, stock prices and default limits, the accounts that can sign in, and the sample data |
 | `seed-lib.php` | The sample data itself, and the add/remove/count functions |
 | `seed-sample.php` | The same sample data from the command line |
 | `create-admin.php` | One-time bootstrap, delete after use |
@@ -154,9 +153,8 @@ complete`, or `rejected`.
 4. The delivery payment repeats the same two steps with `stage = 'delivery'`.
    When both are verified the application flips to **complete** on its own.
 
-A verified booking payment — not completion — is what earns the referral reward
-and enters the applicant in the raffle; `booking_paid_at` on the application row
-is the flag both read.
+A verified booking payment — not completion — is what enters the applicant in
+the raffle; `booking_paid_at` on the application row is the flag it reads.
 
 The application's status is always derived from its payments
 (`status_from_payments()` / `sync_application_status()` in `lib.php`), so it can
@@ -224,39 +222,6 @@ Pictures go to `assets/images/blog/` rather than `admin/uploads/`, because
 the public site has to load them and `uploads/` is deliberately closed.
 Deleting a post removes its picture, but only when the file sits in that
 folder.
-
-## Referrals
-
-Every application is given a permanent code of its own (`MF` plus six
-characters, no O/0 or I/1) the moment it is submitted.
-
-The code only starts working once that application is **paid in full** — that is
-when it is handed over, printed on the final receipt PDF and shown in the
-portal with ready-made apply links (`apply-stove.html?ref=CODE`).
-
-Quoting a code costs the new applicant nothing and saves them nothing: they pay
-the full fee. What it does is book a reward for the owner of the code, held on
-the referred application as `referral_reward` with a status:
-
-| Status | Meaning |
-|---|---|
-| `none` | Not referred, or the code did not match anything |
-| `pending` | Owed. Only payable once the referred applicant has paid in full |
-| `sent` | The office has transferred it and the referrer has been emailed |
-| `cancelled` | Written off by the office |
-
-**Nothing is paid automatically.** `referrals.php` lists every referral with
-both sides, the referred applicant's own payment state and the reward status.
-"Mark sent" stays disabled until that applicant is `complete`; using it stamps
-`referral_reward_sent_at`, records which admin did it and any UPI/UTR note, and
-emails the referrer. Rows can be cancelled or put back to pending.
-
-The amount is `settings.referral_reward`, edited in **Settings** and seeded at
-₹500. Each referral snapshots the figure that applied on the day it came in, so
-changing the setting never rewrites a payout already owed.
-
-An unrecognised code is stored as typed in `referred_by_code` with no reward,
-and the payment email says so — the application is never rejected over a typo.
 
 ## Raffle
 

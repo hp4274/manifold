@@ -14,29 +14,19 @@ require_once __DIR__ . '/lib.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store, private');
 
-/* the reward is the same public figure the promo popup quotes, so it goes out
-   either way */
-$reward = ['reward' => money(referral_reward())];
-
 $email = applicant();
 
 if ($email === null) {
-    echo json_encode(['signedIn' => false] + $reward);
+    echo json_encode(['signedIn' => false]);
     exit;
 }
 
 $applications = applications_for($email);
 $name         = '';
-$canRefer     = false;
 
 foreach ($applications as $application) {
     if ($name === '') {
         $name = (string) $application['full_name'];
-    }
-
-    if (!empty($application['booking_paid_at']) && $application['status'] !== 'rejected'
-        && !empty($application['referral_code'])) {
-        $canRefer = true;
     }
 }
 
@@ -48,5 +38,4 @@ echo json_encode([
     'name'     => $name,
     'first'    => $first,
     'email'    => $email,
-    'canRefer' => $canRefer,
-] + $reward);
+]);

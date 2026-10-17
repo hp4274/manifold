@@ -758,6 +758,9 @@
       kycBlock.style.display = skip ? 'none' : '';
 
       kycFields.forEach(function (el) {
+        /* a hidden box must not be sent: a half-typed or restored Aadhaar number
+           in a block nobody can open would fail the server's format check */
+        el.disabled = skip;
         el.required = !skip && el.hasAttribute('data-was-required');
         if (!skip) return;
         settle(el);

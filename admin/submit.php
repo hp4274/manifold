@@ -354,17 +354,22 @@ try {
             respond(false, 'The ID number should be the number as printed — letters and digits, four to twenty.');
         }
 
+        /* The KYC files are for the financier. A full payer has no loan, so
+           nobody checks them and they are not asked for — and the KYC block is
+           hidden on the form, so a stray Aadhaar value there cannot be fixed
+           by the applicant: a full payer's is kept only when it is valid. */
+        $needsKyc = $columns['payment_plan'] !== 'full_payment';
+
         if ($columns['aadhaar_number'] !== null && $columns['aadhaar_number'] !== '') {
             $columns['aadhaar_number'] = $digits($columns['aadhaar_number']);
             if (strlen($columns['aadhaar_number']) !== 12) {
-                respond(false, 'The Aadhaar number has to be twelve digits.');
+                if ($needsKyc) {
+                    respond(false, 'The Aadhaar number has to be twelve digits.');
+                }
+
+                $columns['aadhaar_number'] = null;
             }
         }
-
-        /* The KYC files are for the financier. A full payer has no loan, so
-           nobody checks them and they are not asked for — the Aadhaar format
-           above is still checked whenever one is sent. */
-        $needsKyc = $columns['payment_plan'] !== 'full_payment';
 
         if ($needsKyc && !$columns['aadhaar_doc_path']) {
             respond(false, 'Upload the Aadhaar document before submitting.');
@@ -399,61 +404,6 @@ try {
                 . '. Please pick that day or later.');
         }
 
-        /* ---------- referral ----------
-           Quoting a code costs this applicant nothing and saves them nothing —
-           it books a reward for whoever's code it is, which the office pays by
-           hand. Only a code whose owner has paid in full counts. An unknown
-           code is still stored as typed so the office can see what was meant. */
-        $quoted   = normalise_referral_code(field('referral_code', 20));
-        $referrer = $quoted === '' ? null : referrer_for_code($quoted);
-
-        /* Nobody refers themselves. Somebody who bought a stove and comes back
-           for a kit is the same customer, not a customer they found, so quoting
-           their own code books no reward — matched on the email and the mobile,
-           because the code is the one thing they can copy off their own portal.
-
-           The partner behind that first sale is still inherited below: the
-           dealer who found this customer keeps the second sale, which is what
-           the code was quoted for in the first place. */
-        $selfReferred = $referrer && (
-            strcasecmp((string) ($referrer['email'] ?? ''), (string) $columns['email']) === 0
-            || (
-                $columns['mobile_number'] !== null
-                && substr($digits($referrer['mobile_number'] ?? ''), -10) !== ''
-                && substr($digits($referrer['mobile_number'] ?? ''), -10)
-                   === substr($digits($columns['mobile_number']), -10)
-            )
-        );
-
-        $reward = $referrer && !$selfReferred ? referral_reward() : 0.0;
-
-        $columns['referred_by_code']       = $quoted === '' ? null : $quoted;
-        $columns['referred_by_id']         = $referrer && !$selfReferred ? (int) $referrer['id'] : null;
-        $columns['referral_reward']        = $reward;
-        $columns['referral_reward_status'] = $referrer && !$selfReferred ? 'pending' : 'none';
-
-        if ($selfReferred) {
-            /* the office should still see what was typed, and why it paid
-               nothing, rather than wondering where the reward went */
-            $columns['referral_reward_note'] = 'Own code — a customer cannot refer themselves.';
-        }
-
-        /* A code that books no reward used to be swallowed whole: nothing on the
-           screen, nothing in the row, and the applicant found out months later
-           that their friend was never credited. Say it on both sides — a line
-           back to whoever typed it, and a note the office can read. */
-        $referralNote = '';
-
-        if ($quoted !== '' && !$referrer) {
-            $referralNote = ' The referral code ' . $quoted . ' did not match a customer whose own '
-                . 'booking payment is verified, so no reward was recorded against it.';
-            $columns['admin_note'] = trim(($columns['admin_note'] ?? '')
-                . ' Referral code ' . $quoted . ' was quoted and matched no eligible referrer.');
-        } elseif ($selfReferred) {
-            $referralNote = ' That is your own referral code, and a customer cannot refer themselves, '
-                . 'so no reward was recorded against it.';
-        }
-
         /* the price list is frozen onto the row, so a later change to the
            published price never rewrites what this application owes */
         $plan = payment_plan($form);
@@ -467,10 +417,9 @@ try {
             : (float) $plan['booking'];
         $columns['loan_amount']     = 0.0;
 
-        /* The same box takes a partner's code, and the prefix decides which kind
-           it is — MF a customer, MD a dealer, MX a distributor. A code is only
-           ever one of the three, so a partner sale books commission instead of a
-           customer reward.
+        /* ---------- who sold it ----------
+           The partner box takes the seller's code — a dealer's, a distributor's
+           or a zonal C&F's, tried in that order.
 
            A dealer's code also books their distributor's override: it follows
            whoever signed that dealer up, never the form. A distributor's own
@@ -478,55 +427,12 @@ try {
 
            Both shares are frozen here for the same reason the price is: raising
            a rate later must not rewrite what this sale was worth. */
-        /* ---------- who sold it ----------
-           A second box on the form takes the partner's own code, because who
-           sold a sale and who referred it are two different questions and one
-           box could only ever answer one of them. Answered here it wins: a
-           customer of one dealer can send somebody to another, and the sale
-           belongs to whoever closed it while the reward still goes to whoever
-           sent them.
-
-           Left empty, the answer falls back to where it always came from — the
-           partner behind the referring customer's own sale, or the code in the
-           referral box if that turned out to be a partner's. */
         $quotedPartner = normalise_referral_code(field('partner_code', 20));
 
         $dealer      = $quotedPartner === '' ? null : dealer_for_code($quotedPartner);
         $distributor = $dealer
             ? distributor_for_dealer($dealer)
             : ($quotedPartner === '' ? null : distributor_for_code($quotedPartner));
-
-        if (!$dealer && !$distributor && $referrer) {
-            /* A customer's code and no partner named, so the partner who made
-               that first sale keeps this one too. Without this the dealer who
-               found the customer earns nothing on the customer they went on to
-               find, and the sale books commission to nobody at all.
-
-               Re-checked rather than copied: a dealer switched off since the
-               first sale books no more, and if theirs is the one that went, the
-               distributor takes an override on a dealer sale that has no dealer,
-               so they take nothing either. A distributor's own direct sale
-               carries down as a direct sale. */
-            $dealer = dealer_by_id((int) ($referrer['dealer_id'] ?? 0));
-
-            if ($dealer && ((int) $dealer['is_active'] !== 1 || $dealer['approval_status'] !== 'approved')) {
-                $dealer = null;
-            }
-
-            if ($dealer) {
-                $distributor = distributor_for_dealer($dealer);
-            } elseif (empty($referrer['dealer_id'])) {
-                $distributor = distributor_by_id((int) ($referrer['distributor_id'] ?? 0));
-            }
-        } elseif (!$dealer && !$distributor && !$referrer) {
-            /* nothing in the partner box and nothing a customer holds: the
-               referral box may still carry a partner's code, which is how every
-               shared link worked before there were two boxes */
-            $dealer      = $quoted === '' ? null : dealer_for_code($quoted);
-            $distributor = $dealer
-                ? distributor_for_dealer($dealer)
-                : ($quoted === '' ? null : distributor_for_code($quoted));
-        }
 
         if ($distributor && (int) $distributor['is_active'] !== 1) {
             $distributor = null;
@@ -558,9 +464,6 @@ try {
                 . ' [STOCK RESTRICTION: Seller unit balance <= 100. Dual approval from Principal C&F and Office required before fulfillment.]');
         }
 
-        /* their own code, theirs for good */
-        $columns['referral_code'] = make_referral_code();
-
         /* placeholder, replaced with the MF-00000000 booking number once the row has an id */
         $columns['reference_code'] = 'tmp-' . bin2hex(random_bytes(6));
 
@@ -591,8 +494,7 @@ try {
 
         respond(true, 'Application received — your booking number is ' . $ref . '. '
             . 'Our team reviews it first, and we email you the payment details once it is approved. '
-            . 'Nothing to pay yet.'
-            . ($referrer && !$selfReferred ? ' Your referral code has been recorded.' : $referralNote));
+            . 'Nothing to pay yet.');
     }
 
     if ($form === 'contact') {

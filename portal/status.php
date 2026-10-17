@@ -65,63 +65,6 @@ if ($postDiscarded) {
     $uploadError = 'That file is larger than ' . (int) (UPLOAD_MAX_BYTES / 1024 / 1024)
         . ' MB. Send a smaller photo, or a PDF.';
     $uploadStage = 'booking';
-} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'referral_claim') {
-    csrf_check();
-
-    /* A client asking to be paid the referral reward they have earned. This
-       records nothing about the money — that stays the office's to send and
-       mark on the Referrals page — it only emails the office the request and
-       rests the button for a while so the same ask cannot arrive ten times. */
-    $id = (int) ($_POST['id'] ?? 0);
-
-    $stmt = db()->prepare('SELECT * FROM applications WHERE id = ? AND email = ?');
-    $stmt->execute([$id, $email]);
-    $referrer = $stmt->fetch();
-
-    $stats = $referrer ? referral_stats((int) $referrer['id']) : ['payable' => 0.0];
-
-    if (!$referrer || empty($referrer['referral_code'])) {
-        $error = 'That referral could not be found.';
-    } elseif (!booking_paid($referrer) || $referrer['status'] === 'rejected') {
-        /* the same gate the card itself is drawn behind: a code only earns once
-           the referrer's own booking is verified and their order still stands */
-        $error = 'Your referral code starts earning once your own booking payment is verified.';
-    } elseif ($stats['payable'] <= 0) {
-        $error = 'You have no referral reward waiting to be paid just now.';
-    } elseif (!referral_claim_ready($referrer)) {
-        $error = 'You have already asked — the office is on it. You can ask again '
-            . referral_claim_wait_label($referrer) . '.';
-    } else {
-        /* The cooldown is enforced in the WHERE clause, not just the PHP check
-           above, so two clicks that race past the check cannot both go through:
-           only the first UPDATE touches a row, and only that one emails. */
-        $stmt = db()->prepare(
-            'UPDATE applications
-                SET referral_payout_requested_at = NOW()
-              WHERE id = ? AND email = ?
-                AND (referral_payout_requested_at IS NULL
-                     OR referral_payout_requested_at <= (NOW() - INTERVAL ? HOUR))'
-        );
-        $stmt->execute([$id, $email, REFERRAL_CLAIM_COOLDOWN_HOURS]);
-
-        /* Only the click that actually moved the row says so. A second one that
-           raced past the check above changed nothing and must not be answered
-           with "we have told the office". */
-        if ($stmt->rowCount() === 1) {
-            $amount = (float) $stats['payable'];
-            $count  = (int) ($stats['payable_count'] ?? 0);
-
-            after_response(static function () use ($referrer, $amount, $count): void {
-                send_referral_claim_admin($referrer, $amount, $count);
-            });
-
-            header('Location: status?claimed=1#referral');
-            exit;
-        }
-
-        header('Location: status#referral');
-        exit;
-    }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'documents') {
     csrf_check();
 
@@ -415,13 +358,6 @@ require __DIR__ . '/partials/head.php';
       <p class="portal-alert portal-alert--ok">
         Your corrected documents are with our finance team. We check them by hand, usually within two
         working days, and email you the moment they pass.
-      </p>
-    <?php endif; ?>
-
-    <?php if (isset($_GET['claimed'])): ?>
-      <p class="portal-alert portal-alert--ok">
-        Thanks — we have told the office you are waiting on your referral reward. They pay these by hand,
-        so allow a couple of working days.
       </p>
     <?php endif; ?>
 
@@ -964,130 +900,6 @@ require __DIR__ . '/partials/head.php';
 
               </section>
             <?php endforeach; ?>
-          </div>
-        <?php endif; ?>
-
-        <?php if (booking_paid($app) && $status !== 'rejected' && !empty($app['referral_code'])): ?>
-          <?php
-            $code      = (string) $app['referral_code'];
-            $rewards   = referral_stats((int) $app['id']);
-            $earning   = money(referral_reward());
-            $referrals = referrals_for((int) $app['id']);
-
-            /* the header's "Refer" link jumps to #referral, so only the first
-               card on the page may claim that id */
-            $anchor = empty($referralAnchorUsed) ? ' id="referral"' : '';
-            $referralAnchorUsed = true;
-          ?>
-          <div class="portal-referral"<?= $anchor ?>>
-            <div class="portal-referral__head">
-              <div>
-                <p class="portal-referral__label">Your referral code</p>
-                <p class="portal-referral__code"><?= e($code) ?></p>
-              </div>
-              <button type="button" class="portal-referral__copy" data-copy="<?= e($code) ?>">
-                <i class="bi bi-clipboard" aria-hidden="true"></i> Copy code
-              </button>
-            </div>
-
-            <p class="portal-referral__copyline">Now that your booking payment is verified, this code earns you
-              <strong><?= e($earning) ?></strong> every time somebody applies with it and pays their own fee.
-              We check each one and transfer the money to you by hand. Share a link and the code fills itself in.</p>
-
-            <div class="portal-referral__links">
-              <?php /* both codes travel: theirs, so the reward is theirs, and the
-                       partner who sold to them, so the sale stays where it was */ ?>
-              <button type="button" class="portal-referral__link"
-                      data-copy="<?= e(client_referral_link($app, 'stove')) ?>">
-                <i class="bi bi-link-45deg" aria-hidden="true"></i> Copy stove link
-              </button>
-              <button type="button" class="portal-referral__link"
-                      data-copy="<?= e(client_referral_link($app, 'tuktuk')) ?>">
-                <i class="bi bi-link-45deg" aria-hidden="true"></i> Copy TukTuk link
-              </button>
-            </div>
-
-            <?php if ($rewards['total'] > 0): ?>
-              <p class="portal-referral__stat">
-                <strong><?= (int) $rewards['total'] ?></strong>
-                <?= $rewards['total'] === 1 ? 'person has' : 'people have' ?> applied with your code
-                &middot; <strong><?= e(money($rewards['paid'] + $rewards['pending'])) ?></strong> earned
-                &middot; <strong><?= e(money($rewards['paid'])) ?></strong> paid to you
-                &middot; <strong><?= e(money($rewards['pending'])) ?></strong> pending
-                <?php if ($rewards['payable'] > 0): ?>
-                  &middot; <strong><?= e(money($rewards['payable'])) ?></strong> ready to be sent
-                <?php endif; ?>.
-              </p>
-
-              <?php /* The money side of the same list, read as a statement rather
-                       than a set of rows: what has been sent, what is still owed,
-                       and when the office was last asked for it. Without it a
-                       referrer had to add the rows up themselves. */ ?>
-              <?php if (!empty($app['referral_payout_requested_at'])): ?>
-                <p class="portal-referral__stat portal-referral__stat--muted">
-                  Last payout request: <?= e(format_datetime($app['referral_payout_requested_at'])) ?>.
-                </p>
-              <?php endif; ?>
-
-              <ul class="portal-referral__list">
-                <?php foreach ($referrals as $referral): ?>
-                  <li class="portal-referral__row">
-                    <span class="portal-referral__who"><?= e($referral['full_name']) ?></span>
-                    <span class="portal-referral__when"><?= e(format_datetime($referral['created_at'])) ?></span>
-                    <span class="portal-referral__amount"><?= e(money((float) $referral['referral_reward'])) ?></span>
-                    <span class="portal-referral__state portal-referral__state--<?= e($referral['referral_reward_status']) ?>">
-                      <?php if ($referral['referral_reward_status'] === 'sent'): ?>
-                        <i class="bi bi-check-lg" aria-hidden="true"></i> Sent
-                        <?= $referral['referral_reward_sent_at']
-                              ? e(format_datetime($referral['referral_reward_sent_at']))
-                              : '' ?>
-                      <?php elseif ($referral['referral_reward_status'] === 'cancelled'): ?>
-                        <i class="bi bi-x-lg" aria-hidden="true"></i> Cancelled
-                      <?php elseif (!empty($referral['booking_paid_at'])): ?>
-                        <i class="bi bi-hourglass-split" aria-hidden="true"></i> Pending payout
-                      <?php else: ?>
-                        <i class="bi bi-hourglass" aria-hidden="true"></i> Waiting for their booking payment
-                      <?php endif; ?>
-                    </span>
-                  </li>
-                <?php endforeach; ?>
-              </ul>
-            <?php else: ?>
-              <p class="portal-referral__stat portal-referral__stat--muted">
-                Nobody has applied with your code yet — nothing earned so far.
-              </p>
-            <?php endif; ?>
-
-            <?php /* Once there is a reward sitting verified-but-unpaid, the client
-                     can nudge the office rather than only wait — the same idea as
-                     a dealer raising a voucher. Pressing it emails the office and
-                     then rests for REFERRAL_CLAIM_COOLDOWN_HOURS so one person
-                     cannot send the same claim over and over. */ ?>
-            <?php if ($rewards['payable'] > 0): ?>
-              <div class="portal-referral__claim">
-                <?php if (referral_claim_ready($app)): ?>
-                  <p class="portal-referral__claim-note">
-                    <strong><?= e(money($rewards['payable'])) ?></strong> is verified and waiting to be paid
-                    to you. Ask the office to send it and we will get to it by hand.
-                  </p>
-                  <form method="post">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="referral_claim">
-                    <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
-                    <button type="submit" class="btn-pill btn-pill--accent">
-                      Request my <?= e(money($rewards['payable'])) ?> payout
-                      <i class="bi bi-cash-coin" aria-hidden="true"></i>
-                    </button>
-                  </form>
-                <?php else: ?>
-                  <p class="portal-referral__claim-note portal-referral__claim-note--sent">
-                    <i class="bi bi-hourglass-split" aria-hidden="true"></i>
-                    Payout requested — the office is on it. You can ask again
-                    <?= e(referral_claim_wait_label($app)) ?>.
-                  </p>
-                <?php endif; ?>
-              </div>
-            <?php endif; ?>
           </div>
         <?php endif; ?>
 

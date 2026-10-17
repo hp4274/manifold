@@ -9,9 +9,9 @@
 declare(strict_types=1);
 
 const DB_HOST = '127.0.0.1';
-const DB_NAME = 'manifold';
-const DB_USER = 'root';
-const DB_PASS = '';
+const DB_NAME = 'u768511311_manifold';
+const DB_USER = 'u768511311_vsm3';
+const DB_PASS = 'Manifold@2210';
 const DB_PORT = 3306;
 
 /** Absolute path where uploaded application documents are stored. */
@@ -251,13 +251,6 @@ function payment_plan(string $product): array
 }
 
 /**
- * Paid to a customer each time somebody applies with their referral code. The
- * office transfers it by hand. This is only the starting value — the live
- * figure lives in the `settings` table and is edited from Settings.
- */
-const REFERRAL_REWARD_DEFAULT = 500;
-
-/**
  * Commission, in rupees per sale, per product.
  *
  *   a dealer sells        the dealer's figure, and the override to their distributor
@@ -322,14 +315,6 @@ const DEALER_LIMIT_DEFAULT = 10;
  */
 /** The dial code a number is stored with when the form did not say. */
 const DEFAULT_DIAL_CODE = '91';
-
-/**
- * After a client asks the office to pay their referral reward, the request
- * button rests this many hours before it can be pressed again — long enough
- * that a keen referrer cannot send the same claim ten times in a minute, short
- * enough that a genuine second nudge the next day still gets through.
- */
-const REFERRAL_CLAIM_COOLDOWN_HOURS = 10;
 
 /**
  * How many digits a national number runs to, by dial code.

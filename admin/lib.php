@@ -867,8 +867,8 @@ function stock_take_on_completion(int $applicationId): void
 }
 
 /**
- * Has the booking payment been verified? That is the moment the referral
- * reward is earned and the application enters the raffle — the delivery
+ * Has the booking payment been verified? That is the moment the application
+ * enters the raffle — the delivery
  * payment comes months later and nothing waits for it.
  */
 function booking_paid(array $app): bool
@@ -915,245 +915,29 @@ function save_setting(string $name, string $value): void
     settings_all(true);
 }
 
-/* ---------- referrals ----------
-   Every application carries a code of its own for life. Quoting somebody
-   else's code changes nothing about what this applicant pays — it books a
-   reward for the person who referred them, which the office pays by hand. */
+/* ---------- partner codes ----------
+   Dealers, distributors and zonal C&F each hand out a code of their own; it
+   travels in a share link and lands in the apply form's partner box. The
+   `referral` in these names is historical — nothing here is about customers. */
 
-/** States a reward goes through. `none` means the application was not referred. */
-const REWARD_STATUSES = ['none', 'pending', 'sent', 'cancelled'];
-
-/** What the referrer earns when their code is used. */
-function referral_reward(): float
-{
-    return max(0.0, (float) setting('referral_reward', (string) REFERRAL_REWARD_DEFAULT));
-}
-
-function reward_label(string $status): string
-{
-    $labels = [
-        'none'      => 'Not referred',
-        'pending'   => 'Payout pending',
-        'sent'      => 'Payout sent',
-        'cancelled' => 'Payout cancelled',
-    ];
-
-    return $labels[$status] ?? ucfirst($status);
-}
-
-/** Nothing that can be misread down a phone line: no O/0, no I/1. */
-function make_referral_code(): string
-{
-    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    $check    = db()->prepare('SELECT 1 FROM applications WHERE referral_code = ?');
-
-    for ($attempt = 0; $attempt < 20; $attempt++) {
-        $code = 'MF';
-
-        for ($i = 0; $i < 6; $i++) {
-            $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
-        }
-
-        $check->execute([$code]);
-
-        if (!$check->fetchColumn()) {
-            return $code;
-        }
-    }
-
-    throw new RuntimeException('Could not allocate a referral code.');
-}
-
-/** Whatever they typed, in the shape the codes are stored in. */
+/** Whatever they typed, in the shape partner codes are stored in. */
 function normalise_referral_code(?string $code): string
 {
     return strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) $code));
 }
 
-/**
- * The application a code belongs to, or null. The code is handed out once the
- * booking payment has been verified, so an application that has not got that
- * far is not a valid referrer.
- */
-function referrer_for_code(string $code): ?array
-{
-    if ($code === '') {
-        return null;
-    }
-
-    /* what a quoted code is used for: who the reward belongs to, and which
-       partner made that first sale — never the applicant's paperwork
-
-       The booking number counts as well as the referral code. Both start MF and
-       both sit on the same portal page, so a referrer reading theirs down the
-       phone hands over whichever they happened to be looking at; matching only
-       one of them threw the reward away without a word to anybody. Stored
-       references carry a hyphen (MF-00000182) and the quoted code arrives
-       stripped of it, so the comparison drops it on both sides. */
-    $stmt = db()->prepare(
-        "SELECT id, full_name, email, mobile_number, dealer_id, distributor_id, referral_code
-           FROM applications
-          WHERE (referral_code = ? OR REPLACE(reference_code, '-', '') = ?)
-            AND booking_paid_at IS NOT NULL AND status <> ?
-          LIMIT 1"
-    );
-    $stmt->execute([$code, $code, 'rejected']);
-
-    return $stmt->fetch() ?: null;
-}
-
-/** An apply-form URL with the code already in the box. */
+/** A partner's share link: the apply form with their code already in the partner box. */
 function referral_link(string $code, string $product = 'stove'): string
 {
     $page = $product === 'tuktuk' ? 'apply-tuktuk' : 'apply-stove';
 
-    /* A partner's code names the seller, a customer's names the referrer, and
-       the form has a box for each — so a partner's link fills the partner box
-       and a customer's fills the referral box. */
-    $param = strncasecmp($code, 'MF', 2) === 0 ? 'ref' : 'code';
-
-    return base_url() . '/' . $page . '?' . $param . '=' . rawurlencode($code);
-}
-
-/**
- * A customer's share link, carrying their own code and their dealer's.
- *
- * The reward is theirs and the sale stays with the partner who found them, which
- * is what the two parameters say. Where nobody sold that first application —
- * a customer who came in off the website with no code — only their own goes.
- */
-function client_referral_link(array $app, string $product = 'stove'): string
-{
-    $link = referral_link((string) $app['referral_code'], $product);
-
-    $partner = '';
-
-    if (!empty($app['dealer_id'])) {
-        $dealer = dealer_by_id((int) $app['dealer_id']);
-
-        if ($dealer && (int) $dealer['is_active'] === 1 && $dealer['approval_status'] === 'approved') {
-            $partner = (string) $dealer['dealer_code'];
-        }
-    } elseif (!empty($app['distributor_id'])) {
-        $distributor = distributor_by_id((int) $app['distributor_id']);
-
-        if ($distributor && (int) $distributor['is_active'] === 1) {
-            $partner = (string) $distributor['distributor_code'];
-        }
-    }
-
-    return $partner === '' ? $link : $link . '&code=' . rawurlencode($partner);
-}
-
-/** Everyone who has applied with one application's code, newest first. */
-function referrals_for(int $applicationId): array
-{
-    $stmt = db()->prepare(
-        'SELECT id, reference_code, full_name, product, status, created_at, booking_paid_at,
-                referral_reward, referral_reward_status, referral_reward_sent_at
-           FROM applications
-          WHERE referred_by_id = ?
-          ORDER BY created_at DESC'
-    );
-    $stmt->execute([$applicationId]);
-
-    return $stmt->fetchAll();
-}
-
-/** Headline numbers for one application's code. */
-function referral_stats(int $applicationId): array
-{
-    $stmt = db()->prepare(
-        "SELECT COUNT(*) AS total,
-                SUM(booking_paid_at IS NOT NULL) AS completed,
-                COALESCE(SUM(CASE WHEN referral_reward_status = 'sent'
-                                  THEN referral_reward ELSE 0 END), 0) AS paid,
-                COALESCE(SUM(CASE WHEN referral_reward_status = 'pending'
-                                  THEN referral_reward ELSE 0 END), 0) AS pending,
-                /* payable is the subset of pending the office can actually send:
-                   the referred client has paid their booking and was not turned
-                   down. This is what a payout claim may ask for. */
-                COALESCE(SUM(CASE WHEN referral_reward_status = 'pending'
-                                   AND booking_paid_at IS NOT NULL
-                                   AND status <> 'rejected'
-                                  THEN referral_reward ELSE 0 END), 0) AS payable,
-                /* and how many rows make up that amount, so the office is told
-                   '2 referrals due' rather than every booking-paid referral it
-                   has already settled */
-                COALESCE(SUM(CASE WHEN referral_reward_status = 'pending'
-                                   AND booking_paid_at IS NOT NULL
-                                   AND status <> 'rejected'
-                                  THEN 1 ELSE 0 END), 0) AS payable_count
-           FROM applications
-          WHERE referred_by_id = ?"
-    );
-    $stmt->execute([$applicationId]);
-    $row = $stmt->fetch() ?: [];
-
-    return [
-        'total'     => (int) ($row['total'] ?? 0),
-        'completed' => (int) ($row['completed'] ?? 0),
-        'paid'      => (float) ($row['paid'] ?? 0),
-        'pending'   => (float) ($row['pending'] ?? 0),
-        'payable'   => (float) ($row['payable'] ?? 0),
-        'payable_count' => (int) ($row['payable_count'] ?? 0),
-    ];
-}
-
-/**
- * Whether a referrer may ask the office to pay them again.
- *
- * True if they have never asked, or the cooldown since their last ask has run
- * out. Keyed off `referral_payout_requested_at` on their own application row.
- */
-function referral_claim_ready(array $app): bool
-{
-    $last = $app['referral_payout_requested_at'] ?? null;
-
-    if (empty($last)) {
-        return true;
-    }
-
-    return (strtotime((string) $last) + REFERRAL_CLAIM_COOLDOWN_HOURS * 3600) <= time();
-}
-
-/** How long until the referral request button wakes up, said in plain words. */
-function referral_claim_wait_label(array $app): string
-{
-    $ready = strtotime((string) ($app['referral_payout_requested_at'] ?? 'now'))
-        + REFERRAL_CLAIM_COOLDOWN_HOURS * 3600;
-    $left  = max(0, $ready - time());
-
-    if ($left <= 0) {
-        return 'now';
-    }
-
-    /* round, not ceil: a few seconds of clock drift between PHP and MySQL would
-       otherwise turn a ten-hour wait into "about 11 hours" the instant it is set */
-    $hours = max(1, (int) round($left / 3600));
-
-    return $hours === 1 ? 'in about an hour' : 'in about ' . $hours . ' hours';
-}
-
-/**
- * A reward is only worth paying once the person who used the code has had
- * their own booking payment verified. Until then it sits pending and the
- * office waits — the delivery payment months later changes nothing.
- */
-function reward_is_payable(array $referral): bool
-{
-    return $referral['referral_reward_status'] === 'pending'
-        && !empty($referral['booking_paid_at'])
-        && $referral['status'] !== 'rejected';
+    return base_url() . '/' . $page . '?code=' . rawurlencode($code);
 }
 
 /* ---------- dealers ----------
    A dealer sells on our behalf. They are not an applicant, so they live in
-   their own table, but their code travels in the same ?ref= link the customer
-   referral programme uses. The prefix is what keeps the two apart:
-
-     MF……  an existing customer's referral code
-     MD……  a dealer's code
+   their own table; their MD…… code travels in a share link to the form's
+   partner box.
 
    Nothing a dealer earns is tied to a particular application. Commission is
    summed across their sales, payouts are summed against it, and what is left
@@ -4637,9 +4421,14 @@ function commission_rate(string $partyType, ?int $partyId = null): float
         $key = $partyType . ':' . $partyId;
 
         if (!array_key_exists($key, $own)) {
-            $stmt = db()->prepare("SELECT commission_rate FROM $table WHERE id = ?");
-            $stmt->execute([$partyId]);
-            $own[$key] = $stmt->fetchColumn();
+            try {
+                $stmt = db()->prepare("SELECT commission_rate FROM $table WHERE id = ?");
+                $stmt->execute([$partyId]);
+                $own[$key] = $stmt->fetchColumn();
+            } catch (PDOException $e) {
+                /* a server that has not added the per-partner column yet follows the tier default */
+                $own[$key] = null;
+            }
         }
 
         if ($own[$key] !== false && $own[$key] !== null) {
@@ -4807,7 +4596,7 @@ function dealer_payouts(int $dealerId): array
  * What one dealer has sold, earned, been paid and is still owed.
  *
  * Commission is only counted once the customer's booking payment has been
- * verified — the same bar a referral reward has to clear. A sale that was
+ * verified. A sale that was
  * rejected, or has not paid yet, is in `sales` but not in `earned`.
  */
 function dealer_totals(int $dealerId): array
@@ -5643,9 +5432,8 @@ function serve_partner_payment_proof(string $type, int $partnerId, int $paymentI
 /**
  * Where a sale came from, for a column that answers "who brought this in".
  *
- * Four answers: a partner filled the form themselves, somebody used a partner's
- * link, a customer's referral code was quoted, or it came in off the website
- * with nothing attached.
+ * Three answers: a partner filled the form themselves, somebody used a partner's
+ * link or code, or it came in off the website with nothing attached.
  */
 function sale_source(array $app): array
 {
@@ -5697,20 +5485,6 @@ function sale_source(array $app): array
 
     if (!empty($app['entered_by_distributor'])) {
         return ['label' => 'Distributor import', 'code' => $distributor];
-    }
-
-    /* One box on the form takes any code, so what was typed decides what this
-       says: MF is another customer's, MD a dealer's, MX a distributor's. */
-    $quoted = strtoupper((string) ($app['referred_by_code'] ?? ''));
-
-    if ($quoted !== '') {
-        $prefix = substr($quoted, 0, 2);
-
-        $label = $prefix === 'MD'
-            ? 'Dealer link'
-            : ($prefix === 'MX' ? 'Distributor link' : 'Referral');
-
-        return ['label' => $label, 'code' => $quoted];
     }
 
     if ($dealer !== '') {
@@ -5860,7 +5634,7 @@ function submission_types(): array
             'entity' => 'application',
             'list'  => 'id, reference_code, full_name, email, mobile_number, product,
                         status, created_at, reminder_count, reminded_at,
-                        sale_channel, referred_by_code, entered_by_dealer, entered_by_distributor,
+                        sale_channel, entered_by_dealer, entered_by_distributor,
                         dealer_id, distributor_id',
         ],
         'tuktuk' => [
@@ -5870,7 +5644,7 @@ function submission_types(): array
             'entity' => 'application',
             'list'  => 'id, reference_code, full_name, email, mobile_number, product,
                         status, created_at, reminder_count, reminded_at,
-                        sale_channel, referred_by_code, entered_by_dealer, entered_by_distributor,
+                        sale_channel, entered_by_dealer, entered_by_distributor,
                         dealer_id, distributor_id',
         ],
         'contact' => [
@@ -6360,12 +6134,6 @@ function field_groups(string $type): array
                                          'financing_option' => 'Financing option', 'bank_name' => 'Bank'],
                 'Referral' => ['referral_source' => 'Heard about us via', 'referral_other' => 'Referral (other)'],
                 'Dealer' => ['dealer_commission' => 'Dealer commission'],
-                'Referral programme' => ['referral_code' => 'Their own code',
-                                         'referred_by_code' => 'Code they quoted',
-                                         'referral_reward' => 'Reward owed to referrer',
-                                         'referral_reward_status' => 'Reward status',
-                                         'referral_reward_sent_at' => 'Reward sent on',
-                                         'referral_reward_note' => 'Reward note'],
                 'Consent' => ['declaration_accepted' => 'Declaration accepted',
                               'testimonial_consent' => 'Testimonial consent', 'terms_accepted' => 'Terms accepted'],
                 'Tracking' => ['reference_code' => 'Booking number', 'booking_amount' => 'Booking amount',
@@ -6426,16 +6194,12 @@ function render_value(string $key, $value): string
             . '&amp;dir=payments">Open receipt <i class="bi bi-box-arrow-up-right"></i></a>';
     }
 
-    if ($key === 'referral_reward' || $key === 'dealer_commission') {
+    if ($key === 'dealer_commission') {
         return ((float) $value) > 0 ? e(money((float) $value)) : '—';
     }
 
-    if ($key === 'referral_reward_status') {
-        return $value === 'none' ? '—' : e(reward_label((string) $value));
-    }
-
     if (in_array($key, ['payment_uploaded_at', 'payment_verified_at', 'confirmed_at', 'completed_at',
-                        'referral_reward_sent_at', 'created_at'], true)) {
+                        'created_at'], true)) {
         return e(format_datetime((string) $value));
     }
 

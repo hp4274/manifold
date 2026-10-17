@@ -302,20 +302,20 @@ function raffle_search(string $query, int $drawId = 0, int $limit = 12): array
     $tail = $digits !== '' && strlen($digits) > 4 ? '%' . substr($digits, -8) : null;
 
     $sql = "SELECT a.id, a.full_name, a.email, a.mobile_number, a.city, a.state,
-                   a.reference_code, a.referral_code, a.product, a.completed_at,
+                   a.reference_code, a.product, a.completed_at,
                    w.id AS winner_id, w.draw_id AS won_draw_id, d.reveal_at AS won_draw_at
               FROM applications a
          LEFT JOIN raffle_winners w ON w.application_id = a.id
          LEFT JOIN raffle_draws d   ON d.id = w.draw_id
              WHERE a.booking_paid_at IS NOT NULL AND a.status <> 'rejected'
-               AND (a.full_name LIKE ? OR a.reference_code LIKE ? OR a.referral_code LIKE ?
+               AND (a.full_name LIKE ? OR a.reference_code LIKE ?
                     OR REPLACE(REPLACE(a.mobile_number, ' ', ''), '-', '') LIKE ?"
              . ($tail === null ? '' : ' OR REPLACE(REPLACE(a.mobile_number, \' \', \'\'), \'-\', \'\') LIKE ?')
              . ")
           ORDER BY a.full_name
              LIMIT " . $limit;
 
-    $params = [$like, $like, $like, '%' . ($digits !== '' ? $digits : $query) . '%'];
+    $params = [$like, $like, '%' . ($digits !== '' ? $digits : $query) . '%'];
 
     if ($tail !== null) {
         $params[] = $tail;
