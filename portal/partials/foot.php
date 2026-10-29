@@ -19,6 +19,6 @@
   </div>
 </footer>
 
-<script src="../assets/js/main.js?v=1792231236"></script>
+<script src="../assets/js/main.js?v=1792409832"></script>
 </body>
 </html>

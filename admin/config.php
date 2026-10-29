@@ -8,11 +8,17 @@
 
 declare(strict_types=1);
 
+// const DB_HOST = '127.0.0.1';
+// const DB_NAME = 'manifold';
+// const DB_USER = 'root';
+// const DB_PASS = '';
+// const DB_PORT = 3306;
 const DB_HOST = '127.0.0.1';
 const DB_NAME = 'u768511311_manifold';
 const DB_USER = 'u768511311_vsm3';
 const DB_PASS = 'Manifold@2210';
 const DB_PORT = 3306;
+
 
 /** Absolute path where uploaded application documents are stored. */
 /**
@@ -183,7 +189,7 @@ if (!defined('EMAIL_LOGO_URL'))  { define('EMAIL_LOGO_URL',  'https://manifoldcl
  * Payment QR code, relative to the site root. The first of these that exists
  * is used, so the image can live at the root or with the other images.
  */
-const PAYMENT_QR_CANDIDATES = ['qr.jpeg', 'qr.jpg', 'qr.png', 'assets/images/qr.jpeg', 'assets/images/qr.png'];
+const PAYMENT_QR_CANDIDATES = ['qr_code.png', 'qr.jpeg', 'qr.jpg', 'qr.png', 'assets/images/qr.jpeg', 'assets/images/qr.png'];
 
 /** Site-root-relative path of the QR image, or '' when none is present. */
 function qr_path(): string
@@ -203,6 +209,12 @@ function qr_file(): ?string
     $path = qr_path();
 
     return $path === '' ? null : __DIR__ . '/../' . $path;
+}
+
+/* Online gateway switched off: clients pay by the QR code and upload proof,
+   which the office verifies by hand. Set true to bring the Pay Now buttons back. */
+if (!defined('PG_ENABLED')) {
+    define('PG_ENABLED', false);
 }
 
 /* --------------------------------------------------------------------------

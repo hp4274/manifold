@@ -4644,7 +4644,8 @@ fieldset.field legend{margin-bottom:2px}
 }
 
 /* --- a sale made with a partner's code: the partner is who gets paid --- */
-.portal-pay__fallback--payee{grid-column:1/-1;margin-top:0;padding-top:0;border-top:0}
+.portal-pay__fallback--open{grid-column:1/-1;margin-top:0;padding-top:0;border-top:0}
+.portal-pay__fallback--open > .portal-pay__fallback-body{margin-top:0}
 .portal-pay__fallback-body--payee{grid-template-columns:1fr;gap:22px;margin-top:0}
 .portal-payee{
   padding:20px 22px;
@@ -4709,7 +4710,7 @@ fieldset.field legend{margin-bottom:2px}
   font-size:12px;
   font-weight:700;
 }
-.portal-pay__fallback--payee .portal-pay__form .field{margin-bottom:16px}
+.portal-pay__fallback--open .portal-pay__form .field{margin-bottom:16px}
 
 
 @media (max-width:991px){

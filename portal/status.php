@@ -719,8 +719,9 @@ require __DIR__ . '/partials/head.php';
 
                     <?php /* ---- Pay Now: gateway button (primary path) ----
                              Not for a sale made with a partner's code: that money
-                             goes to the partner, never through the company. */ ?>
-                    <?php if (!$payee): ?>
+                             goes to the partner, never through the company.
+                             Commented out while PG_ENABLED is false. */ ?>
+                    <?php if (!$payee && PG_ENABLED): ?>
                     <div class="portal-pay__gateway">
                       <p class="portal-pay__note">
                         Pay <strong><?= e(money((float) $stage['amount'])) ?></strong> securely
@@ -769,9 +770,10 @@ require __DIR__ . '/partials/head.php';
                     </div>
                     <?php endif; ?>
 
-                    <?php /* ---- Fallback: manual receipt upload ---- */ ?>
-                    <?php if ($payee): ?>
-                    <div class="portal-pay__fallback portal-pay__fallback--payee">
+                    <?php /* ---- Manual receipt upload: the only path while the gateway is off ---- */ ?>
+                    <?php $collapsible = !$payee && PG_ENABLED; ?>
+                    <?php if (!$collapsible): ?>
+                    <div class="portal-pay__fallback portal-pay__fallback--open">
                     <?php else: ?>
                     <details class="portal-pay__fallback">
                       <summary class="portal-pay__fallback-toggle">
@@ -825,16 +827,10 @@ require __DIR__ . '/partials/head.php';
                                  alt="Payment QR code for <?= e($app['reference_code']) ?>">
                           <?php endif; ?>
                           <p class="portal-pay__note">
-                            <?php if ($stageKey === 'booking' && !$totals['stages']['full']['settled']): ?>
-                              Transfer <strong><?= e(money((float) $stage['amount'])) ?></strong> for Booking or
-                              <strong><?= e(money((float) $totals['stages']['full']['amount'])) ?></strong> for Full Payment,
-                              then upload your receipt below. Quote booking number
-                              <strong><?= e($app['reference_code']) ?></strong> on the payment.
-                            <?php else: ?>
-                              Transfer exactly <strong><?= e(money((float) $stage['amount'])) ?></strong>,
-                              then upload that receipt. Quote booking number
-                              <strong><?= e($app['reference_code']) ?></strong> on the payment.
-                            <?php endif; ?>
+                            Scan with any UPI app and pay exactly
+                            <strong><?= e(money((float) $stage['amount'])) ?></strong>, then upload the
+                            screenshot or receipt. Quote booking number
+                            <strong><?= e($app['reference_code']) ?></strong> on the payment.
                           </p>
                         </div>
                         <?php endif; ?>
@@ -844,17 +840,9 @@ require __DIR__ . '/partials/head.php';
                           <?= csrf_field() ?>
                           <input type="hidden" name="id" value="<?= (int) $app['id'] ?>">
 
-                          <?php if ($stageKey === 'booking' && !$totals['stages']['full']['settled']): ?>
-                            <div class="field">
-                              <label for="stage-choice-<?= e($stageId) ?>">Payment Option</label>
-                              <select id="stage-choice-<?= e($stageId) ?>" name="stage" class="form-select">
-                                <option value="booking">Booking Payment (<?= e(money((float) $stage['amount'])) ?>)</option>
-                                <option value="full">Full Payment (<?= e(money((float) $totals['stages']['full']['amount'])) ?>)</option>
-                              </select>
-                            </div>
-                          <?php else: ?>
-                            <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
-                          <?php endif; ?>
+                          <?php /* the plan chosen on the application form decides the stage:
+                                   full payers see only "full", loan customers booking then delivery */ ?>
+                          <input type="hidden" name="stage" value="<?= e($stageKey) ?>">
 
                           <div class="field">
                             <label for="ref-<?= e($stageId) ?>">Payment reference or UTR (optional)</label>
@@ -889,7 +877,7 @@ require __DIR__ . '/partials/head.php';
                         </fieldset>
                         </form>
                       </div>
-                    <?php if ($payee): ?>
+                    <?php if (!$collapsible): ?>
                     </div>
                     <?php else: ?>
                     </details>

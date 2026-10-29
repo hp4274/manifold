@@ -13,7 +13,7 @@ require_once __DIR__ . '/pg-gateway.php';
 
 $email = require_applicant();
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if (!PG_ENABLED || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: status');
     exit;
 }
